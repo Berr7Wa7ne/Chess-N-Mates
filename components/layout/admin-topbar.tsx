@@ -29,7 +29,13 @@ function TopbarIconButton({
   )
 }
 
-export function AdminTopbar({ onMenuClick }: { onMenuClick: () => void }) {
+export function AdminTopbar({
+  onMenuClick,
+  showLogo,
+}: {
+  onMenuClick: () => void
+  showLogo: boolean
+}) {
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
@@ -47,15 +53,17 @@ export function AdminTopbar({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="size-5" />
         </Button>
 
-        <div className="mt-14 overflow-hidden rounded-md">
-          <Image
-            src="/latest-app-logo.png"
-            alt="Chess N Mates Logo"
-            width={200}
-            height={200}
-            className="h-auto w-[100px] sm:w-[120px] lg:w-[140px] object-contain"
-          />
-        </div>
+        {showLogo ? (
+          <div className="mt-14 overflow-hidden rounded-md transition-opacity">
+            <Image
+              src="/latest-app-logo.png"
+              alt="Chess N Mates Logo"
+              width={200}
+              height={200}
+              className="h-auto w-[100px] object-contain sm:w-[120px] lg:w-[140px]"
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">

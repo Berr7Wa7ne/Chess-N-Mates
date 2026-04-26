@@ -45,17 +45,17 @@ export function PlayerNavbar() {
   const isDark = resolvedTheme === "dark"
 
   return (
-    <header className="mt-5 bg-background text-foreground">
+    <header className="mt-10 bg-background text-foreground">
       {/* Top Bar - Logo and Profile */}
       <div className="flex h-14 items-center justify-between border-b px-4 pb-7">
         {/* Logo */}
         <Link href="/player/dashboard" className="flex items-center gap-2">
           <div>
             <Image
-              src="/app-logo.png"
+              src="/latest-app-logo.png"
               alt="Chess And Mates Logo"
-              width={80}
-              height={80}
+              width={85}
+              height={85}
               className="object-contain"
               priority
             />

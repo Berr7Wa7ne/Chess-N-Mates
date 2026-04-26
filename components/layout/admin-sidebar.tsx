@@ -37,8 +37,8 @@ function SidebarContent({
   onDesktopToggle?: () => void
 }) {
   return (
-    <div className="flex h-full flex-col bg-white text-slate-700 transition-colors dark:bg-[#16181b] dark:text-slate-200">
-      <div className="flex items-center justify-between px-6 py-4 dark:border-white/10">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-white text-slate-700 transition-colors dark:bg-[#16181b] dark:text-slate-200">
+      <div className="flex shrink-0 items-center justify-between px-6 py-4 dark:border-white/10">
         <h2></h2>
         <button
           type="button"
@@ -50,7 +50,7 @@ function SidebarContent({
         </button>
       </div>
 
-      <nav className="mt-2 flex flex-col gap-2 px-6 py-6">
+      <nav className="mt-2 flex min-h-0 flex-col gap-2 px-6 py-6">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
@@ -77,7 +77,7 @@ function SidebarContent({
 
 function DesktopCollapsedRail({ onToggle }: { onToggle: () => void }) {
   return (
-    <aside className="hidden w-16 shrink-0 border-r border-slate-200 bg-white transition-colors dark:border-white/10 dark:bg-[#16181b] md:flex">
+    <aside className="hidden w-16 shrink-0 overflow-y-auto border-r border-slate-200 bg-white transition-colors dark:border-white/10 dark:bg-[#16181b] md:flex">
       <div className="flex w-full items-start justify-center pt-4">
         <button
           type="button"
@@ -108,7 +108,7 @@ export function AdminSidebar({
   return (
     <>
       {desktopOpen ? (
-        <aside className="hidden w-[320px] shrink-0 border-r border-slate-200 bg-white transition-colors dark:border-white/10 dark:bg-[#16181b] md:block">
+        <aside className="hidden h-full w-[320px] shrink-0 overflow-y-auto border-r border-slate-200 bg-white transition-colors dark:border-white/10 dark:bg-[#16181b] md:block">
           <SidebarContent
             pathname={pathname}
             onDesktopToggle={() => onDesktopOpenChange(false)}
@@ -119,7 +119,7 @@ export function AdminSidebar({
       )}
 
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <SheetContent side="left" className="w-[300px] border-r border-slate-200 p-0 dark:border-white/10 sm:w-[320px]">
+        <SheetContent side="left" className="w-[300px] overflow-y-auto border-r border-slate-200 p-0 dark:border-white/10 sm:w-[320px]">
           <SheetTitle className="sr-only">Admin navigation</SheetTitle>
           <SidebarContent
             pathname={pathname}

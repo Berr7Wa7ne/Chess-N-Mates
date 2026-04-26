@@ -22,10 +22,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col bg-[#e9e9e9] text-foreground transition-colors dark:bg-[#111315]">
       {/* Topbar */}
-      <AdminTopbar onMenuClick={handleMenuClick} />
+      <AdminTopbar
+        onMenuClick={handleMenuClick}
+        showLogo={isMobile || desktopSidebarOpen}
+      />
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1">
         {/* Sidebar */}
         <AdminSidebar
           desktopOpen={desktopSidebarOpen}
@@ -35,7 +38,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-10">
+        <main className="min-w-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-10">
           <div className="mx-auto w-full max-w-[1280px]">
             {children}
           </div>

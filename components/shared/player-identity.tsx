@@ -25,6 +25,7 @@ export function PlayerIdentity({
   className = "",
 }: PlayerIdentityProps) {
   const isMobile = useIsMobile()
+  const profileHref = `/admin/players/${playerId}`
   const eloPill = (
     <Badge
       variant="secondary"
@@ -33,15 +34,44 @@ export function PlayerIdentity({
       {elo}
     </Badge>
   )
+  const usernameLink = (
+    <Link
+      href={profileHref}
+      className="min-w-0 truncate font-medium text-blue-600 hover:text-blue-700 hover:underline"
+    >
+      {username}
+    </Link>
+  )
 
   return (
     <div className={cn("flex min-w-0 items-center gap-2", className)}>
-      <Link
-        href={`/admin/players/${playerId}`}
-        className="min-w-0 truncate font-medium text-blue-600 hover:text-blue-700 hover:underline"
-      >
-        {username}
-      </Link>
+      {isMobile ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="min-w-0 truncate rounded-sm text-left font-medium text-blue-600 hover:text-blue-700"
+            >
+              {username}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto max-w-[240px] rounded-lg px-3 py-2 text-xs">
+            <div className="space-y-2">
+              <p className="font-medium">Chess Username</p>
+              <Link href={profileHref} className="text-sm font-medium text-blue-600 hover:underline">
+                {username}
+              </Link>
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>{usernameLink}</TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>
+            <p>Chess Username</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
       {isMobile ? (
         <Popover>
           <PopoverTrigger asChild>
