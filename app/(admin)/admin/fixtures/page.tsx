@@ -1,10 +1,16 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useMemo, useState } from "react"
+import { Calendar, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -13,90 +19,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Plus, Calendar } from "lucide-react"
-import { PageHeader, PlayerIdentity, ActionMenu } from "@/components/shared"
-
-interface Fixture {
-  id: number
-  tournament: string
-  round: number
-  playerA: {
-    id: number
-    username: string
-    elo: number
-  }
-  playerB: {
-    id: number
-    username: string
-    elo: number
-  }
-  scheduledDate: Date
-  status: "pending" | "ongoing" | "completed"
-}
-
-const fixtures: Fixture[] = [
-  {
-    id: 1,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
-    playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
-    playerB: { id: 2, username: "KnightRider", elo: 1920 },
-    scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    status: "pending",
-  },
-  {
-    id: 2,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
-    playerA: { id: 3, username: "PawnStorm", elo: 1850 },
-    playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
-    scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    status: "pending",
-  },
-  {
-    id: 3,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
-    playerA: { id: 5, username: "RookEndgame", elo: 1780 },
-    playerB: { id: 6, username: "BishopPair", elo: 1950 },
-    scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    status: "pending",
-  },
-  {
-    id: 4,
-    tournament: "Spring Swiss Championship 2024",
-    round: 2,
-    playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
-    playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
-    scheduledDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
-    status: "pending",
-  },
-  {
-    id: 5,
-    tournament: "Winter Rapid Tournament",
-    round: 3,
-    playerA: { id: 2, username: "KnightRider", elo: 1920 },
-    playerB: { id: 5, username: "RookEndgame", elo: 1780 },
-    scheduledDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
-    status: "ongoing",
-  },
-]
+import { ActionMenu, PageHeader, PlayerIdentity, createViewMenuItem } from "@/components/shared"
+import { fixtures } from "@/lib/admin-data"
 
 function getStatusBadge(status: string) {
   switch (status) {
     case "pending":
-      return <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">Pending</Badge>
+      return <Badge className="border-yellow-500/20 bg-yellow-500/10 text-yellow-600">Pending</Badge>
     case "ongoing":
-      return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">Ongoing</Badge>
+      return <Badge className="border-blue-500/20 bg-blue-500/10 text-blue-600">Ongoing</Badge>
     case "completed":
-      return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">Completed</Badge>
+      return <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">Completed</Badge>
     default:
       return <Badge variant="outline">{status}</Badge>
   }
@@ -112,50 +45,32 @@ function formatDate(date: Date): string {
 }
 
 export default function FixturesPage() {
-  const [selectedTournament, setSelectedTournament] = useState<string>("all")
-  const [selectedRound, setSelectedRound] = useState<string>("all")
+  const [selectedTournament, setSelectedTournament] = useState("all")
+  const [selectedRound, setSelectedRound] = useState("all")
 
-  const tournaments = Array.from(new Set(fixtures.map((f) => f.tournament)))
-  const rounds = Array.from(new Set(fixtures.map((f) => f.round)))
+  const tournaments = useMemo(() => Array.from(new Set(fixtures.map((fixture) => fixture.tournament))), [])
+  const rounds = useMemo(() => Array.from(new Set(fixtures.map((fixture) => fixture.round))), [])
 
   const filteredFixtures = fixtures.filter((fixture) => {
-    const tournamentMatch =
-      selectedTournament === "all" || fixture.tournament === selectedTournament
+    const tournamentMatch = selectedTournament === "all" || fixture.tournament === selectedTournament
     const roundMatch = selectedRound === "all" || fixture.round.toString() === selectedRound
     return tournamentMatch && roundMatch
   })
 
-  // Group by tournament and round
-  const groupedFixtures = filteredFixtures.reduce(
-    (acc, fixture) => {
-      const key = `${fixture.tournament} - Round ${fixture.round}`
-      if (!acc[key]) acc[key] = []
-      acc[key].push(fixture)
-      return acc
-    },
-    {} as Record<string, Fixture[]>
-  )
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fixtures</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage tournament pairings and scheduling
-          </p>
-        </div>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create Fixture
-        </Button>
-      </div>
+      <PageHeader
+        title="Fixtures"
+        subtitle="Manage scheduling and pairings for upcoming matches."
+        action={{ label: "Add Fixture", icon: <Plus className="size-4" /> }}
+      />
 
-      <Card>
+      <Card className="rounded-lg shadow-sm">
         <CardHeader>
-          <CardTitle>Filter</CardTitle>
+          <CardTitle>Filter Fixtures</CardTitle>
+          <CardDescription>Fixtures stay focused on scheduled and ongoing pairings only.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Tournament</label>
@@ -193,84 +108,64 @@ export default function FixturesPage() {
         </CardContent>
       </Card>
 
-      {Object.entries(groupedFixtures).length === 0 ? (
-        <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold">No fixtures found</h3>
-              <p className="text-muted-foreground text-sm">
-                Try adjusting your filters or create new fixtures
-              </p>
+      <Card className="rounded-lg shadow-sm">
+        <CardHeader>
+          <CardTitle>Scheduled Fixtures</CardTitle>
+          <CardDescription>{filteredFixtures.length} pairings match the current filter.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 sm:px-6">
+          {filteredFixtures.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <Calendar className="size-10 text-muted-foreground" />
+              <div>
+                <p className="font-medium">No fixtures found</p>
+                <p className="text-sm text-muted-foreground">Try adjusting the tournament or round filters.</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        Object.entries(groupedFixtures).map(([groupName, groupFixtures]) => (
-          <Card key={groupName}>
-            <CardHeader>
-              <CardTitle className="text-lg">{groupName}</CardTitle>
-              <CardDescription>{groupFixtures.length} matches</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Player A</TableHead>
-                    <TableHead>Player B</TableHead>
-                    <TableHead>Scheduled</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+          ) : (
+            <Table className="table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[24%]">Tournament</TableHead>
+                  <TableHead className="w-[8%]">Round</TableHead>
+                  <TableHead className="w-[20%]">Player A</TableHead>
+                  <TableHead className="w-[20%]">Player B</TableHead>
+                  <TableHead className="w-[18%]">Scheduled</TableHead>
+                  <TableHead className="w-[12%]">Status</TableHead>
+                  <TableHead className="w-[8%] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredFixtures.map((fixture) => (
+                  <TableRow key={fixture.id}>
+                    <TableCell className="font-medium text-muted-foreground">{fixture.tournament}</TableCell>
+                    <TableCell>Round {fixture.round}</TableCell>
+                    <TableCell>
+                      <PlayerIdentity
+                        playerId={fixture.playerA.id}
+                        username={fixture.playerA.username}
+                        elo={fixture.playerA.elo}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <PlayerIdentity
+                        playerId={fixture.playerB.id}
+                        username={fixture.playerB.username}
+                        elo={fixture.playerB.elo}
+                      />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(fixture.scheduledDate)}</TableCell>
+                    <TableCell>{getStatusBadge(fixture.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <ActionMenu items={[createViewMenuItem(`/admin/fixtures/${fixture.id}`)]} />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupFixtures.map((fixture) => (
-                    <TableRow key={fixture.id}>
-                      <TableCell>
-                        <PlayerIdentity
-                          playerId={fixture.playerA.id}
-                          username={fixture.playerA.username}
-                          elo={fixture.playerA.elo}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <PlayerIdentity
-                          playerId={fixture.playerB.id}
-                          username={fixture.playerB.username}
-                          elo={fixture.playerB.elo}
-                        />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(fixture.scheduledDate)}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(fixture.status)}</TableCell>
-                      <TableCell className="text-right">
-                        <ActionMenu
-                          items={[
-                            {
-                              label: "View",
-                              onClick: () => {},
-                            },
-                            {
-                              label: "Edit",
-                              onClick: () => {},
-                            },
-                            {
-                              label: "Cancel",
-                              onClick: () => {},
-                              variant: "destructive",
-                            },
-                          ]}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ))
-      )}
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

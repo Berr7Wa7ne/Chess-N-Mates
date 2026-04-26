@@ -1,6 +1,7 @@
 "use client"
 
 import { MoreHorizontal, Eye, CheckCircle, XCircle } from "lucide-react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -27,24 +28,38 @@ export function ActionMenu({ items }: ActionMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="icon" className="size-9 rounded-md">
           <MoreHorizontal className="h-4 w-4" />
           <span className="sr-only">Open menu</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-40">
         {items.map((item, index) => (
           <div key={index}>
             {item.separator && <DropdownMenuSeparator />}
-            <DropdownMenuItem
-              onClick={item.onClick}
-              className={
-                item.variant === "destructive" ? "text-red-600 focus:text-red-600" : ""
-              }
-            >
-              {item.icon && <span className="mr-2 h-4 w-4">{item.icon}</span>}
-              {item.label}
-            </DropdownMenuItem>
+            {item.href ? (
+              <DropdownMenuItem asChild>
+                <Link
+                  href={item.href}
+                  className={
+                    item.variant === "destructive" ? "text-red-600 focus:text-red-600" : ""
+                  }
+                >
+                  {item.icon && <span className="mr-2 flex h-4 w-4 items-center justify-center">{item.icon}</span>}
+                  {item.label}
+                </Link>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={item.onClick}
+                className={
+                  item.variant === "destructive" ? "text-red-600 focus:text-red-600" : ""
+                }
+              >
+                {item.icon && <span className="mr-2 flex h-4 w-4 items-center justify-center">{item.icon}</span>}
+                {item.label}
+              </DropdownMenuItem>
+            )}
           </div>
         ))}
       </DropdownMenuContent>
@@ -54,7 +69,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
 
 // Preset menu builders
 export function createViewMenuItem(href: string) {
-  return { label: "View", icon: <Eye className="h-4 w-4" /> }
+  return { label: "View", icon: <Eye className="h-4 w-4" />, href }
 }
 
 export function createApproveMenuItem(onClick: () => void) {

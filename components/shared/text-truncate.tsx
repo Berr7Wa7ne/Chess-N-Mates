@@ -13,6 +13,7 @@ interface TextTruncateProps {
   lines?: number
   className?: string
   showTooltip?: boolean
+  maxWidthClassName?: string
 }
 
 export function TextTruncate({
@@ -21,6 +22,7 @@ export function TextTruncate({
   lines = 1,
   className = "",
   showTooltip = true,
+  maxWidthClassName = "max-w-[220px]",
 }: TextTruncateProps) {
   const isTruncated = text.length > maxLength
 
@@ -28,7 +30,7 @@ export function TextTruncate({
 
   const content = (
     <span
-      className={`truncate max-w-xs ${lineClamp} ${className}`}
+      className={`block min-w-0 w-full truncate ${maxWidthClassName} ${lineClamp} ${className}`}
     >
       {text}
     </span>

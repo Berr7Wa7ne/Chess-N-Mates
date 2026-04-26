@@ -3,12 +3,15 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
+import { useTheme } from "next-themes"
 import {
   LayoutDashboard,
   Swords,
   Trophy,
   User,
   LogOut,
+  Moon,
+  Sun,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,9 +41,11 @@ const player = {
 
 export function PlayerNavbar() {
   const pathname = usePathname()
+  const { resolvedTheme, setTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
 
   return (
-    <header className="z-50 bg-background shadow-sm mt-5">
+    <header className="mt-5 bg-background text-foreground">
       {/* Top Bar - Logo and Profile */}
       <div className="flex h-14 items-center justify-between border-b px-4 pb-7">
         {/* Logo */}
@@ -57,37 +62,50 @@ export function PlayerNavbar() {
           </div>
         </Link>
 
-        {/* Profile Dropdown - Desktop only */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="hidden gap-2 sm:flex">
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                  {player.initials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="font-medium">{player.name}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-3 py-2">
-              <p className="font-medium">{player.name}</p>
-              <p className="text-sm text-muted-foreground">@{player.username}</p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/player/profile" className="cursor-pointer">
-                <User className="mr-2 size-4" />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">
-              <LogOut className="mr-2 size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-md"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </Button>
+
+          {/* Profile Dropdown - Desktop only */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="hidden gap-2 sm:flex">
+                <Avatar className="size-8">
+                  <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                    {player.initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium">{player.name}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="px-3 py-2">
+                <p className="font-medium">{player.name}</p>
+                <p className="text-sm text-muted-foreground">@{player.username}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/player/profile" className="cursor-pointer">
+                  <User className="mr-2 size-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-red-600">
+                <LogOut className="mr-2 size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Bottom Navigation Tabs - Mobile First */}
