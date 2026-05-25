@@ -5,7 +5,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -21,10 +24,11 @@ export interface MatchData {
   opponent: string
   playerColor: "white" | "black"
   round: number
-  status: "pending" | "submitted" | "completed" | "disputed"
+  status: "pending" | "ongoing" | "submitted" | "completed" | "disputed"
   deadline: string
   gameLink?: string
   result?: "win" | "loss" | "draw"
+  competition?: string
   dispute?: {
     raisedBy: string
     reason: string
@@ -32,10 +36,18 @@ export interface MatchData {
   }
 }
 
+interface SubmissionPayload {
+  gameLink: string
+  dispute: {
+    hasDispute: boolean
+    reason?: string
+  }
+}
+
 interface MatchDetailsProps {
   role: "player" | "admin"
   match: MatchData
-  onSubmitResult?: (gameLink: string) => void
+  onSubmitResult?: (submission: SubmissionPayload) => void
   onForceResult?: (result: "white_wins" | "black_wins" | "draw") => void
   onApproveDispute?: () => void
   onRejectDispute?: () => void
@@ -49,7 +61,9 @@ export function MatchDetails({
   onApproveDispute,
   onRejectDispute,
 }: MatchDetailsProps) {
-  const [gameLink, setGameLink] = useState("")
+  const [gameLink, setGameLink] = useState(match.gameLink ?? "")
+  const [hasDispute, setHasDispute] = useState(Boolean(match.dispute))
+  const [disputeReason, setDisputeReason] = useState(match.dispute?.reason ?? "")
   const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -77,9 +91,21 @@ export function MatchDetails({
       return
     }
 
+    if (hasDispute && !disputeReason.trim()) {
+      setSubmitStatus("error")
+      setErrorMessage("Please describe the dispute before submitting.")
+      return
+    }
+
     setSubmitStatus("success")
     setErrorMessage("")
-    onSubmitResult?.(gameLink)
+    onSubmitResult?.({
+      gameLink,
+      dispute: {
+        hasDispute,
+        reason: hasDispute ? disputeReason.trim() : undefined,
+      },
+    })
   }
 
   const getStatusBadge = (status: MatchData["status"]) => {
@@ -88,6 +114,8 @@ export function MatchDetails({
         return <Badge className="bg-amber-500 text-white">Pending</Badge>
       case "submitted":
         return <Badge className="bg-blue-500 text-white">Submitted</Badge>
+      case "ongoing":
+        return <Badge className="bg-violet-500 text-white">Ongoing</Badge>
       case "completed":
         return <Badge className="bg-emerald-500 text-white">Completed</Badge>
       case "disputed":
@@ -97,10 +125,9 @@ export function MatchDetails({
 
   return (
     <div className="space-y-6">
-      {/* Core Match Information */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between gap-3">
             <span>Match Details</span>
             {getStatusBadge(match.status)}
           </CardTitle>
@@ -119,8 +146,8 @@ export function MatchDetails({
               <div
                 className={`size-5 rounded-full border-2 ${
                   match.playerColor === "white"
-                    ? "bg-white border-foreground"
-                    : "bg-foreground border-foreground"
+                    ? "border-foreground bg-white"
+                    : "border-foreground bg-foreground"
                 }`}
               />
               <div>
@@ -141,37 +168,33 @@ export function MatchDetails({
               <p className="font-medium">Round {match.round}</p>
             </div>
 
-            <div className="sm:col-span-2">
+            {match.competition ? (
+              <div>
+                <p className="text-sm text-muted-foreground">Competition</p>
+                <p className="font-medium">{match.competition}</p>
+              </div>
+            ) : null}
+
+            <div className={match.competition ? "" : "sm:col-span-2"}>
               <div className="flex items-center gap-2">
                 <Clock className="size-4 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Deadline</p>
               </div>
-              <p
-                className={`font-medium ${
-                  isPastDeadline()
-                    ? "text-red-600"
-                    : isUrgent()
-                    ? "text-amber-600"
-                    : ""
-                }`}
-              >
+              <p className={`font-medium ${isPastDeadline() ? "text-red-600" : isUrgent() ? "text-amber-600" : ""}`}>
                 {new Date(match.deadline).toLocaleString()}
-                {isPastDeadline() && (
-                  <span className="ml-2 text-sm text-red-600">(Overdue)</span>
-                )}
-                {isUrgent() && !isPastDeadline() && (
-                  <span className="ml-2 text-sm text-amber-600">(Urgent)</span>
-                )}
+                {isPastDeadline() ? <span className="ml-2 text-sm text-red-600">(Overdue)</span> : null}
+                {isUrgent() && !isPastDeadline() ? <span className="ml-2 text-sm text-amber-600">(Urgent)</span> : null}
               </p>
             </div>
           </div>
 
-          {/* Show game link for admin */}
-          {role === "admin" && match.gameLink && (
+          {match.gameLink ? (
             <>
               <Separator />
               <div>
-                <p className="text-sm text-muted-foreground">Submitted Game Link</p>
+                <p className="text-sm text-muted-foreground">
+                  {role === "admin" ? "Submitted Game Link" : "Game Link"}
+                </p>
                 <a
                   href={match.gameLink}
                   target="_blank"
@@ -183,12 +206,11 @@ export function MatchDetails({
                 </a>
               </div>
             </>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      {/* Player View - Submit Result */}
-      {role === "player" && match.status === "pending" && (
+      {role === "player" && match.status === "pending" ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -196,57 +218,91 @@ export function MatchDetails({
               Submit Your Result
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div className="space-y-2">
-              <label htmlFor="gameLink" className="text-sm font-medium">
-                Game Link
-              </label>
+              <Label htmlFor="gameLink">Game Link</Label>
               <Input
                 id="gameLink"
                 placeholder="https://chess.com/game/... or https://lichess.org/..."
                 value={gameLink}
-                onChange={(e) => {
-                  setGameLink(e.target.value)
+                onChange={(event) => {
+                  setGameLink(event.target.value)
                   setSubmitStatus("idle")
                 }}
               />
-              {submitStatus === "error" && (
-                <p className="flex items-center gap-1 text-sm text-red-600">
-                  <XCircle className="size-4" />
-                  {errorMessage}
-                </p>
-              )}
-              {submitStatus === "success" && (
-                <p className="flex items-center gap-1 text-sm text-emerald-600">
-                  <CheckCircle2 className="size-4" />
-                  Result submitted successfully
-                </p>
-              )}
             </div>
+
+            <div className="rounded-xl border bg-muted/30 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="dispute-toggle" className="text-base">
+                    Is there a dispute?
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Turn this on if you need the admin team to review something about the match result.
+                  </p>
+                </div>
+                <Switch
+                  id="dispute-toggle"
+                  checked={hasDispute}
+                  onCheckedChange={(checked) => {
+                    setHasDispute(checked)
+                    setSubmitStatus("idle")
+                    if (!checked) setDisputeReason("")
+                  }}
+                />
+              </div>
+
+              {hasDispute ? (
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="disputeReason">Dispute reason/details</Label>
+                  <Textarea
+                    id="disputeReason"
+                    placeholder="Describe what happened so admins can review it quickly."
+                    value={disputeReason}
+                    onChange={(event) => {
+                      setDisputeReason(event.target.value)
+                      setSubmitStatus("idle")
+                    }}
+                    rows={4}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            {submitStatus === "error" ? (
+              <p className="flex items-center gap-1 text-sm text-red-600">
+                <XCircle className="size-4" />
+                {errorMessage}
+              </p>
+            ) : null}
+            {submitStatus === "success" ? (
+              <p className="flex items-center gap-1 text-sm text-emerald-600">
+                <CheckCircle2 className="size-4" />
+                {hasDispute ? "Result and dispute submitted successfully" : "Result submitted successfully"}
+              </p>
+            ) : null}
+
             <Button onClick={handleSubmitResult} className="w-full sm:w-auto">
               Submit Result
             </Button>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {/* Player View - Already Submitted */}
-      {role === "player" && match.status === "submitted" && (
+      {role === "player" && match.status === "submitted" ? (
         <Card>
           <CardContent className="flex items-center gap-3 py-6">
             <CheckCircle2 className="size-6 text-emerald-500" />
             <div>
               <p className="font-medium">Result Submitted</p>
-              <p className="text-sm text-muted-foreground">
-                Waiting for confirmation from the organizer
-              </p>
+              <p className="text-sm text-muted-foreground">Waiting for confirmation from the organizer</p>
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {/* Admin View - Force Result Controls */}
-      {role === "admin" && match.status !== "completed" && (
+      {role === "admin" && match.status !== "completed" ? (
         <Card>
           <CardHeader>
             <CardTitle>Admin Actions</CardTitle>
@@ -255,16 +311,10 @@ export function MatchDetails({
             <div>
               <p className="mb-3 text-sm text-muted-foreground">Force Result</p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => onForceResult?.("white_wins")}
-                >
+                <Button variant="outline" onClick={() => onForceResult?.("white_wins")}>
                   White Wins
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onForceResult?.("black_wins")}
-                >
+                <Button variant="outline" onClick={() => onForceResult?.("black_wins")}>
                   Black Wins
                 </Button>
                 <Button variant="outline" onClick={() => onForceResult?.("draw")}>
@@ -274,10 +324,9 @@ export function MatchDetails({
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {/* Dispute Section */}
-      {match.dispute && (
+      {match.dispute ? (
         <Card className="border-red-200 bg-red-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-800">
@@ -293,26 +342,19 @@ export function MatchDetails({
               </div>
               <div>
                 <p className="text-sm text-red-700">Status</p>
-                <Badge
-                  variant={match.dispute.status === "open" ? "destructive" : "outline"}
-                >
+                <Badge variant={match.dispute.status === "open" ? "destructive" : "outline"}>
                   {match.dispute.status === "open" ? "Open" : "Resolved"}
                 </Badge>
               </div>
             </div>
             <div>
               <p className="text-sm text-red-700">Reason</p>
-              <p className="rounded-md bg-white p-3 text-red-900">
-                {match.dispute.reason}
-              </p>
+              <p className="rounded-md bg-white p-3 text-red-900">{match.dispute.reason}</p>
             </div>
 
-            {role === "admin" && match.dispute.status === "open" && (
+            {role === "admin" && match.dispute.status === "open" ? (
               <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={onApproveDispute}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
+                <Button onClick={onApproveDispute} className="bg-emerald-600 hover:bg-emerald-700">
                   <CheckCircle2 className="mr-2 size-4" />
                   Approve Dispute
                 </Button>
@@ -321,10 +363,10 @@ export function MatchDetails({
                   Reject Dispute
                 </Button>
               </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   )
 }

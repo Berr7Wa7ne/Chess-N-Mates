@@ -1,66 +1,31 @@
 "use client"
 
-import { useParams } from "next/navigation"
 import Link from "next/link"
+import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
+import { MatchDetails } from "@/components/match"
 import { Button } from "@/components/ui/button"
-import { MatchDetails, type MatchData } from "@/components/match"
+import { currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
 
-// Mock match data - in production, fetch based on ID
-const mockMatches: Record<string, MatchData> = {
-  "M-001": {
-    id: "M-001",
-    opponent: "KnightRider",
-    playerColor: "white",
-    round: 4,
-    status: "pending",
-    deadline: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
-  },
-  "M-002": {
-    id: "M-002",
-    opponent: "PawnStorm",
-    playerColor: "black",
-    round: 4,
-    status: "pending",
-    deadline: new Date(Date.now() + 172800000).toISOString(), // In 2 days
-  },
-  "M-003": {
-    id: "M-003",
-    opponent: "BishopBlitz",
-    playerColor: "white",
-    round: 3,
-    status: "submitted",
-    deadline: "2024-03-15T18:00:00",
-    gameLink: "https://chess.com/game/12345678",
-  },
-  "M-004": {
-    id: "M-004",
-    opponent: "QueenGambit",
-    playerColor: "black",
-    round: 3,
-    status: "completed",
-    deadline: "2024-03-14T18:00:00",
-    gameLink: "https://lichess.org/abcd1234",
-    result: "win",
-  },
-}
+const matches = getPlayerMatches(currentPlayerId)
 
 export default function PlayerMatchDetailPage() {
   const params = useParams()
   const matchId = params.id as string
+  const match = matches.find((entry) => entry.id === matchId)
 
-  const match = mockMatches[matchId] || {
-    id: matchId,
-    opponent: "Unknown Player",
-    playerColor: "white" as const,
-    round: 1,
-    status: "pending" as const,
-    deadline: new Date(Date.now() + 86400000).toISOString(),
-  }
-
-  const handleSubmitResult = (gameLink: string) => {
-    alert(`Result submitted with game link: ${gameLink}`)
-    // In production: API call to submit result
+  if (!match) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/player/matches">
+            <ArrowLeft className="mr-2 size-4" />
+            Back to matches
+          </Link>
+        </Button>
+        <p className="text-sm text-muted-foreground">Match not found.</p>
+      </div>
+    )
   }
 
   return (
@@ -72,9 +37,7 @@ export default function PlayerMatchDetailPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Match {matchId}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Match {match.id}</h1>
           <p className="text-muted-foreground">vs {match.opponent}</p>
         </div>
       </div>
@@ -82,7 +45,13 @@ export default function PlayerMatchDetailPage() {
       <MatchDetails
         role="player"
         match={match}
-        onSubmitResult={handleSubmitResult}
+        onSubmitResult={(submission) => {
+          alert(
+            submission.dispute.hasDispute
+              ? `Result submitted with dispute: ${submission.dispute.reason}`
+              : `Result submitted with game link: ${submission.gameLink}`
+          )
+        }}
       />
     </div>
   )

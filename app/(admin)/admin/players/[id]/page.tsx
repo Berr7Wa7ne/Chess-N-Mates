@@ -31,7 +31,7 @@ export default async function PlayerDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={player.username} subtitle="Player profile, activity, and current tournament standing." />
+      <PageHeader title={player.username} subtitle="Player profile, activity, and current community leaderboard standing." />
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card className="rounded-lg shadow-sm">
@@ -68,8 +68,8 @@ export default async function PlayerDetailPage({
 
         <Card className="rounded-lg shadow-sm">
           <CardHeader>
-            <CardTitle>Leaderboard Snapshot</CardTitle>
-            <CardDescription>Quick standing context for this player.</CardDescription>
+            <CardTitle>Community Leaderboard Snapshot</CardTitle>
+            <CardDescription>Quick community ELO standing context for this player.</CardDescription>
           </CardHeader>
           <CardContent>
             {standing ? (

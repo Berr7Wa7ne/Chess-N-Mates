@@ -1,18 +1,11 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import Image from "next/image"
 import { useTheme } from "next-themes"
-import {
-  LayoutDashboard,
-  Swords,
-  Trophy,
-  User,
-  LogOut,
-  Moon,
-  Sun,
-} from "lucide-react"
+import { LayoutDashboard, LogOut, Medal, Moon, Sun, Swords, Trophy, User } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -21,22 +14,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
-// Navigation tabs per requirements: Dashboard, Matches, Leaderboard, Profile
 const navItems = [
   { title: "Dashboard", href: "/player/dashboard", icon: LayoutDashboard },
   { title: "Matches", href: "/player/matches", icon: Swords },
-  { title: "Leaderboard", href: "/player/leaderboard", icon: Trophy },
+  { title: "Tournament", href: "/player/tournament", icon: Trophy },
+  { title: "Leaderboard", href: "/player/leaderboard", icon: Medal },
   { title: "Profile", href: "/player/profile", icon: User },
 ]
 
-// Mock player data
 const player = {
-  name: "John Doe",
-  username: "johndoe",
-  initials: "JD",
+  name: "Maria Garcia",
+  username: "KnightRider",
+  initials: "MG",
 }
 
 export function PlayerNavbar() {
@@ -46,9 +37,7 @@ export function PlayerNavbar() {
 
   return (
     <header className="mt-10 bg-background text-foreground">
-      {/* Top Bar - Logo and Profile */}
       <div className="flex h-14 items-center justify-between border-b px-4 pb-7">
-        {/* Logo */}
         <Link href="/player/dashboard" className="flex items-center gap-2">
           <div>
             <Image
@@ -74,7 +63,6 @@ export function PlayerNavbar() {
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
 
-          {/* Profile Dropdown - Desktop only */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="hidden gap-2 sm:flex">
@@ -108,7 +96,6 @@ export function PlayerNavbar() {
         </div>
       </div>
 
-      {/* Bottom Navigation Tabs - Mobile First */}
       <nav className="flex items-center justify-around border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")

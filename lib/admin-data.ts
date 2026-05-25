@@ -1,4 +1,7 @@
 export type MemberStatus = "active" | "inactive" | "removed"
+export type CompetitionType = "Swiss" | "Knockout" | "Round Robin"
+export type CompetitionStatus = "active" | "pending" | "completed"
+export type CompetitionMatchStatus = "pending" | "ongoing" | "submitted" | "completed" | "disputed"
 
 export interface Member {
   id: number
@@ -12,6 +15,8 @@ export interface Member {
   status: MemberStatus
   registered: boolean
   lastActiveAt: Date
+  removedAt?: string
+  historyNote?: string
 }
 
 export interface Player {
@@ -27,10 +32,14 @@ export interface Player {
 export interface Competition {
   id: number
   name: string
-  type: "Swiss" | "Knockout" | "Round Robin"
-  status: "active" | "pending" | "completed"
+  type: CompetitionType
+  status: CompetitionStatus
   playerCount: number
   startDate: string
+  endDate?: string
+  rounds: number
+  currentRound?: number
+  description: string
 }
 
 export interface Participant {
@@ -44,6 +53,7 @@ export interface Participant {
 
 export interface Fixture {
   id: number
+  competitionId: number
   tournament: string
   round: number
   playerA: {
@@ -57,11 +67,12 @@ export interface Fixture {
     elo: number
   }
   scheduledDate: Date
-  status: "pending" | "ongoing" | "completed"
+  status: CompetitionMatchStatus
 }
 
 export interface Result {
   id: number
+  competitionId: number
   tournament: string
   round: number
   playerA: {
@@ -109,6 +120,25 @@ export interface LeaderboardEntry {
   isActive: boolean
 }
 
+export interface PlayerMatch {
+  id: string
+  competitionId: number
+  competition: string
+  opponent: string
+  opponentId: number
+  round: number
+  playerColor: "white" | "black"
+  status: CompetitionMatchStatus
+  deadline: string
+  gameLink?: string
+  result?: "win" | "loss" | "draw"
+  dispute?: {
+    raisedBy: string
+    reason: string
+    status: "open" | "resolved"
+  }
+}
+
 export const members: Member[] = [
   {
     id: 1,
@@ -136,6 +166,7 @@ export const members: Member[] = [
     status: "inactive",
     registered: false,
     lastActiveAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    historyNote: "Has not completed onboarding yet.",
   },
   {
     id: 4,
@@ -150,10 +181,13 @@ export const members: Member[] = [
     id: 5,
     name: "Michael Brown",
     phoneNumber: "+1 234 567 8905",
-    chessUsername: undefined,
+    chessUsername: { id: 5, username: "RookEndgame", elo: 1780 },
     status: "removed",
     registered: false,
     lastActiveAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    removedAt: "2026-04-20",
+    historyNote:
+      "Removed members keep their historical match, competition, and rating records. If Michael rejoins later, he starts onboarding again as a new member profile.",
   },
   {
     id: 6,
@@ -163,6 +197,7 @@ export const members: Member[] = [
     status: "active",
     registered: false,
     lastActiveAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    historyNote: "Linked chess profile exists, but onboarding is still incomplete.",
   },
   {
     id: 7,
@@ -262,74 +297,97 @@ export const players: Player[] = [
 export const competitions: Competition[] = [
   {
     id: 1,
-    name: "Spring Swiss Championship 2024",
+    name: "Spring Swiss Championship 2026",
     type: "Swiss",
     status: "active",
     playerCount: 64,
-    startDate: "2024-02-15",
+    startDate: "2026-05-14",
+    rounds: 7,
+    currentRound: 4,
+    description: "Main community Swiss event with rolling round deadlines and live standings.",
   },
   {
     id: 2,
-    name: "Winter Knockout Tournament",
+    name: "Winter Knockout Cup 2026",
     type: "Knockout",
-    status: "active",
+    status: "completed",
     playerCount: 32,
-    startDate: "2024-02-10",
+    startDate: "2026-01-12",
+    endDate: "2026-02-01",
+    rounds: 5,
+    description: "Single-elimination competition that concluded earlier this year.",
   },
   {
     id: 3,
-    name: "February Round Robin",
+    name: "June Round Robin Invitational",
     type: "Round Robin",
     status: "pending",
     playerCount: 8,
-    startDate: "2024-02-20",
+    startDate: "2026-06-10",
+    rounds: 7,
+    description: "Upcoming invitational event for the top active members.",
   },
   {
     id: 4,
-    name: "Blitz Championship",
+    name: "Blitz Championship 2025",
     type: "Swiss",
     status: "completed",
     playerCount: 128,
-    startDate: "2024-01-25",
+    startDate: "2025-11-22",
+    endDate: "2025-11-29",
+    rounds: 9,
+    description: "Large-format blitz championship archived for reference.",
   },
   {
     id: 5,
     name: "Rapid Masters Cup",
     type: "Knockout",
-    status: "active",
+    status: "completed",
     playerCount: 16,
-    startDate: "2024-02-12",
+    startDate: "2026-03-08",
+    endDate: "2026-03-20",
+    rounds: 4,
+    description: "Fast-paced knockout event for mid-season ranking movement.",
   },
   {
     id: 6,
-    name: "Club Championship 2024",
+    name: "Club Championship 2026",
     type: "Round Robin",
     status: "pending",
     playerCount: 12,
-    startDate: "2024-03-01",
+    startDate: "2026-07-02",
+    rounds: 11,
+    description: "Long-form club championship planned for the next season.",
   },
 ]
 
 export const participantsByCompetition: Record<number, Participant[]> = {
   1: [
-    { id: 1, username: "GrandMaster_Alex", elo: 2150, status: "active", score: 4.5, joinedDate: "2024-02-14" },
-    { id: 2, username: "KnightRider", elo: 1920, status: "active", score: 4.0, joinedDate: "2024-02-14" },
-    { id: 4, username: "QueenSacrifice", elo: 2020, status: "active", score: 3.5, joinedDate: "2024-02-15" },
-    { id: 6, username: "BishopPair", elo: 1950, status: "active", score: 3.0, joinedDate: "2024-02-15" },
-    { id: 5, username: "RookEndgame", elo: 1780, status: "withdrawn", score: 2.0, joinedDate: "2024-02-14" },
+    { id: 1, username: "GrandMaster_Alex", elo: 2150, status: "active", score: 4.5, joinedDate: "2026-05-13" },
+    { id: 2, username: "KnightRider", elo: 1920, status: "active", score: 4.0, joinedDate: "2026-05-13" },
+    { id: 4, username: "QueenSacrifice", elo: 2020, status: "active", score: 3.5, joinedDate: "2026-05-13" },
+    { id: 6, username: "BishopPair", elo: 1950, status: "active", score: 3.0, joinedDate: "2026-05-13" },
+    { id: 5, username: "RookEndgame", elo: 1780, status: "withdrawn", score: 2.0, joinedDate: "2026-05-13" },
   ],
   2: [
-    { id: 1, username: "GrandMaster_Alex", elo: 2150, status: "active", score: 3, joinedDate: "2024-02-09" },
-    { id: 7, username: "CastleKing", elo: 1880, status: "eliminated", score: 2, joinedDate: "2024-02-09" },
-    { id: 3, username: "PawnStorm", elo: 1850, status: "eliminated", score: 1, joinedDate: "2024-02-10" },
+    { id: 1, username: "GrandMaster_Alex", elo: 2150, status: "active", score: 4, joinedDate: "2026-01-10" },
+    { id: 4, username: "QueenSacrifice", elo: 2020, status: "active", score: 3, joinedDate: "2026-01-10" },
+    { id: 7, username: "CastleKing", elo: 1880, status: "eliminated", score: 2, joinedDate: "2026-01-10" },
+    { id: 3, username: "PawnStorm", elo: 1850, status: "eliminated", score: 1, joinedDate: "2026-01-10" },
+  ],
+  5: [
+    { id: 4, username: "QueenSacrifice", elo: 2020, status: "active", score: 3, joinedDate: "2026-03-08" },
+    { id: 6, username: "BishopPair", elo: 1950, status: "active", score: 2, joinedDate: "2026-03-08" },
+    { id: 8, username: "EnPassant", elo: 1710, status: "eliminated", score: 1, joinedDate: "2026-03-08" },
   ],
 }
 
 export const fixtures: Fixture[] = [
   {
     id: 1,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 4,
     playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
     playerB: { id: 2, username: "KnightRider", elo: 1920 },
     scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
@@ -337,8 +395,9 @@ export const fixtures: Fixture[] = [
   },
   {
     id: 2,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 4,
     playerA: { id: 3, username: "PawnStorm", elo: 1850 },
     playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
     scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
@@ -346,88 +405,86 @@ export const fixtures: Fixture[] = [
   },
   {
     id: 3,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 4,
     playerA: { id: 5, username: "RookEndgame", elo: 1780 },
     playerB: { id: 6, username: "BishopPair", elo: 1950 },
     scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    status: "pending",
+    status: "ongoing",
   },
   {
     id: 4,
-    tournament: "Spring Swiss Championship 2024",
-    round: 2,
-    playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
-    playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
-    scheduledDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
-    status: "pending",
-  },
-  {
-    id: 5,
-    tournament: "Winter Rapid Tournament",
-    round: 3,
-    playerA: { id: 2, username: "KnightRider", elo: 1920 },
-    playerB: { id: 5, username: "RookEndgame", elo: 1780 },
-    scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    status: "ongoing",
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 4,
+    playerA: { id: 7, username: "CastleKing", elo: 1880 },
+    playerB: { id: 8, username: "EnPassant", elo: 1710 },
+    scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    status: "submitted",
   },
 ]
 
 export const results: Result[] = [
   {
     id: 1,
-    tournament: "Winter Rapid Tournament",
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
     round: 1,
     playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
     playerB: { id: 2, username: "KnightRider", elo: 1920 },
     winner: "a",
     scoreA: 1,
     scoreB: 0,
-    datePlayed: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    datePlayed: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
   },
   {
     id: 2,
-    tournament: "Winter Rapid Tournament",
-    round: 1,
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 2,
     playerA: { id: 3, username: "PawnStorm", elo: 1850 },
     playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
     winner: "b",
     scoreA: 0,
     scoreB: 1,
-    datePlayed: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    datePlayed: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
   },
   {
     id: 3,
-    tournament: "Winter Rapid Tournament",
-    round: 2,
+    competitionId: 1,
+    tournament: "Spring Swiss Championship 2026",
+    round: 3,
     playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
     playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
     winner: "draw",
     scoreA: 0.5,
     scoreB: 0.5,
-    datePlayed: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    datePlayed: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
   },
   {
     id: 4,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
-    playerA: { id: 5, username: "RookEndgame", elo: 1780 },
-    playerB: { id: 6, username: "BishopPair", elo: 1950 },
-    winner: "b",
-    scoreA: 0,
-    scoreB: 1,
-    datePlayed: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    competitionId: 2,
+    tournament: "Winter Knockout Cup 2026",
+    round: 4,
+    playerA: { id: 1, username: "GrandMaster_Alex", elo: 2150 },
+    playerB: { id: 4, username: "QueenSacrifice", elo: 2020 },
+    winner: "a",
+    scoreA: 1,
+    scoreB: 0,
+    datePlayed: new Date("2026-02-01T16:00:00"),
   },
   {
     id: 5,
-    tournament: "Spring Swiss Championship 2024",
-    round: 1,
-    playerA: { id: 7, username: "CastleKing", elo: 1880 },
+    competitionId: 5,
+    tournament: "Rapid Masters Cup",
+    round: 3,
+    playerA: { id: 6, username: "BishopPair", elo: 1950 },
     playerB: { id: 8, username: "EnPassant", elo: 1710 },
     winner: "a",
     scoreA: 1,
     scoreB: 0,
-    datePlayed: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    datePlayed: new Date("2026-03-18T17:00:00"),
   },
 ]
 
@@ -506,25 +563,25 @@ export const leaderboard: LeaderboardEntry[] = [
     isActive: true,
   },
   {
-    id: 2,
+    id: 6,
     rank: 3,
+    username: "BishopPair",
+    elo: 1950,
+    points: 25,
+    wins: 10,
+    draws: 2,
+    losses: 2,
+    isActive: true,
+  },
+  {
+    id: 2,
+    rank: 4,
     username: "KnightRider",
     elo: 1920,
     points: 24.5,
     wins: 10,
     draws: 3,
     losses: 1,
-    isActive: true,
-  },
-  {
-    id: 5,
-    rank: 4,
-    username: "RookEndgame",
-    elo: 1780,
-    points: 22,
-    wins: 9,
-    draws: 1,
-    losses: 4,
     isActive: true,
   },
   {
@@ -539,26 +596,26 @@ export const leaderboard: LeaderboardEntry[] = [
     isActive: false,
   },
   {
-    id: 6,
+    id: 3,
     rank: 6,
-    username: "BishopPair",
-    elo: 1950,
-    points: 18,
+    username: "PawnStorm",
+    elo: 1850,
+    points: 19.5,
     wins: 7,
     draws: 2,
     losses: 5,
-    isActive: true,
+    isActive: false,
   },
   {
-    id: 3,
+    id: 5,
     rank: 7,
-    username: "PawnStorm",
-    elo: 1850,
-    points: 16.5,
-    wins: 6,
-    draws: 3,
-    losses: 5,
-    isActive: false,
+    username: "RookEndgame",
+    elo: 1780,
+    points: 18,
+    wins: 7,
+    draws: 1,
+    losses: 6,
+    isActive: true,
   },
   {
     id: 8,
@@ -572,3 +629,109 @@ export const leaderboard: LeaderboardEntry[] = [
     isActive: true,
   },
 ]
+
+export const playerMatchesByPlayerId: Record<number, PlayerMatch[]> = {
+  2: [
+    {
+      id: "M-001",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "GrandMaster_Alex",
+      opponentId: 1,
+      round: 4,
+      playerColor: "black",
+      status: "pending",
+      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "M-002",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "BishopPair",
+      opponentId: 6,
+      round: 4,
+      playerColor: "white",
+      status: "submitted",
+      deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/training-match-002",
+    },
+    {
+      id: "M-003",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "QueenSacrifice",
+      opponentId: 4,
+      round: 3,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/123456789",
+      result: "loss",
+    },
+    {
+      id: "M-004",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "CastleKing",
+      opponentId: 7,
+      round: 2,
+      playerColor: "white",
+      status: "completed",
+      deadline: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/training-match-004",
+      result: "win",
+    },
+    {
+      id: "M-005",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "PawnStorm",
+      opponentId: 3,
+      round: 1,
+      playerColor: "white",
+      status: "disputed",
+      deadline: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/987654321",
+      dispute: {
+        raisedBy: "KnightRider",
+        reason: "Opponent disconnected while a winning position was on the board.",
+        status: "open",
+      },
+    },
+  ],
+}
+
+export const currentPlayerId = 2
+
+export function getCurrentCompetition() {
+  return competitions.find((competition) => competition.status === "active")
+}
+
+export function getCompetitionById(id: number) {
+  return competitions.find((competition) => competition.id === id)
+}
+
+export function getCompetitionFixtures(competitionId: number) {
+  return fixtures.filter((fixture) => fixture.competitionId === competitionId)
+}
+
+export function getCompetitionResults(competitionId: number) {
+  return results.filter((result) => result.competitionId === competitionId)
+}
+
+export function getCompetitionParticipants(competitionId: number) {
+  return participantsByCompetition[competitionId] ?? []
+}
+
+export function getCompetitionStandings(competitionId: number) {
+  const participantIds = new Set(getCompetitionParticipants(competitionId).map((participant) => participant.id))
+  return leaderboard.filter((entry) => participantIds.has(entry.id))
+}
+
+export function getPlayerMatches(playerId: number) {
+  return playerMatchesByPlayerId[playerId] ?? []
+}
+
+export function getLeaderboardEntry(playerId: number) {
+  return leaderboard.find((entry) => entry.id === playerId)
+}

@@ -1,19 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Plus } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { useMemo, useState } from "react"
+import { Info, Plus } from "lucide-react"
 import { ActionMenu, PageHeader, PlayerIdentity, TextTruncate, createViewMenuItem } from "@/components/shared"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { members, type MemberStatus } from "@/lib/admin-data"
 
 function getStatusBadge(status: MemberStatus) {
@@ -52,18 +45,30 @@ const filterOptions: { value: FilterType; label: string }[] = [
 export default function MembersPage() {
   const [filter, setFilter] = useState<FilterType>("all")
 
-  const filteredMembers = members.filter((member) => {
-    if (filter === "all") return true
-    return member.status === filter
-  })
+  const filteredMembers = useMemo(() => {
+    return members.filter((member) => (filter === "all" ? true : member.status === filter))
+  }, [filter])
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Members"
-        subtitle="View and manage all group members."
+        subtitle="View and manage all community members."
         action={{ label: "Add Member", icon: <Plus className="size-4" /> }}
       />
+
+      <Card className="rounded-lg border-blue-200 bg-blue-50/60 shadow-sm">
+        <CardContent className="flex items-start gap-3 p-4">
+          <Info className="mt-0.5 size-5 text-blue-700" />
+          <div className="space-y-1 text-sm text-blue-900">
+            <p className="font-medium">Removed members keep their historical records.</p>
+            <p>
+              If a removed member returns later, they should complete the normal onboarding flow again as a new member,
+              while their previous history remains preserved for admin reference.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-lg shadow-sm">
         <CardHeader className="gap-4">

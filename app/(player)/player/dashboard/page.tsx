@@ -1,139 +1,24 @@
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Award, ChevronRight, Medal, Swords, TrendingUp, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import {
-  AlertCircle,
-  Award,
-  ChevronRight,
-  Clock,
-  Medal,
-  Swords,
-  TrendingUp,
-  Trophy,
-} from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { currentPlayerId, getCurrentCompetition, getLeaderboardEntry, getPlayerMatches, leaderboard } from "@/lib/admin-data"
 
-// Mock player stats
-const playerStats = {
-  rating: 1847,
-  matchesPlayed: 42,
-  wins: 24,
-  losses: 12,
-  draws: 6,
-  rank: 15,
-}
+const currentPlayerStanding = getLeaderboardEntry(currentPlayerId)
+const currentCompetition = getCurrentCompetition()
+const activeMatches = getPlayerMatches(currentPlayerId).filter((match) => match.status === "pending" || match.status === "submitted")
+const pendingMatches = activeMatches.filter((match) => match.status === "pending")
 
-// Mock active matches
-const activeMatches = [
-  {
-    id: "M-001",
-    opponent: "KnightRider",
-    color: "white",
-    round: 4,
-    deadline: "2024-03-20T18:00:00",
-    status: "pending",
-    isUrgent: true,
-  },
-  {
-    id: "M-002",
-    opponent: "PawnStorm",
-    color: "black",
-    round: 4,
-    deadline: "2024-03-22T18:00:00",
-    status: "pending",
-    isUrgent: false,
-  },
-  {
-    id: "M-003",
-    opponent: "BishopBlitz",
-    color: "white",
-    round: 3,
-    status: "submitted",
-    deadline: "2024-03-15T18:00:00",
-    isUrgent: false,
-  },
-]
-
-// Mock leaderboard preview
-const leaderboardPreview = [
-  { rank: 1, player: "GrandMaster_Alex", points: 12 },
-  { rank: 2, player: "QueenGambit", points: 11 },
-  { rank: 3, player: "BishopBlitz", points: 10 },
-]
-
-// Mock notifications
-const notifications = [
-  {
-    id: 1,
-    message: "Match deadline approaching",
-    type: "urgent",
-    icon: Clock,
-  },
-  {
-    id: 2,
-    message: "1 pending match awaiting your result",
-    type: "warning",
-    icon: AlertCircle,
-  },
-]
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case "pending":
-      return <Badge className="bg-amber-500 text-white shadow-sm">Pending</Badge>
-    case "submitted":
-      return <Badge className="bg-blue-500 text-white shadow-sm">Submitted</Badge>
-    case "completed":
-      return <Badge className="bg-emerald-500 text-white shadow-sm">Completed</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
-  }
-}
-
-function formatDeadline(deadline: string) {
-  const date = new Date(deadline)
-  const now = new Date()
-  const diff = date.getTime() - now.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
-  if (days < 0) return "Overdue"
-  if (days === 0) return "Today"
-  if (days === 1) return "Tomorrow"
-  return `${days} days left`
-}
+const leaderboardPreview = leaderboard.slice(0, 3)
 
 export default function PlayerDashboardPage() {
-  const currentPlayerRank = 15
-  const pendingMatches = activeMatches.filter(m => m.status === "pending")
-
   return (
     <div className="space-y-6 pb-8">
-      {/* Welcome Section */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here&apos;s your overview.</p>
+        <p className="text-muted-foreground">Welcome back. Here is your current community and tournament overview.</p>
       </div>
 
-      {/* Notifications - Compact alerts */}
-      {notifications.length > 0 && (
-        <div className="space-y-2">
-          {notifications.map((notification) => (
-            <div
-              key={notification.id}
-              className={`flex items-center gap-3 rounded-xl p-3 ${
-                notification.type === "urgent"
-                  ? "bg-red-50 text-red-700"
-                  : "bg-amber-50 text-amber-700"
-              }`}
-            >
-              <notification.icon className="size-5 shrink-0" />
-              <span className="text-sm font-medium">{notification.message}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Active Matches - TOP PRIORITY - Full width cards */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Active Matches</h2>
@@ -141,83 +26,47 @@ export default function PlayerDashboardPage() {
             View all
           </Link>
         </div>
-        
+
         <div className="space-y-3">
-          {pendingMatches.length > 0 ? (
-            pendingMatches.map((match) => (
-              <Card 
-                key={match.id} 
-                className={`overflow-hidden shadow-sm transition-shadow hover:shadow-md ${
-                  match.isUrgent ? "border-red-200 bg-red-50/30" : ""
-                }`}
-              >
-                <CardContent className="p-0">
-                  <div className="flex items-center justify-between p-4">
-                    <div className="flex-1 space-y-1">
-                      {/* Opponent name - Large text for readability */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-semibold">{match.opponent}</span>
-                        {match.isUrgent && (
-                          <Badge className="bg-red-500 text-white">Urgent</Badge>
-                        )}
-                      </div>
-                      
-                      {/* Match details */}
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <span>{match.id}</span>
-                        <span>•</span>
-                        <span>Round {match.round}</span>
-                        <span>•</span>
-                        <Badge variant="outline" className="text-xs">
-                          {match.color === "white" ? "White" : "Black"}
-                        </Badge>
-                      </div>
-                      
-                      {/* Deadline with urgency highlight */}
-                      <div className={`flex items-center gap-1.5 text-sm ${
-                        match.isUrgent ? "font-medium text-red-600" : "text-muted-foreground"
-                      }`}>
-                        <Clock className="size-4" />
-                        <span>{formatDeadline(match.deadline)}</span>
-                      </div>
+          {activeMatches.length > 0 ? (
+            activeMatches.map((match) => (
+              <Card key={match.id} className={`overflow-hidden shadow-sm ${match.status === "pending" ? "border-amber-200 bg-amber-50/20" : ""}`}>
+                <CardContent className="flex items-center justify-between gap-4 p-4">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-lg font-semibold">{match.opponent}</span>
+                      <Badge variant="outline">Round {match.round}</Badge>
+                      <Badge className={match.status === "pending" ? "bg-amber-500 text-white" : "bg-blue-500 text-white"}>
+                        {match.status}
+                      </Badge>
                     </div>
-                    
-                    {/* Status badge */}
-                    <div className="shrink-0">
-                      {getStatusBadge(match.status)}
-                    </div>
+                    <p className="text-sm text-muted-foreground">{match.competition}</p>
+                    <p className="text-sm text-muted-foreground">
+                      You are playing {match.playerColor}. Deadline: {new Date(match.deadline).toLocaleString()}
+                    </p>
                   </div>
-                  
-                  {/* Primary Action - Large tap target */}
-                  <div className="border-t bg-muted/30 p-3">
-                    <Button 
-                      className="h-12 w-full text-base font-semibold shadow-sm" 
-                      asChild
-                    >
-                      <Link href={`/player/matches/${match.id}`}>
-                        <Swords className="mr-2 size-5" />
-                        Submit Result
-                      </Link>
-                    </Button>
-                  </div>
+                  <Link href={`/player/matches/${match.id}`} className="text-sm font-medium text-primary">
+                    Open
+                  </Link>
                 </CardContent>
               </Card>
             ))
           ) : (
             <Card className="shadow-sm">
-              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <CardContent className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="mb-3 rounded-full bg-muted p-3">
                   <Swords className="size-6 text-muted-foreground" />
                 </div>
-                <p className="font-medium">No pending matches</p>
-                <p className="text-sm text-muted-foreground">You&apos;re all caught up!</p>
+                <p className="font-medium">No active matches</p>
+                <p className="text-sm text-muted-foreground">
+                  You do not have any pending or submitted matches right now.
+                </p>
               </CardContent>
             </Card>
           )}
         </div>
       </section>
 
-      {/* Player Stats - 2x2 Grid */}
       <section>
         <h2 className="mb-3 text-lg font-semibold">Your Stats</h2>
         <div className="grid grid-cols-2 gap-3">
@@ -228,13 +77,13 @@ export default function PlayerDashboardPage() {
                   <TrendingUp className="size-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{playerStats.rating}</p>
-                  <p className="text-xs text-muted-foreground">Rating</p>
+                  <p className="text-2xl font-bold">{currentPlayerStanding?.elo ?? "-"}</p>
+                  <p className="text-xs text-muted-foreground">Community ELO</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -242,13 +91,13 @@ export default function PlayerDashboardPage() {
                   <Medal className="size-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">#{playerStats.rank}</p>
-                  <p className="text-xs text-muted-foreground">Rank</p>
+                  <p className="text-2xl font-bold">#{currentPlayerStanding?.rank ?? "-"}</p>
+                  <p className="text-xs text-muted-foreground">Community Rank</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -256,13 +105,13 @@ export default function PlayerDashboardPage() {
                   <Award className="size-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{playerStats.wins}</p>
+                  <p className="text-2xl font-bold">{currentPlayerStanding?.wins ?? 0}</p>
                   <p className="text-xs text-muted-foreground">Wins</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -270,8 +119,8 @@ export default function PlayerDashboardPage() {
                   <Swords className="size-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{playerStats.matchesPlayed}</p>
-                  <p className="text-xs text-muted-foreground">Matches</p>
+                  <p className="text-2xl font-bold">{pendingMatches.length}</p>
+                  <p className="text-xs text-muted-foreground">Pending Matches</p>
                 </div>
               </div>
             </CardContent>
@@ -279,52 +128,51 @@ export default function PlayerDashboardPage() {
         </div>
       </section>
 
-      {/* Leaderboard Preview - Compact cards */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Top Players</h2>
+          <h2 className="text-lg font-semibold">Top Community Players</h2>
           <Link href="/player/leaderboard" className="text-sm font-medium text-primary">
             Full leaderboard
           </Link>
         </div>
-        
+
         <Card className="shadow-sm">
           <CardContent className="divide-y p-0">
             {leaderboardPreview.map((entry) => (
-              <div
-                key={entry.rank}
-                className="flex items-center justify-between px-4 py-3"
-              >
+              <div key={entry.id} className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <span
-                    className={`flex size-8 items-center justify-center rounded-full text-sm font-bold ${
-                      entry.rank === 1
-                        ? "bg-amber-100 text-amber-700"
-                        : entry.rank === 2
-                        ? "bg-slate-100 text-slate-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
-                    {entry.rank}
-                  </span>
-                  <span className="font-medium">{entry.player}</span>
+                  <span className="flex size-8 items-center justify-center rounded-full bg-muted font-bold">{entry.rank}</span>
+                  <span className="font-medium">{entry.username}</span>
                 </div>
-                <span className="font-semibold text-muted-foreground">{entry.points} pts</span>
+                <span className="font-semibold text-muted-foreground">{entry.elo} ELO</span>
               </div>
             ))}
           </CardContent>
         </Card>
-        
-        {/* Your position indicator */}
+
         <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Your position:</span>
-            <span className="font-bold">#{currentPlayerRank}</span>
+            <span className="text-sm text-muted-foreground">Your community rank:</span>
+            <span className="font-bold">#{currentPlayerStanding?.rank ?? "-"}</span>
           </div>
           <Link href="/player/leaderboard" className="flex items-center text-sm font-medium text-primary">
             View
             <ChevronRight className="size-4" />
           </Link>
+        </div>
+      </section>
+
+      <section>
+        <div className="rounded-2xl border bg-muted/20 p-4">
+          <div className="flex items-center gap-2">
+            <Trophy className="size-5 text-primary" />
+            <h2 className="font-semibold">Tournament</h2>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {currentCompetition
+              ? `${currentCompetition.name} is ongoing. Use the Tournament tab to view fixtures, results, standings, and history.`
+              : "There is currently no ongoing tournament. Use the Tournament tab to review history and upcoming competitions."}
+          </p>
         </div>
       </section>
     </div>
