@@ -2,25 +2,36 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Filter } from "lucide-react"
+import { Filter, Info } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
 
-type FilterType = "all" | "pending" | "submitted" | "completed" | "disputed"
+type FilterType = "all" | "pending" | "awaiting_review" | "confirmed" | "disputed"
 
 const allMatches = getPlayerMatches(currentPlayerId)
 
+const statusDescriptions = {
+  pending: "Awaiting your result submission",
+  awaiting_review: "You submitted the result - waiting for admin review",
+  confirmed: "Result confirmed by admin - match is complete",
+  disputed: "Match has a dispute filed - under admin review",
+}
+
 function getStatusBadge(status: string) {
-  switch (status) {
+  // Map old statuses to new ones for display
+  const displayStatus = status === "submitted" ? "awaiting_review" : status === "completed" ? "confirmed" : status
+  
+  switch (displayStatus) {
     case "pending":
       return <Badge className="bg-amber-500 text-white">Pending</Badge>
-    case "submitted":
-      return <Badge className="bg-blue-500 text-white">Submitted</Badge>
-    case "completed":
-      return <Badge className="bg-emerald-500 text-white">Completed</Badge>
+    case "awaiting_review":
+      return <Badge className="bg-blue-500 text-white">Awaiting Review</Badge>
+    case "confirmed":
+      return <Badge className="bg-emerald-500 text-white">Confirmed</Badge>
     case "disputed":
       return <Badge className="bg-red-500 text-white">Disputed</Badge>
     default:
@@ -42,34 +53,62 @@ function getResultBadge(result: string | undefined) {
   }
 }
 
+// Helper to map statuses for filtering
+const mapStatusForFilter = (status: string): FilterType | string => {
+  if (status === "submitted") return "awaiting_review"
+  if (status === "completed") return "confirmed"
+  return status as FilterType
+}
+
 export default function PlayerMatchesPage() {
   const [filter, setFilter] = useState<FilterType>("all")
 
   const filteredMatches = useMemo(() => {
-    return filter === "all" ? allMatches : allMatches.filter((match) => match.status === filter)
+    return filter === "all"
+      ? allMatches
+      : allMatches.filter((match) => mapStatusForFilter(match.status) === filter)
   }, [filter])
+
+  const filterOptions: Array<{ value: FilterType; label: string; description: string }> = [
+    { value: "all", label: "All Matches", description: "" },
+    { value: "pending", label: "Pending", description: "Awaiting your result submission" },
+    { value: "awaiting_review", label: "Awaiting Review", description: "Waiting for admin verification" },
+    { value: "confirmed", label: "Confirmed", description: "Admin verified results" },
+    { value: "disputed", label: "Disputed", description: "Under dispute review" },
+  ]
 
   return (
     <div className="space-y-4 pb-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">My Matches</h1>
-        <p className="text-muted-foreground">{allMatches.length} total matches</p>
+        <p className="text-muted-foreground">{allMatches.length} total matches across all tournaments</p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {(["all", "pending", "submitted", "completed", "disputed"] as const).map((option) => (
-          <Button
-            key={option}
-            variant={filter === option ? "default" : "outline"}
-            size="sm"
-            className="shrink-0 rounded-full"
-            onClick={() => setFilter(option)}
-          >
-            {option === "all" ? <Filter className="mr-1.5 size-4" /> : null}
-            {option[0].toUpperCase() + option.slice(1)}
-          </Button>
-        ))}
-      </div>
+      <TooltipProvider>
+        <div className="flex flex-wrap gap-2">
+          {filterOptions.map((option) => (
+            <Tooltip key={option.value} delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={filter === option.value ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setFilter(option.value)}
+                >
+                  {option.value === "all" ? <Filter className="mr-1.5 size-4" /> : null}
+                  {option.label}
+                  {option.description ? <Info className="ml-1 size-3 opacity-60" /> : null}
+                </Button>
+              </TooltipTrigger>
+              {option.description && (
+                <TooltipContent side="bottom" className="text-xs">
+                  {option.description}
+                </TooltipContent>
+              )}
+            </Tooltip>
+          ))}
+        </div>
+      </TooltipProvider>
 
       <Card className="shadow-sm">
         <CardContent className="px-0 sm:px-6">
@@ -93,7 +132,7 @@ export default function PlayerMatchesPage() {
                     <TableCell>{match.opponent}</TableCell>
                     <TableCell>Round {match.round}</TableCell>
                     <TableCell className="capitalize">{match.playerColor}</TableCell>
-                    <TableCell>{getStatusBadge(match.status)}</TableCell>
+                    <TableCell>{getStatusBadge(mapStatusForFilter(match.status))}</TableCell>
                     <TableCell>{getResultBadge(match.result)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" asChild>

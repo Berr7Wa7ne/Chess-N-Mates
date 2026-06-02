@@ -119,44 +119,52 @@ export default function CompetitionsPage() {
 
       <Card className="rounded-lg shadow-sm">
         <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4">
             <div>
               <CardTitle>All Competitions</CardTitle>
               <CardDescription>History of all current and past competitions, with quick access to full details.</CardDescription>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-4">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-4 top-4 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={nameFilter}
                   onChange={(event) => setNameFilter(event.target.value)}
-                  placeholder="Filter by name"
+                  placeholder="Search competitions by name..."
                   className="pl-9"
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {(["all", "Swiss", "Knockout", "Round Robin"] as const).map((type) => (
-                  <Button
-                    key={type}
-                    size="sm"
-                    variant={typeFilter === type ? "default" : "outline"}
-                    onClick={() => setTypeFilter(type)}
-                  >
-                    {type}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(["all", "active", "pending", "completed"] as const).map((status) => (
-                  <Button
-                    key={status}
-                    size="sm"
-                    variant={statusFilter === status ? "default" : "outline"}
-                    onClick={() => setStatusFilter(status)}
-                  >
-                    {status}
-                  </Button>
-                ))}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-sm font-medium">Format</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["all", "Swiss", "Knockout", "Round Robin"] as const).map((type) => (
+                      <Button
+                        key={type}
+                        size="sm"
+                        variant={typeFilter === type ? "default" : "outline"}
+                        onClick={() => setTypeFilter(type)}
+                      >
+                        {type}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium">Status</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["all", "active", "pending", "completed"] as const).map((status) => (
+                      <Button
+                        key={status}
+                        size="sm"
+                        variant={statusFilter === status ? "default" : "outline"}
+                        onClick={() => setStatusFilter(status)}
+                      >
+                        {status}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

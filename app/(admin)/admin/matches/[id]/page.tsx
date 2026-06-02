@@ -1,10 +1,13 @@
 "use client"
 
+import { useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { MatchDetails, type MatchData } from "@/components/match"
+import { approveDispute, rejectDispute, forceMatchResult, disputes, getPlayerMatches } from "@/lib/admin-data"
 
 // Mock match data - in production, fetch based on ID
 const mockMatches: Record<string, MatchData> = {
@@ -46,9 +49,10 @@ const mockMatches: Record<string, MatchData> = {
 export default function AdminMatchDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
   const matchId = params.id as string
 
-  const match = mockMatches[matchId] || {
+  let match = mockMatches[matchId] || {
     id: matchId,
     opponent: "Unknown Player",
     playerColor: "white" as const,
@@ -57,19 +61,74 @@ export default function AdminMatchDetailPage() {
     deadline: new Date(Date.now() + 86400000).toISOString(),
   }
 
+  // Check if match has a dispute and update dispute info
+  const dispute = disputes.find((d) => d.matchId === matchId)
+  if (dispute) {
+    match = {
+      ...match,
+      status: "disputed",
+      dispute: {
+        raisedBy: dispute.raisedBy.username,
+        reason: dispute.reason,
+        status: dispute.status as "open" | "resolved",
+      },
+    }
+  }
+
   const handleForceResult = (result: "white_wins" | "black_wins" | "draw") => {
-    alert(`Force result: ${result}`)
-    // In production: API call to force result
+    const response = forceMatchResult(matchId, result)
+    setFeedback({
+      type: response.success ? "success" : "error",
+      message: response.message,
+    })
+
+    if (response.success) {
+      // Reload match data
+      setTimeout(() => {
+        router.refresh()
+        setFeedback(null)
+      }, 1500)
+    }
   }
 
   const handleApproveDispute = () => {
-    alert("Dispute approved")
-    // In production: API call to approve dispute
+    if (!dispute) {
+      setFeedback({ type: "error", message: "No dispute found to approve" })
+      return
+    }
+
+    const response = approveDispute(dispute.id)
+    setFeedback({
+      type: response.success ? "success" : "error",
+      message: response.message,
+    })
+
+    if (response.success) {
+      setTimeout(() => {
+        router.refresh()
+        setFeedback(null)
+      }, 1500)
+    }
   }
 
   const handleRejectDispute = () => {
-    alert("Dispute rejected")
-    // In production: API call to reject dispute
+    if (!dispute) {
+      setFeedback({ type: "error", message: "No dispute found to reject" })
+      return
+    }
+
+    const response = rejectDispute(dispute.id)
+    setFeedback({
+      type: response.success ? "success" : "error",
+      message: response.message,
+    })
+
+    if (response.success) {
+      setTimeout(() => {
+        router.refresh()
+        setFeedback(null)
+      }, 1500)
+    }
   }
 
   return (
@@ -81,12 +140,23 @@ export default function AdminMatchDetailPage() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Match {matchId}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Match {matchId}</h1>
           <p className="text-muted-foreground">Admin view - Full control</p>
         </div>
       </div>
+
+      {feedback && (
+        <Card className={feedback.type === "success" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}>
+          <CardContent className="flex items-center gap-3 py-4">
+            <CheckCircle2
+              className={`size-5 ${feedback.type === "success" ? "text-emerald-600" : "text-red-600"}`}
+            />
+            <p className={feedback.type === "success" ? "text-emerald-800" : "text-red-800"}>
+              {feedback.message}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <MatchDetails
         role="admin"

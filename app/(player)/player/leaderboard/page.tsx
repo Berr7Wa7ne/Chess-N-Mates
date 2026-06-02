@@ -13,7 +13,7 @@ export default function PlayerLeaderboardPage() {
         <p className="text-muted-foreground">Community rankings based on group ELO ratings.</p>
       </div>
 
-      {currentPlayer ? (
+      {/* {currentPlayer ? (
         <Card className="border-primary bg-primary/5 shadow-sm">
           <CardContent className="flex items-center justify-between p-4">
             <div>
@@ -30,7 +30,7 @@ export default function PlayerLeaderboardPage() {
             </p>
           </CardContent>
         </Card>
-      ) : null}
+      ) : null} */}
 
       <Card className="shadow-sm">
         <CardHeader>

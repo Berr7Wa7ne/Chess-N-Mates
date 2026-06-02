@@ -150,7 +150,7 @@ export default function PlayerDashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3">
+        {/* <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Your community rank:</span>
             <span className="font-bold">#{currentPlayerStanding?.rank ?? "-"}</span>
@@ -159,7 +159,7 @@ export default function PlayerDashboardPage() {
             View
             <ChevronRight className="size-4" />
           </Link>
-        </div>
+        </div> */}
       </section>
 
       <section>

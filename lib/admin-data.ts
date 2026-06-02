@@ -631,6 +631,32 @@ export const leaderboard: LeaderboardEntry[] = [
 ]
 
 export const playerMatchesByPlayerId: Record<number, PlayerMatch[]> = {
+  1: [
+    {
+      id: "M-101",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "KnightRider",
+      opponentId: 2,
+      round: 4,
+      playerColor: "white",
+      status: "pending",
+      deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "M-102",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "QueenSacrifice",
+      opponentId: 4,
+      round: 3,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/gm-alex-001",
+      result: "win",
+    },
+  ],
   2: [
     {
       id: "M-001",
@@ -699,6 +725,164 @@ export const playerMatchesByPlayerId: Record<number, PlayerMatch[]> = {
       },
     },
   ],
+  3: [
+    {
+      id: "M-201",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "GrandMaster_Alex",
+      opponentId: 1,
+      round: 4,
+      playerColor: "white",
+      status: "submitted",
+      deadline: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/pawnstorm-001",
+    },
+    {
+      id: "M-202",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "RookEndgame",
+      opponentId: 5,
+      round: 3,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/pawnstorm-003",
+      result: "draw",
+    },
+  ],
+  4: [
+    {
+      id: "M-301",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "KnightRider",
+      opponentId: 2,
+      round: 4,
+      playerColor: "white",
+      status: "pending",
+      deadline: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "M-302",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "EnPassant",
+      opponentId: 8,
+      round: 3,
+      playerColor: "white",
+      status: "completed",
+      deadline: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/queensacrifice-001",
+      result: "win",
+    },
+  ],
+  5: [
+    {
+      id: "M-401",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "BishopPair",
+      opponentId: 6,
+      round: 4,
+      playerColor: "black",
+      status: "pending",
+      deadline: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "M-402",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "PawnStorm",
+      opponentId: 3,
+      round: 2,
+      playerColor: "white",
+      status: "completed",
+      deadline: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/rookendgame-002",
+      result: "loss",
+    },
+  ],
+  6: [
+    {
+      id: "M-501",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "KnightRider",
+      opponentId: 2,
+      round: 4,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/bishoppair-001",
+      result: "win",
+    },
+    {
+      id: "M-502",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "RookEndgame",
+      opponentId: 5,
+      round: 3,
+      playerColor: "white",
+      status: "pending",
+      deadline: new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString(),
+    },
+  ],
+  7: [
+    {
+      id: "M-601",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "EnPassant",
+      opponentId: 8,
+      round: 4,
+      playerColor: "white",
+      status: "submitted",
+      deadline: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/castleking-001",
+    },
+    {
+      id: "M-602",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "QueenSacrifice",
+      opponentId: 4,
+      round: 2,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://lichess.org/castleking-002",
+      result: "draw",
+    },
+  ],
+  8: [
+    {
+      id: "M-701",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "CastleKing",
+      opponentId: 7,
+      round: 4,
+      playerColor: "black",
+      status: "pending",
+      deadline: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: "M-702",
+      competitionId: 1,
+      competition: "Spring Swiss Championship 2026",
+      opponent: "QueenSacrifice",
+      opponentId: 4,
+      round: 3,
+      playerColor: "black",
+      status: "completed",
+      deadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      gameLink: "https://chess.com/game/live/enpassant-001",
+      result: "loss",
+    },
+  ],
 }
 
 export const currentPlayerId = 2
@@ -734,4 +918,180 @@ export function getPlayerMatches(playerId: number) {
 
 export function getLeaderboardEntry(playerId: number) {
   return leaderboard.find((entry) => entry.id === playerId)
+}
+
+// ============================================================================
+// MUTATION FUNCTIONS - Handle result submissions and dispute actions
+// ============================================================================
+
+export interface ResultSubmission {
+  matchId: string
+  playerId: number
+  gameLink: string
+  hasDispute: boolean
+  disputeReason?: string
+}
+
+/**
+ * Submit a match result from a player
+ */
+export function submitPlayerResult(submission: ResultSubmission): { success: boolean; message: string } {
+  try {
+    const playerMatchesList = playerMatchesByPlayerId[submission.playerId]
+    if (!playerMatchesList) {
+      return { success: false, message: "Player not found" }
+    }
+
+    const match = playerMatchesList.find((m) => m.id === submission.matchId)
+    if (!match) {
+      return { success: false, message: "Match not found" }
+    }
+
+    if (match.status !== "pending") {
+      return { success: false, message: "Match is not pending" }
+    }
+
+    // Update match status
+    match.status = "submitted"
+    match.gameLink = submission.gameLink
+
+    // If there's a dispute, create or update dispute record
+    if (submission.hasDispute && submission.disputeReason) {
+      const existingDispute = disputes.find((d) => d.matchId === submission.matchId)
+
+      if (existingDispute) {
+        // Update existing dispute
+        existingDispute.reason = submission.disputeReason
+        existingDispute.status = "open"
+      } else {
+        // Create new dispute
+        const newDisputeId = Math.max(...disputes.map((d) => d.id), 0) + 1
+        const opponent = match.opponentId
+        const opponentPlayer = players.find((p) => p.id === opponent)
+
+        if (opponentPlayer) {
+          disputes.push({
+            id: newDisputeId,
+            matchId: submission.matchId,
+            raisedBy: {
+              id: submission.playerId,
+              username: players.find((p) => p.id === submission.playerId)?.username || "Unknown",
+              elo: players.find((p) => p.id === submission.playerId)?.elo || 0,
+            },
+            opponent: {
+              id: opponent,
+              username: opponentPlayer.username,
+              elo: opponentPlayer.elo,
+            },
+            reason: submission.disputeReason,
+            status: "open",
+          })
+        }
+      }
+
+      match.dispute = {
+        raisedBy: players.find((p) => p.id === submission.playerId)?.username || "Unknown",
+        reason: submission.disputeReason,
+        status: "open",
+      }
+    }
+
+    return { success: true, message: "Result submitted successfully" }
+  } catch (error) {
+    return { success: false, message: "Error submitting result" }
+  }
+}
+
+/**
+ * Approve a dispute (admin action)
+ */
+export function approveDispute(disputeId: number): { success: boolean; message: string } {
+  try {
+    const dispute = disputes.find((d) => d.id === disputeId)
+    if (!dispute) {
+      return { success: false, message: "Dispute not found" }
+    }
+
+    if (dispute.status !== "open") {
+      return { success: false, message: "Dispute is not open" }
+    }
+
+    // Update dispute status
+    dispute.status = "resolved"
+
+    // Update the match's dispute status
+    const matchId = dispute.matchId
+    Object.values(playerMatchesByPlayerId).forEach((matches) => {
+      const match = matches.find((m) => m.id === matchId)
+      if (match && match.dispute) {
+        match.dispute.status = "resolved"
+      }
+    })
+
+    return { success: true, message: "Dispute approved successfully" }
+  } catch (error) {
+    return { success: false, message: "Error approving dispute" }
+  }
+}
+
+/**
+ * Reject a dispute (admin action)
+ */
+export function rejectDispute(disputeId: number): { success: boolean; message: string } {
+  try {
+    const dispute = disputes.find((d) => d.id === disputeId)
+    if (!dispute) {
+      return { success: false, message: "Dispute not found" }
+    }
+
+    if (dispute.status !== "open") {
+      return { success: false, message: "Dispute is not open" }
+    }
+
+    // Update dispute status
+    dispute.status = "rejected"
+
+    // Update the match's dispute status
+    const matchId = dispute.matchId
+    Object.values(playerMatchesByPlayerId).forEach((matches) => {
+      const match = matches.find((m) => m.id === matchId)
+      if (match && match.dispute) {
+        match.dispute.status = "resolved"
+      }
+    })
+
+    return { success: true, message: "Dispute rejected successfully" }
+  } catch (error) {
+    return { success: false, message: "Error rejecting dispute" }
+  }
+}
+
+/**
+ * Force a match result (admin action)
+ */
+export function forceMatchResult(
+  matchId: string,
+  result: "white_wins" | "black_wins" | "draw"
+): { success: boolean; message: string } {
+  try {
+    let matchFound = false
+
+    // Find the match in player matches
+    Object.values(playerMatchesByPlayerId).forEach((matches) => {
+      const match = matches.find((m) => m.id === matchId)
+      if (match) {
+        match.status = "completed"
+        match.result = result === "draw" ? "draw" : result === "white_wins" ? "win" : "loss"
+        matchFound = true
+      }
+    })
+
+    if (!matchFound) {
+      return { success: false, message: "Match not found" }
+    }
+
+    return { success: true, message: `Match result forced to ${result}` }
+  } catch (error) {
+    return { success: false, message: "Error forcing match result" }
+  }
 }
