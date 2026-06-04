@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+require('./config/env');
 
 const usersRoutes = require('./routes/users');
 const competitionsRoutes = require('./routes/competitions');
@@ -9,7 +9,9 @@ const disputesRoutes = require('./routes/disputes');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+}));
 app.use(express.json());
 
 app.use('/api/v1/users', usersRoutes);
@@ -21,8 +23,20 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to the Chess Community API' });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT);
+
+server.on('listening', () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log('Press Ctrl+C to stop');
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Stop the other process or set PORT to a different value.`);
+  } else {
+    console.error('Failed to start server:', err.message);
+  }
+  process.exit(1);
 });
