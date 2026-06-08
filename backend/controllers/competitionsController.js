@@ -1,26 +1,424 @@
 const { supabase } = require('../config/supabase');
+const { generateFixtures } = require('../services/fixtureGenerator');
+const { computeStandings } = require('../services/standingsService');
+const {
+  attachParticipantCounts,
+  fetchParticipantsWithUsers,
+  getParticipantCount,
+  timestamp,
+} = require('../utils/competitionHelpers');
+
+const ALLOWED_UPDATE_FIELDS = [
+  'name',
+  'description',
+  'tournament_type',
+  'competition_status',
+  'current_round',
+  'registration_open_at',
+  'registration_close_at',
+  'start_date',
+  'end_date',
+  'max_participants',
+  'rounds',
+  'min_elo',
+  'max_elo',
+];
 
 exports.createCompetition = async (req, res) => {
-  const { name, description, tournament_type, max_participants, rounds, min_elo, max_elo, created_by } = req.body;
+  const {
+    name,
+    description,
+    tournament_type,
+    max_participants,
+    rounds,
+    min_elo,
+    max_elo,
+    created_by,
+    registration_open_at,
+    registration_close_at,
+    start_date,
+    end_date,
+  } = req.body;
+
+  if (!name || !tournament_type || !created_by) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'name, tournament_type, and created_by are required' },
+    });
+  }
+
+  const requiredDateFields = {
+    registration_open_at,
+    registration_close_at,
+    start_date,
+    end_date,
+  };
+  const missingDateFields = Object.entries(requiredDateFields)
+    .filter(([, value]) => !value)
+    .map(([field]) => field);
+
+  if (missingDateFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `${missingDateFields.join(', ')} ${missingDateFields.length === 1 ? 'is' : 'are'} required`,
+      },
+    });
+  }
+
   const { data, error } = await supabase
     .from('competitions')
-    .insert([{ name, description, tournament_type, max_participants, rounds, min_elo, max_elo, created_by }])
+    .insert([{
+      name,
+      description,
+      tournament_type,
+      max_participants: max_participants ?? 32,
+      rounds: rounds ?? 5,
+      min_elo: min_elo ?? 800,
+      max_elo: max_elo ?? 3000,
+      created_by,
+      registration_open_at,
+      registration_close_at,
+      start_date,
+      end_date,
+      competition_status: 'draft',
+      current_round: 0,
+    }])
     .select()
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.status(201).json({ success: true, data });
+  res.status(201).json({ success: true, data: { ...data, participant_count: 0 } });
 };
 
 exports.getCompetitions = async (req, res) => {
-  const { data, error } = await supabase.from('competitions').select('*');
+  const status = req.query.status;
+  const type = req.query.type;
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  const offset = Number(req.query.offset) || 0;
+
+  let query = supabase
+    .from('competitions')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (status) query = query.eq('competition_status', status);
+  if (type) query = query.eq('tournament_type', type);
+
+  const { data, error, count } = await query;
+
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+
+  const enriched = await attachParticipantCounts(data || []);
+
+  res.json({
+    success: true,
+    data: enriched,
+    pagination: { total: count ?? enriched.length, limit, offset },
+  });
 };
 
 exports.getCompetition = async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabase.from('competitions').select('*').eq('id', id).single();
+
+  const { data, error } = await supabase
+    .from('competitions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
   if (error) return res.status(404).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+
+  const participant_count = await getParticipantCount(id);
+
+  res.json({ success: true, data: { ...data, participant_count } });
+};
+
+exports.updateCompetition = async (req, res) => {
+  const { id } = req.params;
+  const updates = {};
+
+  for (const field of ALLOWED_UPDATE_FIELDS) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'No valid fields to update' },
+    });
+  }
+
+  const { data, error } = await supabase
+    .from('competitions')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ success: false, error: { message: error.message } });
+
+  const participant_count = await getParticipantCount(id);
+  res.json({ success: true, data: { ...data, participant_count } });
+};
+
+exports.startCompetition = async (req, res) => {
+  const { id } = req.params;
+
+  const { data: competition, error: compError } = await supabase
+    .from('competitions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (compError) {
+    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
+  }
+
+  if (competition.competition_status !== 'open_registration') {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Competition not in "open_registration" status' },
+    });
+  }
+
+  const participants = await fetchParticipantsWithUsers(id);
+  const eligible = participants.filter((p) => p.participant_status === 'registered');
+
+  if (eligible.length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Not enough participants (minimum 2)' },
+    });
+  }
+
+  const { data: existingMatches } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('competition_id', id);
+
+  const fixtures = generateFixtures(
+    competition,
+    eligible,
+    existingMatches || [],
+    [],
+    1
+  );
+
+  const matchRows = fixtures
+    .filter((f) => f.player_a_id && f.player_b_id)
+    .map((f) => ({
+      competition_id: Number(id),
+      round_number: f.round_number || 1,
+      player_a_id: f.player_a_id,
+      player_b_id: f.player_b_id,
+      match_status: 'pending',
+    }));
+
+  if (matchRows.length > 0) {
+    const { error: matchError } = await supabase.from('matches').insert(matchRows);
+    if (matchError) {
+      return res.status(400).json({ success: false, error: { message: matchError.message } });
+    }
+  }
+
+  await supabase
+    .from('competition_participants')
+    .update({ participant_status: 'active' })
+    .eq('competition_id', id)
+    .eq('participant_status', 'registered');
+
+  const { error: updateError } = await supabase
+    .from('competitions')
+    .update({ competition_status: 'active', current_round: 1 })
+    .eq('id', id);
+
+  if (updateError) {
+    return res.status(400).json({ success: false, error: { message: updateError.message } });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      competition_id: Number(id),
+      action: 'started',
+      round: 1,
+      fixtures_generated: matchRows.length,
+      timestamp: timestamp(),
+    },
+  });
+};
+
+exports.advanceRound = async (req, res) => {
+  const { id } = req.params;
+  const includePendingMatches = Boolean(req.body?.include_pending_matches);
+
+  const { data: competition, error: compError } = await supabase
+    .from('competitions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (compError) {
+    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
+  }
+
+  if (competition.competition_status !== 'active') {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Competition is not active' },
+    });
+  }
+
+  const currentRound = competition.current_round || 1;
+
+  const { data: roundMatches } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('competition_id', id)
+    .eq('round_number', currentRound);
+
+  const unresolved = (roundMatches || []).filter((m) => m.match_status !== 'completed');
+
+  if (unresolved.length > 0 && !includePendingMatches) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `${unresolved.length} match(es) in round ${currentRound} are not completed`,
+      },
+    });
+  }
+
+  const nextRound = currentRound + 1;
+  const maxRounds = competition.rounds || 1;
+
+  if (nextRound > maxRounds && competition.tournament_type !== 'knockout') {
+    await supabase
+      .from('competitions')
+      .update({ competition_status: 'completed', end_date: timestamp() })
+      .eq('id', id);
+
+    return res.json({
+      success: true,
+      data: {
+        competition_id: Number(id),
+        previous_round: currentRound,
+        current_round: currentRound,
+        fixtures_generated: 0,
+        unresolved_matches: unresolved.length,
+        timestamp: timestamp(),
+        action: 'completed',
+      },
+    });
+  }
+
+  const participants = await fetchParticipantsWithUsers(id);
+  const { data: allMatches } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('competition_id', id);
+
+  const completedMatches = (allMatches || []).filter((m) => m.match_status === 'completed');
+
+  if (competition.tournament_type === 'knockout') {
+    const roundWinners = completedMatches
+      .filter((m) => m.round_number === currentRound)
+      .map((m) => {
+        if (m.result_winner === 'a') return m.player_a_id;
+        if (m.result_winner === 'b') return m.player_b_id;
+        return m.player_a_id;
+      });
+
+    if (roundWinners.length <= 1) {
+      await supabase
+        .from('competitions')
+        .update({ competition_status: 'completed', end_date: timestamp() })
+        .eq('id', id);
+
+      return res.json({
+        success: true,
+        data: {
+          competition_id: Number(id),
+          previous_round: currentRound,
+          current_round: currentRound,
+          fixtures_generated: 0,
+          unresolved_matches: unresolved.length,
+          timestamp: timestamp(),
+          action: 'completed',
+        },
+      });
+    }
+  }
+
+  const fixtures = generateFixtures(
+    competition,
+    participants,
+    allMatches || [],
+    completedMatches,
+    nextRound
+  );
+
+  const matchRows = fixtures
+    .filter((f) => f.player_a_id && f.player_b_id)
+    .map((f) => ({
+      competition_id: Number(id),
+      round_number: f.round_number || nextRound,
+      player_a_id: f.player_a_id,
+      player_b_id: f.player_b_id,
+      match_status: 'pending',
+    }));
+
+  if (matchRows.length > 0) {
+    const { error: matchError } = await supabase.from('matches').insert(matchRows);
+    if (matchError) {
+      return res.status(400).json({ success: false, error: { message: matchError.message } });
+    }
+  }
+
+  await supabase
+    .from('competitions')
+    .update({ current_round: nextRound })
+    .eq('id', id);
+
+  res.json({
+    success: true,
+    data: {
+      competition_id: Number(id),
+      previous_round: currentRound,
+      current_round: nextRound,
+      fixtures_generated: matchRows.length,
+      unresolved_matches: unresolved.length,
+      timestamp: timestamp(),
+    },
+  });
+};
+
+exports.getStandings = async (req, res) => {
+  const { id } = req.params;
+
+  const { data: competition, error: compError } = await supabase
+    .from('competitions')
+    .select('id')
+    .eq('id', id)
+    .single();
+
+  if (compError) {
+    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
+  }
+
+  const participants = await fetchParticipantsWithUsers(id);
+
+  const { data: matches, error: matchError } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('competition_id', id);
+
+  if (matchError) {
+    return res.status(400).json({ success: false, error: { message: matchError.message } });
+  }
+
+  const standings = computeStandings(participants, matches || []);
+
+  res.json({ success: true, data: standings });
 };

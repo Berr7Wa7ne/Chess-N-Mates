@@ -33,6 +33,9 @@ CREATE TABLE users (
   display_name VARCHAR(255),
   avatar_url VARCHAR(500),
 
+  -- Role
+  role TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('admin', 'player')),
+
   -- Status & Tracking
   user_status user_status DEFAULT 'pending',
   last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -45,6 +48,7 @@ CREATE TABLE users (
 CREATE INDEX idx_whatsapp_id ON users(whatsapp_id);
 CREATE INDEX idx_chess_username ON users(chess_username);
 CREATE INDEX idx_user_status ON users(user_status);
+CREATE INDEX idx_users_role ON users(role);
 
 -- competitions table
 CREATE TABLE competitions (

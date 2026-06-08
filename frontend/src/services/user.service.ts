@@ -1,0 +1,40 @@
+import { API_ENDPOINTS } from '@/src/lib/api/endpoints'
+import { httpClient } from '@/src/lib/api/http'
+import type { BackendApiResponse } from '@/src/types/api'
+import type {
+  ActivityLogEntry,
+  AuthUser,
+  LoginPayload,
+  RegisterChessPayload,
+  RegisterUserPayload,
+  UpdateUserPayload,
+  User,
+} from '@/src/types/user'
+
+export const userService = {
+  login(payload: LoginPayload) {
+    return httpClient.post<AuthUser>(API_ENDPOINTS.USERS.LOGIN, payload)
+  },
+
+  registerUser(payload: RegisterUserPayload) {
+    return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER, payload)
+  },
+
+  registerChessAccount(id: number, payload: RegisterChessPayload) {
+    return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER_CHESS(id), payload)
+  },
+
+  getUser(id: number) {
+    return httpClient.get<User>(API_ENDPOINTS.USERS.GET(id))
+  },
+
+  updateUser(id: number, payload: UpdateUserPayload) {
+    return httpClient.put<User>(API_ENDPOINTS.USERS.UPDATE(id), payload)
+  },
+
+  getActivityLog() {
+    return httpClient.get<ActivityLogEntry[]>(API_ENDPOINTS.USERS.ACTIVITY_LOG)
+  },
+}
+
+export type UserServiceResponse<T> = BackendApiResponse<T>

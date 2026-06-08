@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { title: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Members", href: "/admin/members", icon: Users },
   { title: "Competitions", href: "/admin/competitions", icon: Trophy },
   { title: "Disputes", href: "/admin/disputes", icon: AlertTriangle },
@@ -39,7 +39,7 @@ function SidebarContent({
 
       <nav className="mt-2 flex min-h-0 flex-col gap-2 px-6 py-6">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
 
           return (
             <Link

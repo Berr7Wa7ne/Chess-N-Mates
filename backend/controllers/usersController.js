@@ -1,15 +1,91 @@
 const { supabase } = require('../config/supabase');
 
+const VALID_ROLES = ['admin', 'player'];
+
+function normalizeRole(role) {
+  if (!role) return 'player';
+  return String(role).toLowerCase();
+}
+
 exports.registerUser = async (req, res) => {
-  const { phone_number, whatsapp_id, display_name } = req.body;
+  const { phone_number, whatsapp_id, display_name, role: rawRole } = req.body;
+
+  if (!phone_number || !whatsapp_id || !display_name) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'phone_number, whatsapp_id, and display_name are required' },
+    });
+  }
+
+  const role = normalizeRole(rawRole);
+  if (!VALID_ROLES.includes(role)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Invalid role. Must be admin or player.' },
+    });
+  }
+
+  const { data: existingUser, error: lookupError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('phone_number', phone_number)
+    .maybeSingle();
+
+  if (lookupError) {
+    return res.status(400).json({ success: false, error: { message: lookupError.message } });
+  }
+
+  if (existingUser) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Phone number already registered' },
+    });
+  }
+
   const { data, error } = await supabase
     .from('users')
-    .insert([{ phone_number, whatsapp_id, display_name, email: `${phone_number}@temp.com` }])
+    .insert([{
+      phone_number,
+      whatsapp_id,
+      display_name,
+      role,
+      email: `${phone_number}@temp.com`,
+    }])
     .select()
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
   res.status(201).json({ success: true, data });
+};
+
+exports.loginUser = async (req, res) => {
+  const { phone_number } = req.body;
+
+  if (!phone_number) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'phone_number is required' },
+    });
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, phone_number, display_name, role')
+    .eq('phone_number', phone_number.trim())
+    .maybeSingle();
+
+  if (error) {
+    return res.status(400).json({ success: false, error: { message: error.message } });
+  }
+
+  if (!data) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'No account found for this phone number' },
+    });
+  }
+
+  res.json({ success: true, data });
 };
 
 exports.registerChess = async (req, res) => {

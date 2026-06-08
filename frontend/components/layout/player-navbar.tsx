@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { LayoutDashboard, LogOut, Medal, Moon, Sun, Swords, Trophy, User } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/src/hooks/useAuth"
 
 const navItems = [
   { title: "Dashboard", href: "/player/dashboard", icon: LayoutDashboard },
@@ -24,16 +25,30 @@ const navItems = [
   { title: "Profile", href: "/player/profile", icon: User },
 ]
 
-const player = {
-  name: "Maria Garcia",
-  username: "KnightRider",
-  initials: "MG",
+function getInitials(name?: string | null) {
+  if (!name) return "P"
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
 }
 
 export function PlayerNavbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { currentUser, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
+  const playerName = currentUser?.display_name || "Player"
+  const playerUsername = currentUser?.chess_username || currentUser?.phone_number || "player"
+
+  function handleLogout() {
+    logout()
+    router.push("/login")
+  }
 
   return (
     <header className="mt-10 bg-background text-foreground">
@@ -68,16 +83,16 @@ export function PlayerNavbar() {
               <Button variant="ghost" size="sm" className="hidden gap-2 sm:flex">
                 <Avatar className="size-8">
                   <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                    {player.initials}
+                    {getInitials(playerName)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="font-medium">{player.name}</span>
+                <span className="font-medium">{playerName}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <div className="px-3 py-2">
-                <p className="font-medium">{player.name}</p>
-                <p className="text-sm text-muted-foreground">@{player.username}</p>
+                <p className="font-medium">{playerName}</p>
+                <p className="text-sm text-muted-foreground">@{playerUsername}</p>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -87,7 +102,7 @@ export function PlayerNavbar() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">
+              <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
                 <LogOut className="mr-2 size-4" />
                 Sign out
               </DropdownMenuItem>

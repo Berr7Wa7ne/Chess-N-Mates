@@ -1,10 +1,19 @@
 "use client"
 
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Bell, Menu, Moon, Sun, User } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/src/hooks/useAuth"
 
 function TopbarIconButton({
   children,
@@ -37,7 +46,15 @@ export function AdminTopbar({
   showLogo: boolean
 }) {
   const { resolvedTheme, setTheme } = useTheme()
+  const router = useRouter()
+  const { logout, currentUser } = useAuth()
   const isDark = resolvedTheme === "dark"
+  const displayName = currentUser?.display_name || "Admin"
+
+  function handleSignOut() {
+    logout()
+    router.push("/login")
+  }
 
   return (
     <header className="top-0 z-40 flex h-[72px] items-center justify-between bg-white px-4 transition-colors dark:border-white/10 dark:bg-[#16181b] sm:px-6 lg:px-8">
@@ -81,17 +98,31 @@ export function AdminTopbar({
           </span>
         </TopbarIconButton>
 
-        <button
-          type="button"
-          className="flex size-12 items-center justify-center rounded-full bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white dark:focus-visible:ring-white/20"
-          aria-label="Open user menu"
-        >
-          <Avatar className="size-12 border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
-            <AvatarFallback className="bg-slate-50 text-slate-700 dark:bg-white/5 dark:text-slate-300">
-              <User className="size-5" />
-            </AvatarFallback>
-          </Avatar>
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex size-12 items-center justify-center rounded-full bg-slate-50 text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white dark:focus-visible:ring-white/20"
+              aria-label="Open user menu"
+            >
+              <Avatar className="size-12 border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+                <AvatarFallback className="bg-slate-50 text-slate-700 dark:bg-white/5 dark:text-slate-300">
+                  <User className="size-5" />
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="px-3 py-2">
+              <p className="font-medium">{displayName}</p>
+              <p className="text-xs text-muted-foreground">Signed in as admin</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-red-600" onClick={handleSignOut}>
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )
