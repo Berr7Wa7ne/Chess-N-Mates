@@ -4,7 +4,7 @@ const AUTH_USER_KEY = 'chess_tournament_user'
 const PHONE_INDEX_KEY = 'chess_tournament_phone_index'
 
 interface PhoneIndex {
-  [phone: string]: number
+  [phone: string]: string
 }
 
 export function getStoredUser(): User | null {
@@ -39,7 +39,7 @@ function getPhoneIndex(): PhoneIndex {
   }
 }
 
-export function getUserIdByPhone(phone: string): number | null {
+export function getUserIdByPhone(phone: string): string | null {
   const index = getPhoneIndex()
   return index[phone] ?? null
 }
