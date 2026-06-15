@@ -1,4 +1,4 @@
-const { supabase } = require('../config/supabase');
+const { supabase, supabaseAdmin } = require('../config/supabase');
 const { generateFixtures } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
 const {
@@ -22,6 +22,14 @@ const ALLOWED_UPDATE_FIELDS = [
   'rounds',
   'min_elo',
   'max_elo',
+  'time_control',
+  'timezone',
+  'entry_fee_prize',
+  'platform',
+  'match_length',
+  'format_match_rules',
+  'rules',
+  'round_robin_legs',
 ];
 
 exports.createCompetition = async (req, res) => {
@@ -38,6 +46,14 @@ exports.createCompetition = async (req, res) => {
     registration_close_at,
     start_date,
     end_date,
+    time_control,
+    timezone,
+    entry_fee_prize,
+    platform,
+    match_length,
+    format_match_rules,
+    rules,
+    round_robin_legs,
   } = req.body;
 
   if (!name || !tournament_type || !created_by) {
@@ -66,7 +82,7 @@ exports.createCompetition = async (req, res) => {
     });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competitions')
     .insert([{
       name,
@@ -81,6 +97,14 @@ exports.createCompetition = async (req, res) => {
       registration_close_at,
       start_date,
       end_date,
+      time_control,
+      timezone: timezone ?? 'UTC+1:00',
+      entry_fee_prize,
+      platform: platform ?? 'chess.com',
+      match_length: match_length ?? 'single_match',
+      format_match_rules,
+      rules: rules ?? [],
+      round_robin_legs: round_robin_legs ?? 1,
       competition_status: 'draft',
       current_round: 0,
     }])
@@ -97,7 +121,7 @@ exports.getCompetitions = async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
   const offset = Number(req.query.offset) || 0;
 
-  let query = supabase
+  let query = supabaseAdmin
     .from('competitions')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
@@ -122,7 +146,7 @@ exports.getCompetitions = async (req, res) => {
 exports.getCompetition = async (req, res) => {
   const { id } = req.params;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competitions')
     .select('*')
     .eq('id', id)
@@ -150,7 +174,7 @@ exports.updateCompetition = async (req, res) => {
     });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competitions')
     .update(updates)
     .eq('id', id)
@@ -166,7 +190,7 @@ exports.updateCompetition = async (req, res) => {
 exports.startCompetition = async (req, res) => {
   const { id } = req.params;
 
-  const { data: competition, error: compError } = await supabase
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('*')
     .eq('id', id)
@@ -193,7 +217,7 @@ exports.startCompetition = async (req, res) => {
     });
   }
 
-  const { data: existingMatches } = await supabase
+  const { data: existingMatches } = await supabaseAdmin
     .from('matches')
     .select('*')
     .eq('competition_id', id);
@@ -209,7 +233,7 @@ exports.startCompetition = async (req, res) => {
   const matchRows = fixtures
     .filter((f) => f.player_a_id && f.player_b_id)
     .map((f) => ({
-      competition_id: Number(id),
+      competition_id: id,
       round_number: f.round_number || 1,
       player_a_id: f.player_a_id,
       player_b_id: f.player_b_id,
@@ -217,19 +241,19 @@ exports.startCompetition = async (req, res) => {
     }));
 
   if (matchRows.length > 0) {
-    const { error: matchError } = await supabase.from('matches').insert(matchRows);
+    const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
     if (matchError) {
       return res.status(400).json({ success: false, error: { message: matchError.message } });
     }
   }
 
-  await supabase
+  await supabaseAdmin
     .from('competition_participants')
     .update({ participant_status: 'active' })
     .eq('competition_id', id)
     .eq('participant_status', 'registered');
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from('competitions')
     .update({ competition_status: 'active', current_round: 1 })
     .eq('id', id);
@@ -241,7 +265,7 @@ exports.startCompetition = async (req, res) => {
   res.json({
     success: true,
     data: {
-      competition_id: Number(id),
+      competition_id: id,
       action: 'started',
       round: 1,
       fixtures_generated: matchRows.length,
@@ -254,7 +278,7 @@ exports.advanceRound = async (req, res) => {
   const { id } = req.params;
   const includePendingMatches = Boolean(req.body?.include_pending_matches);
 
-  const { data: competition, error: compError } = await supabase
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('*')
     .eq('id', id)
@@ -273,7 +297,7 @@ exports.advanceRound = async (req, res) => {
 
   const currentRound = competition.current_round || 1;
 
-  const { data: roundMatches } = await supabase
+  const { data: roundMatches } = await supabaseAdmin
     .from('matches')
     .select('*')
     .eq('competition_id', id)
@@ -294,7 +318,7 @@ exports.advanceRound = async (req, res) => {
   const maxRounds = competition.rounds || 1;
 
   if (nextRound > maxRounds && competition.tournament_type !== 'knockout') {
-    await supabase
+    await supabaseAdmin
       .from('competitions')
       .update({ competition_status: 'completed', end_date: timestamp() })
       .eq('id', id);
@@ -302,7 +326,7 @@ exports.advanceRound = async (req, res) => {
     return res.json({
       success: true,
       data: {
-        competition_id: Number(id),
+        competition_id: id,
         previous_round: currentRound,
         current_round: currentRound,
         fixtures_generated: 0,
@@ -314,7 +338,7 @@ exports.advanceRound = async (req, res) => {
   }
 
   const participants = await fetchParticipantsWithUsers(id);
-  const { data: allMatches } = await supabase
+  const { data: allMatches } = await supabaseAdmin
     .from('matches')
     .select('*')
     .eq('competition_id', id);
@@ -331,7 +355,7 @@ exports.advanceRound = async (req, res) => {
       });
 
     if (roundWinners.length <= 1) {
-      await supabase
+      await supabaseAdmin
         .from('competitions')
         .update({ competition_status: 'completed', end_date: timestamp() })
         .eq('id', id);
@@ -339,14 +363,14 @@ exports.advanceRound = async (req, res) => {
       return res.json({
         success: true,
         data: {
-          competition_id: Number(id),
-          previous_round: currentRound,
-          current_round: currentRound,
-          fixtures_generated: 0,
-          unresolved_matches: unresolved.length,
-          timestamp: timestamp(),
-          action: 'completed',
-        },
+        competition_id: id,
+        previous_round: currentRound,
+        current_round: currentRound,
+        fixtures_generated: 0,
+        unresolved_matches: unresolved.length,
+        timestamp: timestamp(),
+        action: 'completed',
+      },
       });
     }
   }
@@ -362,7 +386,7 @@ exports.advanceRound = async (req, res) => {
   const matchRows = fixtures
     .filter((f) => f.player_a_id && f.player_b_id)
     .map((f) => ({
-      competition_id: Number(id),
+      competition_id: id,
       round_number: f.round_number || nextRound,
       player_a_id: f.player_a_id,
       player_b_id: f.player_b_id,
@@ -370,13 +394,13 @@ exports.advanceRound = async (req, res) => {
     }));
 
   if (matchRows.length > 0) {
-    const { error: matchError } = await supabase.from('matches').insert(matchRows);
+    const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
     if (matchError) {
       return res.status(400).json({ success: false, error: { message: matchError.message } });
     }
   }
 
-  await supabase
+  await supabaseAdmin
     .from('competitions')
     .update({ current_round: nextRound })
     .eq('id', id);
@@ -384,7 +408,7 @@ exports.advanceRound = async (req, res) => {
   res.json({
     success: true,
     data: {
-      competition_id: Number(id),
+      competition_id: id,
       previous_round: currentRound,
       current_round: nextRound,
       fixtures_generated: matchRows.length,
@@ -397,7 +421,7 @@ exports.advanceRound = async (req, res) => {
 exports.getStandings = async (req, res) => {
   const { id } = req.params;
 
-  const { data: competition, error: compError } = await supabase
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('id')
     .eq('id', id)
@@ -409,7 +433,7 @@ exports.getStandings = async (req, res) => {
 
   const participants = await fetchParticipantsWithUsers(id);
 
-  const { data: matches, error: matchError } = await supabase
+  const { data: matches, error: matchError } = await supabaseAdmin
     .from('matches')
     .select('*')
     .eq('competition_id', id);

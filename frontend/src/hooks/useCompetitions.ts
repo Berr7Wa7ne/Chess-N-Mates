@@ -20,25 +20,25 @@ export function useCompetitions(params?: CompetitionListParams) {
   })
 }
 
-export function useCompetition(id: number, enabled = true) {
+export function useCompetition(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.competitions.detail(id),
     queryFn: async () => {
       const response = await competitionService.getCompetition(id)
       return response.data
     },
-    enabled: enabled && id > 0,
+    enabled: enabled && !!id,
   })
 }
 
-export function useCompetitionStandings(id: number, enabled = true) {
+export function useCompetitionStandings(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.competitions.standings(id),
     queryFn: async () => {
       const response = await competitionService.getStandings(id)
       return response.data
     },
-    enabled: enabled && id > 0,
+    enabled: enabled && !!id,
   })
 }
 
@@ -46,7 +46,7 @@ export function useStartCompetition() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: number) => competitionService.startCompetition(id),
+    mutationFn: (id: string) => competitionService.startCompetition(id),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
@@ -62,7 +62,7 @@ export function useAdvanceRound() {
       id,
       payload,
     }: {
-      id: number
+      id: string
       payload?: AdvanceRoundPayload
     }) => competitionService.advanceRound(id, payload),
     onSuccess: (_data, { id }) => {
@@ -92,10 +92,23 @@ export function useUpdateCompetition() {
       id,
       payload,
     }: {
-      id: number
+      id: string
       payload: UpdateCompetitionPayload
     }) => competitionService.updateCompetition(id, payload),
     onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
+    },
+  })
+}
+
+export function useOpenRegistration() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      competitionService.updateCompetition(id, { competition_status: 'open_registration' }),
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
     },

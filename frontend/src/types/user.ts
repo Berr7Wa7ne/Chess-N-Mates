@@ -3,7 +3,7 @@ export type ChessPlatform = 'chess.com' | 'lichess' | 'none'
 export type UserRole = 'admin' | 'player'
 
 export interface User {
-  id: number
+  id: string
   email?: string
   phone_number: string
   whatsapp_id: string
@@ -22,7 +22,7 @@ export interface User {
 }
 
 export interface AuthUser {
-  id: number
+  id: string
   phone_number: string
   display_name: string
   role: UserRole
@@ -50,10 +50,10 @@ export interface UpdateUserPayload {
 }
 
 export interface ActivityLogEntry {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   action: string
   entity_type?: string
-  entity_id?: number
+  entity_id?: string
   created_at: string
 }

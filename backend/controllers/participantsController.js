@@ -1,4 +1,4 @@
-const { supabase } = require('../config/supabase');
+const { supabase, supabaseAdmin } = require('../config/supabase');
 const {
   getParticipantCount,
   isRegistrationOpen,
@@ -16,7 +16,15 @@ exports.joinCompetition = async (req, res) => {
     });
   }
 
-  const { data: competition, error: compError } = await supabase
+  // Validate user_id is a UUID from Supabase Auth, not a numeric ID
+  if (/^\d+$/.test(user_id)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Invalid user_id format. Use the Supabase Auth UUID.' },
+    });
+  }
+
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('*')
     .eq('id', id)
@@ -41,7 +49,7 @@ exports.joinCompetition = async (req, res) => {
     });
   }
 
-  const { data: user, error: userError } = await supabase
+  const { data: user, error: userError } = await supabaseAdmin
     .from('users')
     .select('id, chess_elo')
     .eq('id', user_id)
@@ -59,7 +67,7 @@ exports.joinCompetition = async (req, res) => {
     });
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from('competition_participants')
     .select('id, participant_status')
     .eq('competition_id', id)
@@ -74,7 +82,7 @@ exports.joinCompetition = async (req, res) => {
   }
 
   if (existing?.participant_status === 'withdrawn') {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('competition_participants')
       .update({
         participant_status: 'registered',
@@ -89,10 +97,10 @@ exports.joinCompetition = async (req, res) => {
     return res.status(201).json({ success: true, data });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competition_participants')
     .insert([{
-      competition_id: Number(id),
+      competition_id: id,
       user_id,
       participant_status: 'registered',
       score: 0,
@@ -110,7 +118,7 @@ exports.joinCompetition = async (req, res) => {
 exports.withdrawParticipant = async (req, res) => {
   const { id, userId } = req.params;
 
-  const { data: competition, error: compError } = await supabase
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('competition_status')
     .eq('id', id)
@@ -127,7 +135,7 @@ exports.withdrawParticipant = async (req, res) => {
     });
   }
 
-  const { data: participant, error: partError } = await supabase
+  const { data: participant, error: partError } = await supabaseAdmin
     .from('competition_participants')
     .select('*')
     .eq('competition_id', id)
@@ -147,7 +155,7 @@ exports.withdrawParticipant = async (req, res) => {
 
   const previousStatus = participant.participant_status;
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from('competition_participants')
     .update({ participant_status: 'withdrawn' })
     .eq('id', participant.id);
@@ -170,7 +178,7 @@ exports.withdrawParticipant = async (req, res) => {
 exports.eliminateParticipant = async (req, res) => {
   const { id, userId } = req.params;
 
-  const { data: competition, error: compError } = await supabase
+  const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
     .select('tournament_type, competition_status')
     .eq('id', id)
@@ -187,7 +195,7 @@ exports.eliminateParticipant = async (req, res) => {
     });
   }
 
-  const { data: participant, error: partError } = await supabase
+  const { data: participant, error: partError } = await supabaseAdmin
     .from('competition_participants')
     .select('*')
     .eq('competition_id', id)
@@ -208,7 +216,7 @@ exports.eliminateParticipant = async (req, res) => {
   const previousStatus = participant.participant_status;
   const eliminatedAt = timestamp();
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from('competition_participants')
     .update({
       participant_status: 'eliminated',

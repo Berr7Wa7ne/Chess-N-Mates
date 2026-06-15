@@ -20,15 +20,15 @@ export const userService = {
     return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER, payload)
   },
 
-  registerChessAccount(id: number, payload: RegisterChessPayload) {
+  registerChessAccount(id: string, payload: RegisterChessPayload) {
     return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER_CHESS(id), payload)
   },
 
-  getUser(id: number) {
+  getUser(id: string) {
     return httpClient.get<User>(API_ENDPOINTS.USERS.GET(id))
   },
 
-  updateUser(id: number, payload: UpdateUserPayload) {
+  updateUser(id: string, payload: UpdateUserPayload) {
     return httpClient.put<User>(API_ENDPOINTS.USERS.UPDATE(id), payload)
   },
 

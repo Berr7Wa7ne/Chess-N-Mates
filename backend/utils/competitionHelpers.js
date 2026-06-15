@@ -1,7 +1,7 @@
-const { supabase } = require('../config/supabase');
+const { supabase, supabaseAdmin } = require('../config/supabase');
 
 async function getParticipantCount(competitionId) {
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from('competition_participants')
     .select('*', { count: 'exact', head: true })
     .eq('competition_id', competitionId)
@@ -15,7 +15,7 @@ async function attachParticipantCounts(competitions) {
   if (!competitions.length) return competitions;
 
   const ids = competitions.map((c) => c.id);
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competition_participants')
     .select('competition_id')
     .in('competition_id', ids)
@@ -35,7 +35,7 @@ async function attachParticipantCounts(competitions) {
 }
 
 async function fetchParticipantsWithUsers(competitionId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('competition_participants')
     .select(`
       *,

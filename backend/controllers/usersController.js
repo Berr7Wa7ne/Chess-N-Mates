@@ -1,4 +1,4 @@
-const { supabase } = require('../config/supabase');
+const { supabase, supabaseAdmin } = require('../config/supabase');
 
 const VALID_ROLES = ['admin', 'player'];
 
@@ -25,7 +25,7 @@ exports.registerUser = async (req, res) => {
     });
   }
 
-  const { data: existingUser, error: lookupError } = await supabase
+  const { data: existingUser, error: lookupError } = await supabaseAdmin
     .from('users')
     .select('id')
     .eq('phone_number', phone_number)
@@ -42,7 +42,7 @@ exports.registerUser = async (req, res) => {
     });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .insert([{
       phone_number,
@@ -68,7 +68,7 @@ exports.loginUser = async (req, res) => {
     });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .select('id, phone_number, display_name, role')
     .eq('phone_number', phone_number.trim())
@@ -91,7 +91,7 @@ exports.loginUser = async (req, res) => {
 exports.registerChess = async (req, res) => {
   const { id } = req.params;
   const { chess_username, chess_platform } = req.body;
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .update({ chess_username, chess_platform, chess_elo: 1200 })
     .eq('id', id)
@@ -104,7 +104,7 @@ exports.registerChess = async (req, res) => {
 
 exports.getUser = async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+  const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', id).single();
   if (error) return res.status(404).json({ success: false, error: { message: error.message } });
   res.json({ success: true, data });
 };
@@ -112,7 +112,7 @@ exports.getUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
   const { display_name, avatar_url } = req.body;
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .update({ display_name, avatar_url })
     .eq('id', id)

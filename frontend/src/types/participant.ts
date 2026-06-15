@@ -1,9 +1,9 @@
 export type ParticipantStatus = 'registered' | 'active' | 'eliminated' | 'withdrawn'
 
 export interface Participant {
-  id: number
-  competition_id: number
-  user_id: number
+  id: string
+  competition_id: string
+  user_id: string
   participant_status: ParticipantStatus
   score: number
   wins: number
@@ -14,7 +14,7 @@ export interface Participant {
 }
 
 export interface JoinCompetitionPayload {
-  user_id: number
+  user_id: string
 }
 
 export interface WithdrawParticipantPayload {
@@ -26,7 +26,7 @@ export interface EliminateParticipantPayload {
 }
 
 export interface ParticipantActionResult {
-  participant_id: number
+  participant_id: string
   previous_status: ParticipantStatus
   new_status: ParticipantStatus
   eliminated_at?: string

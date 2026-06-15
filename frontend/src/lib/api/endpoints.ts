@@ -2,27 +2,36 @@ export const API_ENDPOINTS = {
   USERS: {
     LOGIN: '/users/login',
     REGISTER: '/users/register',
-    REGISTER_CHESS: (id: number) => `/users/${id}/register-chess`,
-    GET: (id: number) => `/users/${id}`,
-    UPDATE: (id: number) => `/users/${id}`,
+    REGISTER_CHESS: (id: string) => `/users/${id}/register-chess`,
+    GET: (id: string) => `/users/${id}`,
+    UPDATE: (id: string) => `/users/${id}`,
     ACTIVITY_LOG: '/users/activity/log',
   },
 
   COMPETITIONS: {
     CREATE: '/competitions',
     LIST: '/competitions',
-    GET: (id: number) => `/competitions/${id}`,
-    UPDATE: (id: number) => `/competitions/${id}`,
-    START: (id: number) => `/competitions/${id}/start`,
-    ADVANCE_ROUND: (id: number) => `/competitions/${id}/advance-round`,
-    STANDINGS: (id: number) => `/competitions/${id}/standings`,
+    GET: (id: string) => `/competitions/${id}`,
+    UPDATE: (id: string) => `/competitions/${id}`,
+    START: (id: string) => `/competitions/${id}/start`,
+    ADVANCE_ROUND: (id: string) => `/competitions/${id}/advance-round`,
+    STANDINGS: (id: string) => `/competitions/${id}/standings`,
+    MATCHES: (id: string) => `/competitions/${id}/matches`,
   },
 
   PARTICIPANTS: {
-    JOIN: (id: number) => `/competitions/${id}/join`,
-    WITHDRAW: (id: number, userId: number) =>
+    JOIN: (id: string) => `/competitions/${id}/join`,
+    WITHDRAW: (id: string, userId: string) =>
       `/competitions/${id}/participants/${userId}/withdraw`,
-    ELIMINATE: (id: number, userId: number) =>
+    ELIMINATE: (id: string, userId: string) =>
       `/competitions/${id}/participants/${userId}/eliminate`,
+  },
+
+  MATCHES: {
+    GET: (id: string) => `/matches/${id}`,
+    SUBMIT_RESULT: (id: string) => `/matches/${id}/submit-result`,
+    CONFIRM_RESULT: (id: string) => `/matches/${id}/confirm-result`,
+    FORCE_RESULT: (id: string) => `/matches/${id}/force-result`,
+    EXTEND_DEADLINE: (id: string) => `/matches/${id}/extend-deadline`,
   },
 } as const

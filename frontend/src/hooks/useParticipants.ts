@@ -17,7 +17,7 @@ export function useJoinCompetition() {
       competitionId,
       payload,
     }: {
-      competitionId: number
+      competitionId: string
       payload: JoinCompetitionPayload
     }) => participantService.joinCompetition(competitionId, payload),
     onSuccess: (_data, { competitionId }) => {
@@ -37,8 +37,8 @@ export function useWithdraw() {
       userId,
       payload,
     }: {
-      competitionId: number
-      userId: number
+      competitionId: string
+      userId: string
       payload?: WithdrawParticipantPayload
     }) =>
       participantService.withdrawParticipant(competitionId, userId, payload),
@@ -59,8 +59,8 @@ export function useEliminate() {
       userId,
       payload,
     }: {
-      competitionId: number
-      userId: number
+      competitionId: string
+      userId: string
       payload?: EliminateParticipantPayload
     }) =>
       participantService.eliminateParticipant(competitionId, userId, payload),

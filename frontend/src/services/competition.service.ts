@@ -22,26 +22,26 @@ export const competitionService = {
     return httpClient.get<Competition[]>(API_ENDPOINTS.COMPETITIONS.LIST, searchParams)
   },
 
-  getCompetition(id: number) {
+  getCompetition(id: string) {
     return httpClient.get<Competition>(API_ENDPOINTS.COMPETITIONS.GET(id))
   },
 
-  updateCompetition(id: number, payload: UpdateCompetitionPayload) {
+  updateCompetition(id: string, payload: UpdateCompetitionPayload) {
     return httpClient.patch<Competition>(API_ENDPOINTS.COMPETITIONS.UPDATE(id), payload)
   },
 
-  startCompetition(id: number) {
+  startCompetition(id: string) {
     return httpClient.post<StartCompetitionResult>(API_ENDPOINTS.COMPETITIONS.START(id), {})
   },
 
-  advanceRound(id: number, payload?: AdvanceRoundPayload) {
+  advanceRound(id: string, payload?: AdvanceRoundPayload) {
     return httpClient.post<AdvanceRoundResult>(
       API_ENDPOINTS.COMPETITIONS.ADVANCE_ROUND(id),
       payload ?? {}
     )
   },
 
-  getStandings(id: number) {
+  getStandings(id: string) {
     return httpClient.get<StandingEntry[]>(API_ENDPOINTS.COMPETITIONS.STANDINGS(id))
   },
 }

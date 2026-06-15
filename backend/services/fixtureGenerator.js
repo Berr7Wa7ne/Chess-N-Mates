@@ -1,5 +1,7 @@
 /**
  * Tournament fixture generation for Swiss, Knockout, and Round Robin formats.
+ * Updated with proper Round Robin circle method, double-leg support,
+ * and knockout bye handling.
  */
 
 function hasPlayedBefore(existingMatches, playerA, playerB) {
@@ -17,6 +19,8 @@ function sortByScoreAndElo(participants) {
     return (b.chess_elo || 0) - (a.chess_elo || 0);
   });
 }
+
+// ─── Swiss System ───────────────────────────────────────────────
 
 function generateSwissPairings(participants, existingMatches) {
   const active = sortByScoreAndElo(
@@ -68,6 +72,8 @@ function generateSwissPairings(participants, existingMatches) {
   return pairs;
 }
 
+// ─── Knockout ────────────────────────────────────────────────────
+
 function generateKnockoutPairings(participants, roundNumber, completedMatches) {
   const active = sortByScoreAndElo(
     participants.filter((p) => p.participant_status === 'active' || p.participant_status === 'registered')
@@ -76,6 +82,8 @@ function generateKnockoutPairings(participants, roundNumber, completedMatches) {
   if (roundNumber === 1) {
     const seeded = sortByScoreAndElo(active);
     const pairs = [];
+
+    // Standard seeding: 1 vs N, 2 vs N-1, etc.
     let left = 0;
     let right = seeded.length - 1;
 
@@ -88,10 +96,11 @@ function generateKnockoutPairings(participants, roundNumber, completedMatches) {
       right -= 1;
     }
 
+    // Handle bye (odd number of players) — player gets a walkover
     if (left === right) {
       pairs.push({
         player_a_id: seeded[left].user_id,
-        player_b_id: null,
+        player_b_id: seeded[left].user_id, // self-pair = bye
         is_bye: true,
       });
     }
@@ -99,13 +108,20 @@ function generateKnockoutPairings(participants, roundNumber, completedMatches) {
     return pairs;
   }
 
+  // Subsequent rounds: winners from previous round
   const roundMatches = completedMatches.filter((m) => m.round_number === roundNumber - 1);
   const winners = [];
 
   for (const match of roundMatches) {
-    if (match.result_winner === 'a') winners.push(match.player_a_id);
-    else if (match.result_winner === 'b') winners.push(match.player_b_id);
-    else if (match.is_bye || !match.player_b_id) winners.push(match.player_a_id);
+    if (match.is_bye) {
+      // Bye winner is the player who had the bye
+      winners.push(match.player_a_id);
+    } else if (match.result_winner === 'a') {
+      winners.push(match.player_a_id);
+    } else if (match.result_winner === 'b') {
+      winners.push(match.player_b_id);
+    }
+    // If draw in knockout — treat as unresolved (should not happen normally)
   }
 
   const pairs = [];
@@ -113,46 +129,103 @@ function generateKnockoutPairings(participants, roundNumber, completedMatches) {
     if (i + 1 < winners.length) {
       pairs.push({ player_a_id: winners[i], player_b_id: winners[i + 1] });
     } else {
-      pairs.push({ player_a_id: winners[i], player_b_id: null, is_bye: true });
+      // Another bye if odd number of winners
+      pairs.push({ player_a_id: winners[i], player_b_id: winners[i], is_bye: true });
     }
   }
 
   return pairs;
 }
 
-function generateRoundRobinPairings(participants, roundNumber) {
+// ─── Round Robin (Proper Circle Method) ──────────────────────────
+
+/**
+ * Generates round robin pairings using the standard circle method.
+ * Guarantees each player faces every other player exactly once per leg.
+ * 
+ * Circle method algorithm:
+ * - Fix one player (the "anchor")
+ * - Rotate the other N-1 players around the anchor
+ * - Each rotation produces one round of pairings
+ */
+function generateRoundRobinPairsCircleMethod(players) {
+  const n = players.length;
+  if (n < 2) return [];
+
+  // If odd, add a "dummy" player (bye)
+  const isOdd = n % 2 !== 0;
+  const all = isOdd ? [...players, null] : [...players];
+  const total = all.length; // even now
+
+  const rounds = [];
+
+  // The circle method: fix the first element, rotate the rest
+  for (let round = 0; round < total - 1; round++) {
+    const roundPairs = [];
+
+    for (let i = 0; i < total / 2; i++) {
+      const a = all[i];
+      const b = all[total - 1 - i];
+
+      if (a !== null && b !== null) {
+        roundPairs.push({ player_a_id: a, player_b_id: b });
+      }
+      // If one is null, that player gets a bye (skipped)
+    }
+
+    rounds.push(roundPairs);
+
+    // Rotate: keep first element fixed, rotate the rest clockwise
+    const last = all.pop();
+    all.splice(1, 0, last);
+  }
+
+  return rounds;
+}
+
+function generateRoundRobinFixtures(participants, totalRounds, legs = 1) {
   const active = sortByScoreAndElo(
     participants.filter((p) => ['registered', 'active'].includes(p.participant_status))
   );
 
-  const allPairings = [];
-  for (let i = 0; i < active.length; i += 1) {
-    for (let j = i + 1; j < active.length; j += 1) {
-      allPairings.push({
-        player_a_id: active[i].user_id,
-        player_b_id: active[j].user_id,
+  const playerIds = active.map((p) => p.user_id);
+  const roundPairings = generateRoundRobinPairsCircleMethod(playerIds);
+
+  if (roundPairings.length === 0) return [];
+
+  const fixtures = [];
+
+  // Single leg: use rounds as-is
+  for (let r = 0; r < roundPairings.length; r++) {
+    for (const pair of roundPairings[r]) {
+      fixtures.push({
+        ...pair,
+        round_number: r + 1,
       });
     }
   }
 
-  const perRound = Math.max(1, Math.ceil(allPairings.length / Math.max(active.length - 1, 1)));
-  const start = (roundNumber - 1) * perRound;
-  return allPairings.slice(start, start + perRound);
-}
-
-function generateRoundRobinAllRounds(participants, totalRounds) {
-  const fixtures = [];
-  for (let round = 1; round <= totalRounds; round += 1) {
-    const pairings = generateRoundRobinPairings(participants, round);
-    for (const pair of pairings) {
-      fixtures.push({ ...pair, round_number: round });
+  // Double leg: mirror all pairings with swapped sides
+  if (legs >= 2) {
+    const offset = roundPairings.length;
+    for (let r = 0; r < roundPairings.length; r++) {
+      for (const pair of roundPairings[r]) {
+        fixtures.push({
+          player_a_id: pair.player_b_id,
+          player_b_id: pair.player_a_id,
+          round_number: r + 1 + offset,
+        });
+      }
     }
   }
+
   return fixtures;
 }
 
+// ─── Main Entry Point ────────────────────────────────────────────
+
 function generateFixtures(competition, participants, existingMatches, completedMatches, roundNumber) {
-  const { tournament_type } = competition;
+  const { tournament_type, round_robin_legs = 1 } = competition;
 
   if (tournament_type === 'swiss') {
     return generateSwissPairings(participants, existingMatches).map((p) => ({
@@ -169,8 +242,13 @@ function generateFixtures(competition, participants, existingMatches, completedM
   }
 
   if (tournament_type === 'round_robin') {
+    // Round robin generates ALL rounds at once on round 1
     if (roundNumber === 1) {
-      return generateRoundRobinAllRounds(participants, competition.rounds || 1);
+      return generateRoundRobinFixtures(
+        participants,
+        competition.rounds || participants.length - 1,
+        round_robin_legs
+      );
     }
     return [];
   }
@@ -182,5 +260,6 @@ module.exports = {
   generateFixtures,
   generateSwissPairings,
   generateKnockoutPairings,
-  generateRoundRobinPairings,
+  generateRoundRobinFixtures,
+  generateRoundRobinPairsCircleMethod,
 };

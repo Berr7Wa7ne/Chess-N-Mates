@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { MoreHorizontal, Plus, Search, Trophy } from 'lucide-react'
+import { Check, Loader2, MoreHorizontal, Plus, Search, Trophy } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyState, PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,7 @@ import {
   CompetitionStatusBadge,
   TournamentTypeBadge,
 } from '@/src/components/competitions/competition-badges'
-import { useCompetitions } from '@/src/hooks/useCompetitions'
+import { useCompetitions, useOpenRegistration } from '@/src/hooks/useCompetitions'
 import { ApiError } from '@/src/types/api'
 import type { CompetitionStatus, TournamentType } from '@/src/types/competition'
 
@@ -52,10 +52,21 @@ export default function AdminCompetitionsPage() {
     )
   }, [competitions, nameFilter])
 
+  const openRegistrationMutation = useOpenRegistration()
+
   const activeCompetition = filteredCompetitions.find((c) => c.competition_status === 'active')
 
   function handleDeleteUnavailable() {
     toast.info('Delete is not available yet for competitions')
+  }
+
+  async function handleOpenRegistration(id: string) {
+    try {
+      await openRegistrationMutation.mutateAsync(id)
+      toast.success('Registration opened successfully')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to open registration')
+    }
   }
 
   return (
@@ -219,6 +230,18 @@ export default function AdminCompetitionsPage() {
                             <DropdownMenuItem asChild>
                               <Link href={`/admin/competitions/${competition.id}`}>View</Link>
                             </DropdownMenuItem>
+                            {competition.competition_status === 'draft' && (
+                              <DropdownMenuItem
+                                className="gap-2 text-emerald-600"
+                                onClick={() => handleOpenRegistration(competition.id)}
+                                disabled={openRegistrationMutation.isPending}
+                              >
+                                {openRegistrationMutation.isPending ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : null}
+                                Open Registration
+                              </DropdownMenuItem>
+                            )}
                             {!['completed', 'active'].includes(competition.competition_status) && (
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/competitions/edit/${competition.id}`}>Edit</Link>

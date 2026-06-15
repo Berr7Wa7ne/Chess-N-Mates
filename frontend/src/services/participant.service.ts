@@ -10,7 +10,7 @@ import type {
 } from '@/src/types/participant'
 
 export const participantService = {
-  joinCompetition(competitionId: number, payload: JoinCompetitionPayload) {
+  joinCompetition(competitionId: string, payload: JoinCompetitionPayload) {
     return httpClient.post<Participant>(
       API_ENDPOINTS.PARTICIPANTS.JOIN(competitionId),
       payload
@@ -18,8 +18,8 @@ export const participantService = {
   },
 
   withdrawParticipant(
-    competitionId: number,
-    userId: number,
+    competitionId: string,
+    userId: string,
     payload?: WithdrawParticipantPayload
   ) {
     return httpClient.post<ParticipantActionResult>(
@@ -29,8 +29,8 @@ export const participantService = {
   },
 
   eliminateParticipant(
-    competitionId: number,
-    userId: number,
+    competitionId: string,
+    userId: string,
     payload?: EliminateParticipantPayload
   ) {
     return httpClient.post<ParticipantActionResult>(

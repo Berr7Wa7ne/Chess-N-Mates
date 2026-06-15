@@ -663,7 +663,7 @@ const joinResponse = await fetch(
       'Content-Type': 'application/json',
       'Authorization': 'Bearer BOT_API_KEY'
     },
-    body: JSON.stringify({ user_id: userId })
+    body: JSON.stringify({ user_id: user.id })
   }
 );
 

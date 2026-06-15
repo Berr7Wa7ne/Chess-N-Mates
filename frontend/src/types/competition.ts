@@ -6,10 +6,31 @@ export type CompetitionStatus =
   | 'completed'
   | 'cancelled'
 
+export type MatchLength = 'single_match' | 'best_of_3' | 'best_of_5'
+export type Platform = 'chess.com' | 'lichess' | 'over_the_board' | 'others'
+export type FormatMatchRule =
+  | 'single_elimination'
+  | 'two_game_match'
+  | 'single_game_per_round'
+  | 'two_game_round'
+  | 'single_leg'
+  | 'double_leg'
+
 export interface Competition {
-  id: number
+  id: string
   name: string
   description?: string | null
+
+  // New structured fields replacing description
+  time_control?: string | null
+  timezone?: string
+  entry_fee_prize?: string | null
+  platform?: string
+  match_length?: string
+  format_match_rules?: string
+  rules?: string[]
+  round_robin_legs?: number
+
   tournament_type: TournamentType
   competition_status: CompetitionStatus
   registration_open_at?: string | null
@@ -23,14 +44,13 @@ export interface Competition {
   max_elo?: number
   allow_guest_participants?: boolean
   participant_count?: number
-  created_by: number
+  created_by: string
   created_at?: string
   updated_at?: string
 }
 
 export interface CreateCompetitionPayload {
   name: string
-  description?: string
   tournament_type: TournamentType
   max_participants?: number
   rounds?: number
@@ -40,12 +60,21 @@ export interface CreateCompetitionPayload {
   end_date: string
   min_elo?: number
   max_elo?: number
-  created_by: number
+  created_by: string
+
+  // New structured fields
+  time_control?: string
+  timezone?: string
+  entry_fee_prize?: string
+  platform?: string
+  match_length?: string
+  format_match_rules?: string
+  rules?: string[]
+  round_robin_legs?: number
 }
 
 export interface UpdateCompetitionPayload {
   name?: string
-  description?: string
   tournament_type?: TournamentType
   competition_status?: CompetitionStatus
   current_round?: number
@@ -57,6 +86,14 @@ export interface UpdateCompetitionPayload {
   rounds?: number
   min_elo?: number
   max_elo?: number
+  time_control?: string
+  timezone?: string
+  entry_fee_prize?: string
+  platform?: string
+  match_length?: string
+  format_match_rules?: string
+  rules?: string[]
+  round_robin_legs?: number
 }
 
 export interface CompetitionListParams {
@@ -67,7 +104,7 @@ export interface CompetitionListParams {
 }
 
 export interface StartCompetitionResult {
-  competition_id: number
+  competition_id: string
   action: string
   round: number
   fixtures_generated: number
@@ -79,17 +116,18 @@ export interface AdvanceRoundPayload {
 }
 
 export interface AdvanceRoundResult {
-  competition_id: number
+  competition_id: string
   previous_round: number
   current_round: number
   fixtures_generated: number
   unresolved_matches: number
   timestamp: string
+  action?: string
 }
 
 export interface StandingEntry {
   rank: number
-  user_id: number
+  user_id: string
   display_name: string
   chess_username?: string | null
   chess_elo?: number

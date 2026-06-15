@@ -6,29 +6,50 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Calendar,
+  Check,
   ChevronLeft,
+  ChevronRight,
+  Clock,
   Crown,
+  Gamepad2,
+  Globe,
+  GripVertical,
   Loader2,
+  MapPin,
+  Plus,
   Settings2,
   Sparkles,
+  Swords,
   Trophy,
   Users,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/src/hooks/useAuth'
-import { useCreateCompetition, useUpdateCompetition } from '@/src/hooks/useCompetitions'
+import { useCreateCompetition, useOpenRegistration, useUpdateCompetition } from '@/src/hooks/useCompetitions'
 import { ApiError } from '@/src/types/api'
 import type {
   Competition,
   CreateCompetitionPayload,
   TournamentType,
   UpdateCompetitionPayload,
+  MatchLength,
+  Platform,
 } from '@/src/types/competition'
+
+// ─── Constants ────────────────────────────────────────────────────
 
 const TOURNAMENT_TYPES: { value: TournamentType; label: string; description: string }[] = [
   {
@@ -48,6 +69,74 @@ const TOURNAMENT_TYPES: { value: TournamentType; label: string; description: str
   },
 ]
 
+const PLATFORMS: { value: Platform; label: string }[] = [
+  { value: 'chess.com', label: 'Chess.com' },
+  { value: 'lichess', label: 'Lichess' },
+  { value: 'over_the_board', label: 'Over the Board' },
+  { value: 'others', label: 'Others' },
+]
+
+const MATCH_LENGTHS: { value: MatchLength; label: string; description: string }[] = [
+  {
+    value: 'single_match',
+    label: 'Single Match',
+    description: 'One decisive game per pairing.',
+  },
+  {
+    value: 'best_of_3',
+    label: 'Best of 3 Games',
+    description: 'First to 2 wins takes the match.',
+  },
+  {
+    value: 'best_of_5',
+    label: 'Best of 5 Games',
+    description: 'First to 3 wins takes the match.',
+  },
+]
+
+// ─── Format-Specific Match Rules ──────────────────────────────────
+
+const FORMAT_RULES: Record<TournamentType, { value: string; label: string; description: string }[]> = {
+  swiss: [
+    {
+      value: 'single_game_per_round',
+      label: 'Single Game per Round',
+      description: 'One game per pairing.',
+    },
+    {
+      value: 'two_game_round',
+      label: 'Two-Game Round',
+      description: 'Each pairing plays twice (swap colors).',
+    },
+  ],
+  knockout: [
+    {
+      value: 'single_elimination',
+      label: 'Single Elimination',
+      description: 'One game, draw resolved with tie-break.',
+    },
+    {
+      value: 'two_game_match',
+      label: 'Two-Game Match',
+      description: 'One white each, aggregate score, tie-break if needed.',
+    },
+  ],
+  round_robin: [
+    {
+      value: 'single_leg',
+      label: 'Single Game',
+      description: 'Each pairing is played once.',
+    },
+    {
+      value: 'double_leg',
+      label: 'Double Game',
+      description: 'Each pairing is played twice (swap colors).',
+    },
+  ],
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────
+
 function toIsoOrUndefined(value: string) {
   if (!value) return undefined
   return new Date(value).toISOString()
@@ -61,10 +150,25 @@ function toDateTimeLocalValue(value?: string | null) {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16)
 }
 
+function computeRounds(tournamentType: TournamentType, maxPlayers: number, legCount: number): number {
+  if (tournamentType === 'knockout') {
+    return Math.max(1, Math.ceil(Math.log2(maxPlayers)))
+  }
+  if (tournamentType === 'round_robin') {
+    const n = maxPlayers
+    const singleLegRounds = n < 2 ? 0 : n - 1
+    return legCount === 2 ? singleLegRounds * 2 : singleLegRounds
+  }
+  // Swiss — user-provided, return 0 to indicate "editable"
+  return 0
+}
+
 interface CreateCompetitionFormProps {
   competition?: Competition
   mode?: 'create' | 'edit'
 }
+
+// ─── Component ────────────────────────────────────────────────────
 
 export function CreateCompetitionForm({
   competition,
@@ -74,18 +178,55 @@ export function CreateCompetitionForm({
   const { currentUser } = useAuth()
   const createMutation = useCreateCompetition()
   const updateMutation = useUpdateCompetition()
+  const openRegistrationMutation = useOpenRegistration()
   const isEditMode = mode === 'edit'
   const isSubmitting = createMutation.isPending || updateMutation.isPending
 
+  // ── Open Registration Banner State ──
+  const [createdCompetitionId, setCreatedCompetitionId] = useState<string | null>(null)
+  const [showOpenRegBanner, setShowOpenRegBanner] = useState(false)
+
+  async function handleOpenRegistration(competitionId: string) {
+    try {
+      await openRegistrationMutation.mutateAsync(competitionId)
+      toast.success('Registration opened successfully')
+      router.push(`/admin/competitions/${competitionId}`)
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to open registration')
+    }
+  }
+
+  async function handleDismissBanner(competitionId: string) {
+    setShowOpenRegBanner(false)
+    router.push(`/admin/competitions/${competitionId}`)
+  }
+
+  // ── Basic Info ──
   const [name, setName] = useState(competition?.name ?? '')
-  const [description, setDescription] = useState(competition?.description ?? '')
   const [tournamentType, setTournamentType] = useState<TournamentType>(
     competition?.tournament_type ?? 'swiss'
   )
+
+  // ── Structured Fields (replacing description) ──
+  const [timeControl, setTimeControl] = useState(competition?.time_control ?? '')
+  const [timezone, setTimezone] = useState(competition?.timezone ?? 'UTC+1:00')
+  const [entryFeePrize, setEntryFeePrize] = useState(competition?.entry_fee_prize ?? '')
+  const [platform, setPlatform] = useState(competition?.platform ?? 'chess.com')
+  const [matchLength, setMatchLength] = useState<MatchLength>(
+    (competition?.match_length as MatchLength) ?? 'single_match'
+  )
+  const [formatMatchRules, setFormatMatchRules] = useState(
+    competition?.format_match_rules ?? FORMAT_RULES.swiss[0].value
+  )
+
+  // ── Capacity & Rating ──
   const [maxParticipants, setMaxParticipants] = useState(String(competition?.max_participants ?? 32))
   const [rounds, setRounds] = useState(String(competition?.rounds ?? 5))
   const [minElo, setMinElo] = useState(String(competition?.min_elo ?? 800))
   const [maxElo, setMaxElo] = useState(String(competition?.max_elo ?? 3000))
+  const [roundRobinLegs, setRoundRobinLegs] = useState(competition?.round_robin_legs ?? 1)
+
+  // ── Dates ──
   const [registrationOpenAt, setRegistrationOpenAt] = useState(
     toDateTimeLocalValue(competition?.registration_open_at)
   )
@@ -95,36 +236,107 @@ export function CreateCompetitionForm({
   const [startDate, setStartDate] = useState(toDateTimeLocalValue(competition?.start_date))
   const [endDate, setEndDate] = useState(toDateTimeLocalValue(competition?.end_date))
 
+  // ── Dynamic Rules ──
+  const [rules, setRules] = useState<string[]>(competition?.rules ?? [])
+  const [showRuleInput, setShowRuleInput] = useState(rules.length === 0)
+  const [currentRule, setCurrentRule] = useState('')
+
+  // ── Synced computed rounds ──
+  const computedRounds = computeRounds(
+    tournamentType,
+    Number(maxParticipants) || 2,
+    tournamentType === 'round_robin' ? roundRobinLegs : 1
+  )
+  const isRoundsEditable = tournamentType === 'swiss'
+  const roundsDisplayValue = isRoundsEditable ? rounds : String(computedRounds)
+
+  // ── Round Robin leg toggle ──
+  useEffect(() => {
+    if (tournamentType === 'round_robin') {
+      setFormatMatchRules(roundRobinLegs === 2 ? 'double_leg' : 'single_leg')
+    }
+  }, [tournamentType, roundRobinLegs])
+
+  // Reset format match rules when tournament type changes
+  useEffect(() => {
+    const rules = FORMAT_RULES[tournamentType]
+    if (rules) {
+      // Check if current value is valid for this type
+      const valid = rules.some((r) => r.value === formatMatchRules)
+      if (!valid) {
+        setFormatMatchRules(rules[0].value)
+      }
+    }
+    // Reset leg count for round robin
+    if (tournamentType !== 'round_robin') {
+      setRoundRobinLegs(1)
+    }
+  }, [tournamentType])
+
+  // Sync edit mode competition data
   useEffect(() => {
     if (!competition) return
     setName(competition.name)
-    setDescription(competition.description ?? '')
     setTournamentType(competition.tournament_type)
+    setTimeControl(competition.time_control ?? '')
+    setTimezone(competition.timezone ?? 'UTC+1:00')
+    setEntryFeePrize(competition.entry_fee_prize ?? '')
+    setPlatform(competition.platform ?? 'chess.com')
+    setMatchLength((competition.match_length as MatchLength) ?? 'single_match')
+    setFormatMatchRules(competition.format_match_rules ?? FORMAT_RULES[competition.tournament_type][0].value)
     setMaxParticipants(String(competition.max_participants ?? 32))
     setRounds(String(competition.rounds ?? 5))
     setMinElo(String(competition.min_elo ?? 800))
     setMaxElo(String(competition.max_elo ?? 3000))
+    setRoundRobinLegs(competition.round_robin_legs ?? 1)
+    setRules(competition.rules ?? [])
     setRegistrationOpenAt(toDateTimeLocalValue(competition.registration_open_at))
     setRegistrationCloseAt(toDateTimeLocalValue(competition.registration_close_at))
     setStartDate(toDateTimeLocalValue(competition.start_date))
     setEndDate(toDateTimeLocalValue(competition.end_date))
   }, [competition])
 
+  // ── Validation ──
+  function validate(): string | null {
+    if (!name.trim()) return 'Competition name is required'
+    if (!registrationOpenAt || !registrationCloseAt || !startDate || !endDate) {
+      return 'All date fields are required'
+    }
+    const min = Number(minElo)
+    const max = Number(maxElo)
+    if (min > max) return 'Minimum ELO cannot be greater than Maximum ELO'
+    if (Number(maxParticipants) < 2) return 'Must have at least 2 players'
+    if (isRoundsEditable && Number(rounds) < 1) return 'Rounds must be at least 1'
+    return null
+  }
+
+  // ── Rules Management ──
+  function addRule() {
+    if (!currentRule.trim()) return
+    setRules((prev) => [...prev, currentRule.trim()])
+    setCurrentRule('')
+    setShowRuleInput(false)
+  }
+
+  function removeRule(index: number) {
+    setRules((prev) => prev.filter((_, i) => i !== index))
+    if (rules.length <= 1) {
+      setShowRuleInput(true)
+    }
+  }
+
+  // ── Submit ──
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
+    const validationError = validate()
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
+
     if (!currentUser) {
       toast.error('You must be logged in to create a competition')
-      return
-    }
-
-    if (!name.trim()) {
-      toast.error('Competition name is required')
-      return
-    }
-
-    if (!registrationOpenAt || !registrationCloseAt || !startDate || !endDate) {
-      toast.error('Registration open, registration close, start, and end dates are required')
       return
     }
 
@@ -135,14 +347,21 @@ export function CreateCompetitionForm({
       end_date: toIsoOrUndefined(endDate) as string,
     }
 
-    const payload: CreateCompetitionPayload | UpdateCompetitionPayload = {
+    const basePayload = {
       name: name.trim(),
-      description: description.trim() || undefined,
       tournament_type: tournamentType,
       max_participants: Number(maxParticipants) || 32,
-      rounds: Number(rounds) || 5,
+      rounds: isRoundsEditable ? Number(rounds) || 5 : computedRounds,
       min_elo: Number(minElo) || 800,
       max_elo: Number(maxElo) || 3000,
+      time_control: timeControl.trim() || undefined,
+      timezone,
+      entry_fee_prize: entryFeePrize.trim() || undefined,
+      platform: platform as Platform,
+      match_length: matchLength,
+      format_match_rules: formatMatchRules,
+      rules: rules.length > 0 ? rules : undefined,
+      round_robin_legs: tournamentType === 'round_robin' ? roundRobinLegs : undefined,
       ...schedulePayload,
     }
 
@@ -150,7 +369,7 @@ export function CreateCompetitionForm({
       if (isEditMode && competition) {
         const response = await updateMutation.mutateAsync({
           id: competition.id,
-          payload,
+          payload: basePayload as UpdateCompetitionPayload,
         })
         toast.success(`"${response.data.name}" updated successfully`)
         router.push(`/admin/competitions/${competition.id}`)
@@ -158,12 +377,13 @@ export function CreateCompetitionForm({
       }
 
       const response = await createMutation.mutateAsync({
-        ...payload,
-        tournament_type: tournamentType,
+        ...basePayload,
         created_by: currentUser.id,
       } as CreateCompetitionPayload)
       toast.success(`"${response.data.name}" created successfully`)
-      router.push(`/admin/competitions/${response.data.id}`)
+      // Show open registration banner instead of navigating away
+      setCreatedCompetitionId(response.data.id)
+      setShowOpenRegBanner(true)
     } catch (error) {
       toast.error(
         error instanceof ApiError
@@ -173,8 +393,19 @@ export function CreateCompetitionForm({
     }
   }
 
+  // ── Rounds helper text ──
+  function getRoundsHelperText(): string | null {
+    if (tournamentType === 'knockout') return 'Until a winner is determined'
+    if (tournamentType === 'round_robin') return 'Full cycle'
+    return null
+  }
+
+  // ── Render ──
+  const currentFormatRules = FORMAT_RULES[tournamentType]
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* ── Header ── */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-amber-500/5 p-6 shadow-sm">
         <div className="absolute -right-8 -top-8 size-32 rounded-full bg-primary/10 blur-2xl" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -193,10 +424,26 @@ export function CreateCompetitionForm({
                 </Badge>
               </div>
               <p className="mt-1 max-w-xl text-muted-foreground">
-                Set up your tournament format, registration window, and player limits.
+                Configure your tournament format, rules, and structure.
               </p>
             </div>
           </div>
+          {isEditMode && competition?.competition_status === 'draft' && (
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 gap-2 rounded-xl border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/20"
+              onClick={() => handleOpenRegistration(competition.id)}
+              disabled={openRegistrationMutation.isPending}
+            >
+              {openRegistrationMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              Open Registration
+            </Button>
+          )}
           <Button type="button" variant="outline" asChild className="shrink-0">
             <Link href="/admin/competitions">
               <ChevronLeft className="mr-2 size-4" />
@@ -207,66 +454,270 @@ export function CreateCompetitionForm({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Crown className="size-5 text-amber-500" />
-              Basic Information
-            </CardTitle>
-            <CardDescription>Name and describe your tournament for players.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Competition name</Label>
-              <Input
-                id="name"
-                placeholder="Rapid Masters Cup 2026"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="h-11"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="A fast-paced tournament for intermediate players…"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="resize-none"
-              />
-            </div>
-
-            <div className="space-y-3">
-              <Label>Tournament format</Label>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {TOURNAMENT_TYPES.map((type) => {
-                  const selected = tournamentType === type.value
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => setTournamentType(type.value)}
-                      className={`rounded-xl border p-4 text-left transition-all ${
-                        selected
-                          ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                          : 'hover:border-primary/40 hover:bg-muted/50'
-                      }`}
-                    >
-                      <p className="font-semibold">{type.label}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{type.description}</p>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+        {/* ── Left Column ── */}
         <div className="space-y-6">
+          {/* ── Basic Information ── */}
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="size-5 text-amber-500" />
+                Basic Information
+              </CardTitle>
+              <CardDescription>Name and configure your tournament.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Competition name</Label>
+                <Input
+                  id="name"
+                  placeholder="Rapid Masters Cup 2026"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="h-11"
+                />
+              </div>
+
+              {/* Tournament Format */}
+              <div className="space-y-3">
+                <Label>Tournament format</Label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {TOURNAMENT_TYPES.map((type) => {
+                    const selected = tournamentType === type.value
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setTournamentType(type.value)}
+                        className={`rounded-xl border p-4 text-left transition-all ${
+                          selected
+                            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                            : 'hover:border-primary/40 hover:bg-muted/50'
+                        }`}
+                      >
+                        <p className="font-semibold">{type.label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{type.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Tournament Details (replaces Description) ── */}
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="size-5 text-purple-500" />
+                Tournament Details
+              </CardTitle>
+              <CardDescription>Time control, platform, and entry conditions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="timeControl" className="flex items-center gap-1.5">
+                    <Clock className="size-3.5 text-muted-foreground" />
+                    Time Control
+                  </Label>
+                  <Input
+                    id="timeControl"
+                    placeholder="e.g., 5+0 or 3+2"
+                    value={timeControl}
+                    onChange={(e) => setTimeControl(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="timezone" className="flex items-center gap-1.5">
+                    <Globe className="size-3.5 text-muted-foreground" />
+                    Timezone
+                  </Label>
+                  <Input
+                    id="timezone"
+                    placeholder="e.g., UTC+5:30"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="entryFeePrize" className="flex items-center gap-1.5">
+                  <Trophy className="size-3.5 text-muted-foreground" />
+                  Entry Fee / Prize
+                </Label>
+                <Input
+                  id="entryFeePrize"
+                  placeholder="e.g., Free or $5 — winner takes 70%"
+                  value={entryFeePrize}
+                  onChange={(e) => setEntryFeePrize(e.target.value)}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="platform" className="flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-muted-foreground" />
+                  Platform
+                </Label>
+                <Select value={platform} onValueChange={(val) => setPlatform(val)}>
+                  <SelectTrigger id="platform" className="h-11">
+                    <SelectValue placeholder="Select platform" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLATFORMS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Match Configuration ── */}
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Swords className="size-5 text-red-500" />
+                Match Configuration
+              </CardTitle>
+              <CardDescription>How matches are played and scored.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Match Length */}
+              <div className="space-y-3">
+                <Label>Match Length</Label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {MATCH_LENGTHS.map((ml) => {
+                    const selected = matchLength === ml.value
+                    return (
+                      <button
+                        key={ml.value}
+                        type="button"
+                        onClick={() => setMatchLength(ml.value)}
+                        className={`rounded-xl border p-3 text-left transition-all ${
+                          selected
+                            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                            : 'hover:border-primary/40 hover:bg-muted/50'
+                        }`}
+                      >
+                        <p className="text-sm font-semibold">{ml.label}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{ml.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Format-Specific Match Rules */}
+              <div className="space-y-3">
+                <Label>Format-Specific Rules</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {currentFormatRules.map((rule) => {
+                    const selected = formatMatchRules === rule.value
+                    return (
+                      <button
+                        key={rule.value}
+                        type="button"
+                        onClick={() => setFormatMatchRules(rule.value)}
+                        className={`rounded-xl border p-3 text-left transition-all ${
+                          selected
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                            : 'hover:border-primary/40 hover:bg-muted/50'
+                        }`}
+                      >
+                        <p className="text-sm font-semibold">{rule.label}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{rule.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Competition Rules (Dynamic Input UI) ── */}
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GripVertical className="size-5 text-orange-500" />
+                Competition Rules
+              </CardTitle>
+              <CardDescription>Add specific rules players must follow.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {rules.length > 0 && (
+                <ul className="space-y-2">
+                  {rules.map((rule, index) => (
+                    <li
+                      key={index}
+                      className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-2.5 text-sm"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                          {index + 1}
+                        </span>
+                        {rule}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeRule(index)}
+                        className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {showRuleInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter a rule..."
+                    value={currentRule}
+                    onChange={(e) => setCurrentRule(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addRule()
+                      }
+                    }}
+                    className="h-10"
+                  />
+                  <Button
+                    type="button"
+                    onClick={addRule}
+                    disabled={!currentRule.trim()}
+                    className="h-10 shrink-0"
+                  >
+                    <Plus className="mr-1.5 size-4" />
+                    Add Rule
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRuleInput(true)}
+                  className="w-full gap-1.5"
+                >
+                  <Plus className="size-4" />
+                  Add Rule
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Right Column ── */}
+        <div className="space-y-6">
+          {/* ── Capacity & Rounds ── */}
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -275,30 +726,82 @@ export function CreateCompetitionForm({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="maxParticipants">Max players</Label>
-                  <Input
-                    id="maxParticipants"
-                    type="number"
-                    min={2}
-                    value={maxParticipants}
-                    onChange={(e) => setMaxParticipants(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rounds">Rounds</Label>
+              <div className="space-y-2">
+                <Label htmlFor="maxParticipants">Maximum Players</Label>
+                <Input
+                  id="maxParticipants"
+                  type="number"
+                  min={2}
+                  value={maxParticipants}
+                  onChange={(e) => setMaxParticipants(e.target.value)}
+                  className="h-11"
+                />
+              </div>
+
+              {/* Dynamic Rounds Field */}
+              <div className="space-y-2">
+                <Label htmlFor="rounds">
+                  {tournamentType === 'swiss'
+                    ? 'Number of Rounds'
+                    : tournamentType === 'knockout'
+                    ? 'Estimated Rounds'
+                    : 'Total Rounds'}
+                </Label>
+                <div className="relative">
                   <Input
                     id="rounds"
                     type="number"
                     min={1}
-                    value={rounds}
-                    onChange={(e) => setRounds(e.target.value)}
-                    className="h-11"
+                    value={roundsDisplayValue}
+                    onChange={(e) => {
+                      if (isRoundsEditable) setRounds(e.target.value)
+                    }}
+                    readOnly={!isRoundsEditable}
+                    className={`h-11 ${!isRoundsEditable ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : ''}`}
                   />
+                  {!isRoundsEditable && (
+                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        AUTO
+                      </Badge>
+                    </div>
+                  )}
                 </div>
+                {getRoundsHelperText() && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {getRoundsHelperText()}
+                  </p>
+                )}
               </div>
+
+              {/* Round Robin Legs toggle */}
+              {tournamentType === 'round_robin' && (
+                <div className="rounded-xl border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Double Leg (Home & Away)</p>
+                      <p className="text-xs text-muted-foreground">
+                        {roundRobinLegs === 2
+                          ? 'Each pairing played twice (swap colors)'
+                          : 'Each pairing played once'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRoundRobinLegs(roundRobinLegs === 1 ? 2 : 1)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        roundRobinLegs === 2 ? 'bg-primary' : 'bg-muted-foreground/30'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block size-5 rounded-full bg-white shadow-sm transition-transform ${
+                          roundRobinLegs === 2 ? 'translate-x-6' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -322,16 +825,23 @@ export function CreateCompetitionForm({
                   />
                 </div>
               </div>
+              {Number(minElo) > Number(maxElo) && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <X className="size-3" />
+                  Min ELO cannot exceed Max ELO
+                </p>
+              )}
             </CardContent>
           </Card>
 
+          {/* ── Schedule ── */}
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="size-5 text-emerald-500" />
                 Schedule
               </CardTitle>
-              <CardDescription>Optional — set when players can register and when play begins.</CardDescription>
+              <CardDescription>Set registration window and play dates.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -383,6 +893,44 @@ export function CreateCompetitionForm({
         </div>
       </div>
 
+      {/* ── Open Registration Banner ── */}
+      {showOpenRegBanner && createdCompetitionId && (
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-5 py-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Check className="size-5 text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              Open registration
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="size-9 rounded-xl border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+              onClick={() => createdCompetitionId && handleOpenRegistration(createdCompetitionId)}
+              disabled={openRegistrationMutation.isPending}
+            >
+              {openRegistrationMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4 text-emerald-600" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="size-9 rounded-xl"
+              onClick={() => createdCompetitionId && handleDismissBanner(createdCompetitionId)}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Footer Actions ── */}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Button type="button" variant="outline" asChild className="h-12 rounded-2xl px-8">
           <Link href="/admin/competitions">Cancel</Link>
@@ -408,4 +956,3 @@ export function CreateCompetitionForm({
     </form>
   )
 }
-
