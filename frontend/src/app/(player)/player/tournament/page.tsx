@@ -75,7 +75,7 @@ export default function PlayerTournamentPage() {
     )
   }, [competitions])
 
-  const standingsQuery = useCompetitionStandings(currentCompetition?.id ?? 0, !!currentCompetition)
+  const standingsQuery = useCompetitionStandings(currentCompetition?.id ?? '', !!currentCompetition)
   const standings = standingsQuery.data ?? []
   const isRegistered = Boolean(
     currentUser && standings.some((entry) => entry.user_id === currentUser.id)

@@ -891,33 +891,40 @@ export function getCurrentCompetition() {
   return competitions.find((competition) => competition.status === "active")
 }
 
-export function getCompetitionById(id: number) {
-  return competitions.find((competition) => competition.id === id)
+export function getCompetitionById(id: number | string) {
+  const numericId = Number(id)
+  return competitions.find((competition) => competition.id === numericId)
 }
 
-export function getCompetitionFixtures(competitionId: number) {
-  return fixtures.filter((fixture) => fixture.competitionId === competitionId)
+export function getCompetitionFixtures(competitionId: number | string) {
+  const id = Number(competitionId)
+  return fixtures.filter((fixture) => fixture.competitionId === id)
 }
 
-export function getCompetitionResults(competitionId: number) {
-  return results.filter((result) => result.competitionId === competitionId)
+export function getCompetitionResults(competitionId: number | string) {
+  const id = Number(competitionId)
+  return results.filter((result) => result.competitionId === id)
 }
 
-export function getCompetitionParticipants(competitionId: number) {
-  return participantsByCompetition[competitionId] ?? []
+export function getCompetitionParticipants(competitionId: number | string) {
+  const id = Number(competitionId)
+  return participantsByCompetition[id] ?? []
 }
 
-export function getCompetitionStandings(competitionId: number) {
-  const participantIds = new Set(getCompetitionParticipants(competitionId).map((participant) => participant.id))
+export function getCompetitionStandings(competitionId: number | string) {
+  const id = Number(competitionId)
+  const participantIds = new Set(getCompetitionParticipants(id).map((participant) => participant.id))
   return leaderboard.filter((entry) => participantIds.has(entry.id))
 }
 
-export function getPlayerMatches(playerId: number) {
-  return playerMatchesByPlayerId[playerId] ?? []
+export function getPlayerMatches(playerId: number | string) {
+  const id = Number(playerId)
+  return playerMatchesByPlayerId[id] ?? []
 }
 
-export function getLeaderboardEntry(playerId: number) {
-  return leaderboard.find((entry) => entry.id === playerId)
+export function getLeaderboardEntry(playerId: number | string) {
+  const id = Number(playerId)
+  return leaderboard.find((entry) => entry.id === id)
 }
 
 // ============================================================================
