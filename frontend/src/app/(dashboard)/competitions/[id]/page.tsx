@@ -31,13 +31,12 @@ export default function CompetitionDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id: idParam } = use(params)
-  const id = Number(idParam)
+  const { id } = use(params)
 
-  const competitionQuery = useCompetition(id, !Number.isNaN(id))
-  const standingsQuery = useCompetitionStandings(id, !Number.isNaN(id))
+  const competitionQuery = useCompetition(id, !!id)
+  const standingsQuery = useCompetitionStandings(id, !!id)
 
-  if (Number.isNaN(id)) {
+  if (!id) {
     return <p className="text-destructive">Invalid competition ID</p>
   }
 

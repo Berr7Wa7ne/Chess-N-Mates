@@ -11,10 +11,10 @@ import { ApiError } from '@/src/types/api'
 
 export default function EditCompetitionPage() {
   const params = useParams()
-  const id = Number(params.id)
-  const competitionQuery = useCompetition(id, !Number.isNaN(id))
+  const id = params.id as string
+  const competitionQuery = useCompetition(id, !!id)
 
-  if (Number.isNaN(id)) {
+  if (!id) {
     return <p className="text-destructive">Invalid competition ID</p>
   }
 
