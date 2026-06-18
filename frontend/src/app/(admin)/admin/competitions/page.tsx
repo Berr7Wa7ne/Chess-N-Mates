@@ -8,12 +8,21 @@ import { EmptyState, PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -27,7 +36,7 @@ import {
   CompetitionStatusBadge,
   TournamentTypeBadge,
 } from '@/src/components/competitions/competition-badges'
-import { useCompetitions, useOpenRegistration } from '@/src/hooks/useCompetitions'
+import { useCompetitions, useDeleteCompetition, useOpenRegistration } from '@/src/hooks/useCompetitions'
 import { ApiError } from '@/src/types/api'
 import type { CompetitionStatus, TournamentType } from '@/src/types/competition'
 
@@ -35,6 +44,11 @@ export default function AdminCompetitionsPage() {
   const [nameFilter, setNameFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | TournamentType>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | CompetitionStatus>('all')
+
+  // Delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [competitionToDelete, setCompetitionToDelete] = useState<{ id: string; name: string; status: CompetitionStatus } | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
   const listParams = useMemo(() => {
     const params: { status?: CompetitionStatus; type?: TournamentType } = {}
@@ -53,8 +67,29 @@ export default function AdminCompetitionsPage() {
   }, [competitions, nameFilter])
 
   const openRegistrationMutation = useOpenRegistration()
+  const deleteMutation = useDeleteCompetition()
 
   const activeCompetition = filteredCompetitions.find((c) => c.competition_status === 'active')
+
+  function handleDeleteClick(competition: { id: string; name: string; competition_status: CompetitionStatus }) {
+    setCompetitionToDelete({ id: competition.id, name: competition.name, status: competition.competition_status })
+    setDeleteConfirmText('')
+    setDeleteDialogOpen(true)
+  }
+
+  async function handleConfirmDelete() {
+    if (!competitionToDelete) return
+
+    try {
+      await deleteMutation.mutateAsync(competitionToDelete.id)
+      toast.success(`"${competitionToDelete.name}" deleted successfully`)
+      setDeleteDialogOpen(false)
+      setCompetitionToDelete(null)
+      setDeleteConfirmText('')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to delete competition')
+    }
+  }
 
   function handleDeleteUnavailable() {
     toast.info('Delete is not available yet for competitions')
@@ -68,6 +103,8 @@ export default function AdminCompetitionsPage() {
       toast.error(error instanceof ApiError ? error.message : 'Failed to open registration')
     }
   }
+
+  const requiresDeleteTyping = competitionToDelete && ['active', 'completed'].includes(competitionToDelete.status)
 
   return (
     <div className="space-y-6">
@@ -247,7 +284,11 @@ export default function AdminCompetitionsPage() {
                                 <Link href={`/admin/competitions/edit/${competition.id}`}>Edit</Link>
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="text-red-600" onClick={handleDeleteUnavailable}>
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleDeleteClick(competition)}
+                              disabled={deleteMutation.isPending}
+                            >
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -261,6 +302,67 @@ export default function AdminCompetitionsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteDialogOpen(false)
+          setCompetitionToDelete(null)
+          setDeleteConfirmText('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Competition</DialogTitle>
+            <DialogDescription>
+              {requiresDeleteTyping ? (
+                <>
+                  This competition is <strong>{competitionToDelete?.status}</strong>. Deleting it will permanently remove all associated data including participants and matches.
+                  Type <strong className="text-destructive">DELETE</strong> to confirm.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete <strong>"{competitionToDelete?.name}"</strong>? This action cannot be undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {requiresDeleteTyping && (
+            <div className="space-y-2 py-2">
+              <Label htmlFor="deleteConfirm">Type DELETE to confirm</Label>
+              <Input
+                id="deleteConfirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="h-11"
+              />
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => {
+              setDeleteDialogOpen(false)
+              setCompetitionToDelete(null)
+              setDeleteConfirmText('')
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={
+                deleteMutation.isPending ||
+                (requiresDeleteTyping ? deleteConfirmText !== 'DELETE' : false)
+              }
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

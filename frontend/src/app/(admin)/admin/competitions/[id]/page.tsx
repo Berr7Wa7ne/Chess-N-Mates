@@ -319,7 +319,7 @@ export default function AdminCompetitionDetailPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Left: Overview + Structured Details ── */}
         <div className="space-y-6">
           <Card className="rounded-2xl shadow-sm">
@@ -345,8 +345,12 @@ export default function AdminCompetitionDetailPage() {
                 <span className="font-medium">{competition.timezone || 'Not set'}</span>
               </div>
               <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Entry Fee / Prize</span>
-                <span className="font-medium">{competition.entry_fee_prize || 'Free'}</span>
+                <span className="text-muted-foreground">Entry Fee</span>
+                <span className="font-medium">{competition.entry_fee || 'Free'}</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="text-muted-foreground">Prize</span>
+                <span className="font-medium">{competition.prize || '—'}</span>
               </div>
               <div className="flex items-center justify-between border-b pb-3">
                 <span className="text-muted-foreground">Platform</span>

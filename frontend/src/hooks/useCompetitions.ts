@@ -102,6 +102,17 @@ export function useUpdateCompetition() {
   })
 }
 
+export function useDeleteCompetition() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => competitionService.deleteCompetition(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
+    },
+  })
+}
+
 export function useOpenRegistration() {
   const queryClient = useQueryClient()
 

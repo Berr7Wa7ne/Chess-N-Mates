@@ -24,26 +24,32 @@ export default function PlayerDashboardPage() {
   const { currentUser } = useAuth()
   const { data: apiCompetitions } = useCompetitions()
   const joinMutation = useJoinCompetition()
-  const [bannerDismissed, setBannerDismissed] = useState(() =>
-    typeof window !== "undefined" && sessionStorage.getItem("player_tournament_banner_seen") === "1"
-  )
+  const [bannerDismissed, setBannerDismissed] = useState(true) // default to dismissed, will be updated below
 
   const bannerCompetition = useMemo(() => {
     if (!apiCompetitions?.length) return null
-    return (
-      apiCompetitions.find((competition) => competition.competition_status === "open_registration") ??
-      apiCompetitions[0]
-    )
+    // Only show banner for competitions open for registration
+    return apiCompetitions.find((competition) => competition.competition_status === "open_registration") ?? null
   }, [apiCompetitions])
 
   useEffect(() => {
     if (bannerCompetition && !bannerDismissed) {
-      sessionStorage.setItem("player_tournament_banner_seen", "1")
+      sessionStorage.setItem(`player_tournament_banner_${bannerCompetition.id}`, "1")
     }
   }, [bannerCompetition, bannerDismissed])
 
+  // Re-evaluate dialog based on current banner competition
+  useEffect(() => {
+    if (bannerCompetition) {
+      const seen = sessionStorage.getItem(`player_tournament_banner_${bannerCompetition.id}`) === "1"
+      setBannerDismissed(seen)
+    }
+  }, [bannerCompetition])
+
   function markBannerSeen() {
-    sessionStorage.setItem("player_tournament_banner_seen", "1")
+    if (bannerCompetition) {
+      sessionStorage.setItem(`player_tournament_banner_${bannerCompetition.id}`, "1")
+    }
     setBannerDismissed(true)
   }
 

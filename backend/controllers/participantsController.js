@@ -175,6 +175,34 @@ exports.withdrawParticipant = async (req, res) => {
   });
 };
 
+exports.getUserRegistrations = async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'userId is required' },
+    });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('competition_participants')
+    .select('competition_id')
+    .eq('user_id', userId)
+    .neq('participant_status', 'withdrawn');
+
+  if (error) {
+    return res.status(400).json({ success: false, error: { message: error.message } });
+  }
+
+  const competitionIds = (data || []).map((p) => p.competition_id);
+
+  res.json({
+    success: true,
+    data: competitionIds,
+  });
+};
+
 exports.eliminateParticipant = async (req, res) => {
   const { id, userId } = req.params;
 

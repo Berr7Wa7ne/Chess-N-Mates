@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { getCompetitionFixtures, getCompetitionResults } from "@/lib/admin-data"
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/src/components/competitions/competition-badges"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitionStandings, useCompetitions } from "@/src/hooks/useCompetitions"
-import { useJoinCompetition, useWithdraw } from "@/src/hooks/useParticipants"
+import { useJoinCompetition, useUserRegistrations, useWithdraw } from "@/src/hooks/useParticipants"
 import { ApiError } from "@/src/types/api"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
@@ -65,6 +65,8 @@ export default function PlayerTournamentPage() {
   const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
   const joinMutation = useJoinCompetition()
   const withdrawMutation = useWithdraw()
+  const { data: userRegisteredIds = [] } = useUserRegistrations(currentUser?.id)
+  const userRegisteredSet = useMemo(() => new Set(userRegisteredIds), [userRegisteredIds])
 
   const currentCompetition = useMemo(() => {
     if (!competitions?.length) return null
@@ -140,6 +142,20 @@ export default function PlayerTournamentPage() {
       toast.success("You have withdrawn from this competition")
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Failed to withdraw")
+    }
+  }
+
+  async function handleJoinCompetition(competitionId: string, competitionName: string) {
+    if (!currentUser) return
+
+    try {
+      await joinMutation.mutateAsync({
+        competitionId,
+        payload: { user_id: currentUser.id },
+      })
+      toast.success(`Joined "${competitionName}"`)
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to join competition")
     }
   }
 
@@ -357,24 +373,28 @@ export default function PlayerTournamentPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Start Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {competitionsLoading && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     Loading competitions...
                   </TableCell>
                 </TableRow>
               )}
               {!competitionsLoading && competitions?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     No competitions found.
                   </TableCell>
                 </TableRow>
               )}
-              {competitions?.map((competition) => (
+              {competitions?.map((competition) => {
+                const alreadyJoined = userRegisteredSet.has(competition.id)
+                const canJoin = competition.competition_status === "open_registration" && !alreadyJoined
+                return (
                   <TableRow key={competition.id}>
                     <TableCell className="font-medium">{competition.name}</TableCell>
                     <TableCell>
@@ -388,8 +408,22 @@ export default function PlayerTournamentPage() {
                         ? new Date(competition.start_date).toLocaleString()
                         : "—"}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {canJoin ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handleJoinCompetition(competition.id, competition.name)}
+                          disabled={joinMutation.isPending}
+                        >
+                          Join
+                        </Button>
+                      ) : alreadyJoined ? (
+                        <span className="text-xs text-muted-foreground">Joined</span>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
-                ))}
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>

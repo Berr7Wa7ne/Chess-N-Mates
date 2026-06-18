@@ -2,13 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Calendar,
   Check,
   ChevronLeft,
-  ChevronRight,
   Clock,
   Crown,
   Gamepad2,
@@ -76,59 +75,55 @@ const PLATFORMS: { value: Platform; label: string }[] = [
   { value: 'others', label: 'Others' },
 ]
 
-const MATCH_LENGTHS: { value: MatchLength; label: string; description: string }[] = [
-  {
-    value: 'single_match',
-    label: 'Single Match',
-    description: 'One decisive game per pairing.',
-  },
-  {
-    value: 'best_of_3',
-    label: 'Best of 3 Games',
-    description: 'First to 2 wins takes the match.',
-  },
-  {
-    value: 'best_of_5',
-    label: 'Best of 5 Games',
-    description: 'First to 3 wins takes the match.',
-  },
-]
-
-// ─── Format-Specific Match Rules ──────────────────────────────────
-
-const FORMAT_RULES: Record<TournamentType, { value: string; label: string; description: string }[]> = {
+// Match configuration options per tournament type
+const MATCH_CONFIG_OPTIONS: Record<TournamentType, { value: MatchLength; label: string; description: string }[]> = {
   swiss: [
     {
-      value: 'single_game_per_round',
-      label: 'Single Game per Round',
+      value: 'single_game',
+      label: 'Single Game',
       description: 'One game per pairing.',
     },
     {
-      value: 'two_game_round',
-      label: 'Two-Game Round',
+      value: 'double_game',
+      label: 'Double Game',
       description: 'Each pairing plays twice (swap colors).',
+    },
+    {
+      value: 'best_of_3',
+      label: 'Best of 3 Games',
+      description: 'First to 2 wins takes the match.',
+    },
+    {
+      value: 'best_of_5',
+      label: 'Best of 5 Games',
+      description: 'First to 3 wins takes the match.',
     },
   ],
   knockout: [
     {
-      value: 'single_elimination',
-      label: 'Single Elimination',
-      description: 'One game, draw resolved with tie-break.',
+      value: 'single_game',
+      label: 'Single Game',
+      description: 'One game per pairing.',
     },
     {
-      value: 'two_game_match',
-      label: 'Two-Game Match',
-      description: 'One white each, aggregate score, tie-break if needed.',
+      value: 'best_of_3',
+      label: 'Best of 3 Games',
+      description: 'First to 2 wins takes the match.',
+    },
+    {
+      value: 'best_of_5',
+      label: 'Best of 5 Games',
+      description: 'First to 3 wins takes the match.',
     },
   ],
   round_robin: [
     {
-      value: 'single_leg',
+      value: 'single_game',
       label: 'Single Game',
       description: 'Each pairing is played once.',
     },
     {
-      value: 'double_leg',
+      value: 'double_game',
       label: 'Double Game',
       description: 'Each pairing is played twice (swap colors).',
     },
@@ -150,17 +145,53 @@ function toDateTimeLocalValue(value?: string | null) {
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16)
 }
 
-function computeRounds(tournamentType: TournamentType, maxPlayers: number, legCount: number): number {
+function computeRounds(tournamentType: TournamentType, maxPlayers: number, matchLength: MatchLength): number {
   if (tournamentType === 'knockout') {
     return Math.max(1, Math.ceil(Math.log2(maxPlayers)))
   }
   if (tournamentType === 'round_robin') {
     const n = maxPlayers
     const singleLegRounds = n < 2 ? 0 : n - 1
-    return legCount === 2 ? singleLegRounds * 2 : singleLegRounds
+    return matchLength === 'double_game' ? singleLegRounds * 2 : singleLegRounds
   }
   // Swiss — user-provided, return 0 to indicate "editable"
   return 0
+}
+
+// ─── Auto-expanding Textarea ──────────────────────────────────────
+
+function AutoResizeTextarea({
+  value,
+  onChange,
+  placeholder,
+  onKeyDown,
+  className,
+}: {
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  placeholder?: string
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  className?: string
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+    }
+  }, [value])
+
+  return (
+    <Textarea
+      ref={textareaRef}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      onKeyDown={onKeyDown}
+      className={`min-h-[40px] resize-none overflow-hidden ${className ?? ''}`}
+    />
+  )
 }
 
 interface CreateCompetitionFormProps {
@@ -207,24 +238,37 @@ export function CreateCompetitionForm({
     competition?.tournament_type ?? 'swiss'
   )
 
-  // ── Structured Fields (replacing description) ──
+  // ── Structured Fields ──
   const [timeControl, setTimeControl] = useState(competition?.time_control ?? '')
   const [timezone, setTimezone] = useState(competition?.timezone ?? 'UTC+1:00')
-  const [entryFeePrize, setEntryFeePrize] = useState(competition?.entry_fee_prize ?? '')
+  const [entryFee, setEntryFee] = useState(competition?.entry_fee ?? '')
+  const [prize, setPrize] = useState(competition?.prize ?? '')
   const [platform, setPlatform] = useState(competition?.platform ?? 'chess.com')
+
+  // ── Match Configuration (combined) ──
+  const currentMatchOptions = MATCH_CONFIG_OPTIONS[tournamentType]
   const [matchLength, setMatchLength] = useState<MatchLength>(
-    (competition?.match_length as MatchLength) ?? 'single_match'
+    (() => {
+      if (competition?.match_length) {
+        return competition.match_length as MatchLength
+      }
+      return currentMatchOptions[0].value
+    })()
   )
-  const [formatMatchRules, setFormatMatchRules] = useState(
-    competition?.format_match_rules ?? FORMAT_RULES.swiss[0].value
-  )
+
+  // Reset match length when tournament type changes if current value not valid
+  useEffect(() => {
+    const valid = currentMatchOptions.some((opt) => opt.value === matchLength)
+    if (!valid) {
+      setMatchLength(currentMatchOptions[0].value)
+    }
+  }, [tournamentType])
 
   // ── Capacity & Rating ──
   const [maxParticipants, setMaxParticipants] = useState(String(competition?.max_participants ?? 32))
   const [rounds, setRounds] = useState(String(competition?.rounds ?? 5))
   const [minElo, setMinElo] = useState(String(competition?.min_elo ?? 800))
   const [maxElo, setMaxElo] = useState(String(competition?.max_elo ?? 3000))
-  const [roundRobinLegs, setRoundRobinLegs] = useState(competition?.round_robin_legs ?? 1)
 
   // ── Dates ──
   const [registrationOpenAt, setRegistrationOpenAt] = useState(
@@ -245,33 +289,10 @@ export function CreateCompetitionForm({
   const computedRounds = computeRounds(
     tournamentType,
     Number(maxParticipants) || 2,
-    tournamentType === 'round_robin' ? roundRobinLegs : 1
+    matchLength
   )
   const isRoundsEditable = tournamentType === 'swiss'
   const roundsDisplayValue = isRoundsEditable ? rounds : String(computedRounds)
-
-  // ── Round Robin leg toggle ──
-  useEffect(() => {
-    if (tournamentType === 'round_robin') {
-      setFormatMatchRules(roundRobinLegs === 2 ? 'double_leg' : 'single_leg')
-    }
-  }, [tournamentType, roundRobinLegs])
-
-  // Reset format match rules when tournament type changes
-  useEffect(() => {
-    const rules = FORMAT_RULES[tournamentType]
-    if (rules) {
-      // Check if current value is valid for this type
-      const valid = rules.some((r) => r.value === formatMatchRules)
-      if (!valid) {
-        setFormatMatchRules(rules[0].value)
-      }
-    }
-    // Reset leg count for round robin
-    if (tournamentType !== 'round_robin') {
-      setRoundRobinLegs(1)
-    }
-  }, [tournamentType])
 
   // Sync edit mode competition data
   useEffect(() => {
@@ -280,15 +301,16 @@ export function CreateCompetitionForm({
     setTournamentType(competition.tournament_type)
     setTimeControl(competition.time_control ?? '')
     setTimezone(competition.timezone ?? 'UTC+1:00')
-    setEntryFeePrize(competition.entry_fee_prize ?? '')
+    setEntryFee(competition.entry_fee ?? '')
+    setPrize(competition.prize ?? '')
     setPlatform(competition.platform ?? 'chess.com')
-    setMatchLength((competition.match_length as MatchLength) ?? 'single_match')
-    setFormatMatchRules(competition.format_match_rules ?? FORMAT_RULES[competition.tournament_type][0].value)
+    const ml = (competition.match_length as MatchLength)
+    const valid = MATCH_CONFIG_OPTIONS[competition.tournament_type].some((opt) => opt.value === ml)
+    setMatchLength(valid ? ml : MATCH_CONFIG_OPTIONS[competition.tournament_type][0].value)
     setMaxParticipants(String(competition.max_participants ?? 32))
     setRounds(String(competition.rounds ?? 5))
     setMinElo(String(competition.min_elo ?? 800))
     setMaxElo(String(competition.max_elo ?? 3000))
-    setRoundRobinLegs(competition.round_robin_legs ?? 1)
     setRules(competition.rules ?? [])
     setRegistrationOpenAt(toDateTimeLocalValue(competition.registration_open_at))
     setRegistrationCloseAt(toDateTimeLocalValue(competition.registration_close_at))
@@ -325,6 +347,20 @@ export function CreateCompetitionForm({
     }
   }
 
+  // Derive format_match_rules from matchLength and tournamentType
+  function deriveFormatMatchRules(type: TournamentType, ml: MatchLength): string {
+    if (type === 'swiss') {
+      return ml === 'double_game' ? 'two_game_round' : 'single_game_per_round'
+    }
+    if (type === 'knockout') {
+      return ml === 'single_game' ? 'single_elimination' : 'two_game_match'
+    }
+    if (type === 'round_robin') {
+      return ml === 'double_game' ? 'double_leg' : 'single_leg'
+    }
+    return 'single_game_per_round'
+  }
+
   // ── Submit ──
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -356,12 +392,12 @@ export function CreateCompetitionForm({
       max_elo: Number(maxElo) || 3000,
       time_control: timeControl.trim() || undefined,
       timezone,
-      entry_fee_prize: entryFeePrize.trim() || undefined,
+      entry_fee: entryFee.trim() || undefined,
+      prize: prize.trim() || undefined,
       platform: platform as Platform,
       match_length: matchLength,
-      format_match_rules: formatMatchRules,
+      format_match_rules: deriveFormatMatchRules(tournamentType, matchLength),
       rules: rules.length > 0 ? rules : undefined,
-      round_robin_legs: tournamentType === 'round_robin' ? roundRobinLegs : undefined,
       ...schedulePayload,
     }
 
@@ -401,8 +437,6 @@ export function CreateCompetitionForm({
   }
 
   // ── Render ──
-  const currentFormatRules = FORMAT_RULES[tournamentType]
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* ── Header ── */}
@@ -505,14 +539,14 @@ export function CreateCompetitionForm({
             </CardContent>
           </Card>
 
-          {/* ── Tournament Details (replaces Description) ── */}
+          {/* ── Tournament Details ── */}
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings2 className="size-5 text-purple-500" />
                 Tournament Details
               </CardTitle>
-              <CardDescription>Time control, platform, and entry conditions.</CardDescription>
+              <CardDescription>Time control, entry fee, prize, and platform.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -544,16 +578,32 @@ export function CreateCompetitionForm({
                 </div>
               </div>
 
+              {/* Entry Fee (separate from Prize) */}
               <div className="space-y-2">
-                <Label htmlFor="entryFeePrize" className="flex items-center gap-1.5">
+                <Label htmlFor="entryFee" className="flex items-center gap-1.5">
                   <Trophy className="size-3.5 text-muted-foreground" />
-                  Entry Fee / Prize
+                  Entry Fee <span className="text-xs text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <Input
-                  id="entryFeePrize"
-                  placeholder="e.g., Free or $5 — winner takes 70%"
-                  value={entryFeePrize}
-                  onChange={(e) => setEntryFeePrize(e.target.value)}
+                  id="entryFee"
+                  placeholder="e.g., $5, Free, or 10,000 NGN"
+                  value={entryFee}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                  className="h-11"
+                />
+              </div>
+
+              {/* Prize (separate from Entry Fee) */}
+              <div className="space-y-2">
+                <Label htmlFor="prize" className="flex items-center gap-1.5">
+                  <Gamepad2 className="size-3.5 text-muted-foreground" />
+                  Prize <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="prize"
+                  placeholder="e.g., Trophy, Cash prize, or bragging rights"
+                  value={prize}
+                  onChange={(e) => setPrize(e.target.value)}
                   className="h-11"
                 />
               </div>
@@ -579,60 +629,34 @@ export function CreateCompetitionForm({
             </CardContent>
           </Card>
 
-          {/* ── Match Configuration ── */}
+          {/* ── Match Configuration (single unified section) ── */}
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Swords className="size-5 text-red-500" />
                 Match Configuration
               </CardTitle>
-              <CardDescription>How matches are played and scored.</CardDescription>
+              <CardDescription>How each pairing is played.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Match Length */}
+            <CardContent>
               <div className="space-y-3">
-                <Label>Match Length</Label>
+                <Label>Match Format</Label>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {MATCH_LENGTHS.map((ml) => {
-                    const selected = matchLength === ml.value
+                  {currentMatchOptions.map((opt) => {
+                    const selected = matchLength === opt.value
                     return (
                       <button
-                        key={ml.value}
+                        key={opt.value}
                         type="button"
-                        onClick={() => setMatchLength(ml.value)}
+                        onClick={() => setMatchLength(opt.value)}
                         className={`rounded-xl border p-3 text-left transition-all ${
                           selected
                             ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
                             : 'hover:border-primary/40 hover:bg-muted/50'
                         }`}
                       >
-                        <p className="text-sm font-semibold">{ml.label}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{ml.description}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Format-Specific Match Rules */}
-              <div className="space-y-3">
-                <Label>Format-Specific Rules</Label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {currentFormatRules.map((rule) => {
-                    const selected = formatMatchRules === rule.value
-                    return (
-                      <button
-                        key={rule.value}
-                        type="button"
-                        onClick={() => setFormatMatchRules(rule.value)}
-                        className={`rounded-xl border p-3 text-left transition-all ${
-                          selected
-                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
-                            : 'hover:border-primary/40 hover:bg-muted/50'
-                        }`}
-                      >
-                        <p className="text-sm font-semibold">{rule.label}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{rule.description}</p>
+                        <p className="text-sm font-semibold">{opt.label}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
                       </button>
                     )
                   })}
@@ -677,28 +701,40 @@ export function CreateCompetitionForm({
               )}
 
               {showRuleInput ? (
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter a rule..."
+                <div className="flex flex-col gap-2">
+                  <AutoResizeTextarea
                     value={currentRule}
                     onChange={(e) => setCurrentRule(e.target.value)}
+                    placeholder="Enter a rule..."
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
                         addRule()
                       }
                     }}
-                    className="h-10"
                   />
-                  <Button
-                    type="button"
-                    onClick={addRule}
-                    disabled={!currentRule.trim()}
-                    className="h-10 shrink-0"
-                  >
-                    <Plus className="mr-1.5 size-4" />
-                    Add Rule
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={addRule}
+                      disabled={!currentRule.trim()}
+                      className="h-10"
+                    >
+                      <Plus className="mr-1.5 size-4" />
+                      Add Rule
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCurrentRule('')
+                        setShowRuleInput(false)
+                      }}
+                      className="h-10"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <Button
@@ -774,34 +810,7 @@ export function CreateCompetitionForm({
                 )}
               </div>
 
-              {/* Round Robin Legs toggle */}
-              {tournamentType === 'round_robin' && (
-                <div className="rounded-xl border bg-muted/30 p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Double Leg (Home & Away)</p>
-                      <p className="text-xs text-muted-foreground">
-                        {roundRobinLegs === 2
-                          ? 'Each pairing played twice (swap colors)'
-                          : 'Each pairing played once'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setRoundRobinLegs(roundRobinLegs === 1 ? 2 : 1)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        roundRobinLegs === 2 ? 'bg-primary' : 'bg-muted-foreground/30'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block size-5 rounded-full bg-white shadow-sm transition-transform ${
-                          roundRobinLegs === 2 ? 'translate-x-6' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Round Robin Legs toggle — REMOVED since match config handles it */}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

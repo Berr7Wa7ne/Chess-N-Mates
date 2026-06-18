@@ -13,6 +13,7 @@ export const API_ENDPOINTS = {
     LIST: '/competitions',
     GET: (id: string) => `/competitions/${id}`,
     UPDATE: (id: string) => `/competitions/${id}`,
+    DELETE: (id: string) => `/competitions/${id}`,
     START: (id: string) => `/competitions/${id}/start`,
     ADVANCE_ROUND: (id: string) => `/competitions/${id}/advance-round`,
     STANDINGS: (id: string) => `/competitions/${id}/standings`,
@@ -20,6 +21,7 @@ export const API_ENDPOINTS = {
   },
 
   PARTICIPANTS: {
+    REGISTRATIONS: (userId: string) => `/competitions/registered/${userId}`,
     JOIN: (id: string) => `/competitions/${id}/join`,
     WITHDRAW: (id: string, userId: string) =>
       `/competitions/${id}/participants/${userId}/withdraw`,

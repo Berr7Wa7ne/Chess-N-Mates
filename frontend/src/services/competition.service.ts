@@ -41,6 +41,12 @@ export const competitionService = {
     )
   },
 
+  deleteCompetition(id: string) {
+    return httpClient.delete<{ competition_id: string; competition_name: string; deleted_participants: number; deleted_matches: number }>(
+      API_ENDPOINTS.COMPETITIONS.DELETE(id)
+    )
+  },
+
   getStandings(id: string) {
     return httpClient.get<StandingEntry[]>(API_ENDPOINTS.COMPETITIONS.STANDINGS(id))
   },

@@ -24,7 +24,8 @@ const ALLOWED_UPDATE_FIELDS = [
   'max_elo',
   'time_control',
   'timezone',
-  'entry_fee_prize',
+  'entry_fee',
+  'prize',
   'platform',
   'match_length',
   'format_match_rules',
@@ -48,7 +49,8 @@ exports.createCompetition = async (req, res) => {
     end_date,
     time_control,
     timezone,
-    entry_fee_prize,
+    entry_fee,
+    prize,
     platform,
     match_length,
     format_match_rules,
@@ -99,7 +101,8 @@ exports.createCompetition = async (req, res) => {
       end_date,
       time_control,
       timezone: timezone ?? 'UTC+1:00',
-      entry_fee_prize,
+      entry_fee,
+      prize,
       platform: platform ?? 'chess.com',
       match_length: match_length ?? 'single_match',
       format_match_rules,
@@ -413,6 +416,61 @@ exports.advanceRound = async (req, res) => {
       current_round: nextRound,
       fixtures_generated: matchRows.length,
       unresolved_matches: unresolved.length,
+      timestamp: timestamp(),
+    },
+  });
+};
+
+exports.deleteCompetition = async (req, res) => {
+  const { id } = req.params;
+
+  // Fetch the competition first to confirm it exists
+  const { data: competition, error: compError } = await supabaseAdmin
+    .from('competitions')
+    .select('id, name, competition_status')
+    .eq('id', id)
+    .single();
+
+  if (compError) {
+    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
+  }
+
+  // Delete related records first (order matters for foreign keys)
+  const { count: deletedParticipants, error: partError } = await supabaseAdmin
+    .from('competition_participants')
+    .delete({ count: 'exact' })
+    .eq('competition_id', id);
+
+  if (partError) {
+    return res.status(400).json({ success: false, error: { message: partError.message } });
+  }
+
+  const { count: deletedMatches, error: matchError } = await supabaseAdmin
+    .from('matches')
+    .delete({ count: 'exact' })
+    .eq('competition_id', id);
+
+  if (matchError) {
+    return res.status(400).json({ success: false, error: { message: matchError.message } });
+  }
+
+  // Now delete the competition itself
+  const { error: deleteError } = await supabaseAdmin
+    .from('competitions')
+    .delete()
+    .eq('id', id);
+
+  if (deleteError) {
+    return res.status(400).json({ success: false, error: { message: deleteError.message } });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      competition_id: id,
+      competition_name: competition.name,
+      deleted_participants: deletedParticipants ?? 0,
+      deleted_matches: deletedMatches ?? 0,
       timestamp: timestamp(),
     },
   });

@@ -6,15 +6,8 @@ export type CompetitionStatus =
   | 'completed'
   | 'cancelled'
 
-export type MatchLength = 'single_match' | 'best_of_3' | 'best_of_5'
+export type MatchLength = 'single_game' | 'double_game' | 'best_of_3' | 'best_of_5'
 export type Platform = 'chess.com' | 'lichess' | 'over_the_board' | 'others'
-export type FormatMatchRule =
-  | 'single_elimination'
-  | 'two_game_match'
-  | 'single_game_per_round'
-  | 'two_game_round'
-  | 'single_leg'
-  | 'double_leg'
 
 export interface Competition {
   id: string
@@ -24,7 +17,8 @@ export interface Competition {
   // New structured fields replacing description
   time_control?: string | null
   timezone?: string
-  entry_fee_prize?: string | null
+  entry_fee?: string | null
+  prize?: string | null
   platform?: string
   match_length?: string
   format_match_rules?: string
@@ -65,7 +59,8 @@ export interface CreateCompetitionPayload {
   // New structured fields
   time_control?: string
   timezone?: string
-  entry_fee_prize?: string
+  entry_fee?: string
+  prize?: string
   platform?: string
   match_length?: string
   format_match_rules?: string
@@ -88,7 +83,8 @@ export interface UpdateCompetitionPayload {
   max_elo?: number
   time_control?: string
   timezone?: string
-  entry_fee_prize?: string
+  entry_fee?: string
+  prize?: string
   platform?: string
   match_length?: string
   format_match_rules?: string

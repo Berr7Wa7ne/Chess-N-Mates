@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/src/lib/query-keys'
 import { participantService } from '@/src/services/participant.service'
 import type {
@@ -8,6 +8,18 @@ import type {
   JoinCompetitionPayload,
   WithdrawParticipantPayload,
 } from '@/src/types/participant'
+
+export function useUserRegistrations(userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.participants.registrations(userId ?? ''),
+    queryFn: async () => {
+      if (!userId) return []
+      const response = await participantService.getUserRegistrations(userId)
+      return response.data ?? []
+    },
+    enabled: !!userId,
+  })
+}
 
 export function useJoinCompetition() {
   const queryClient = useQueryClient()
@@ -24,6 +36,8 @@ export function useJoinCompetition() {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(competitionId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(competitionId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
+      // Invalidate registrations to reflect the new join
+      queryClient.invalidateQueries({ queryKey: ['participants', 'registrations'] })
     },
   })
 }

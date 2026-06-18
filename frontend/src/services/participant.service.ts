@@ -10,6 +10,10 @@ import type {
 } from '@/src/types/participant'
 
 export const participantService = {
+  getUserRegistrations(userId: string) {
+    return httpClient.get<string[]>(API_ENDPOINTS.PARTICIPANTS.REGISTRATIONS(userId))
+  },
+
   joinCompetition(competitionId: string, payload: JoinCompetitionPayload) {
     return httpClient.post<Participant>(
       API_ENDPOINTS.PARTICIPANTS.JOIN(competitionId),
