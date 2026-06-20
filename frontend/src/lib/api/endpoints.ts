@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
     SUBMIT_RESULT: (id: string) => `/matches/${id}/submit-result`,
     CONFIRM_RESULT: (id: string) => `/matches/${id}/confirm-result`,
     FORCE_RESULT: (id: string) => `/matches/${id}/force-result`,
+    MARK_ABSENT: (id: string) => `/matches/${id}/mark-absent`,
     EXTEND_DEADLINE: (id: string) => `/matches/${id}/extend-deadline`,
   },
 } as const

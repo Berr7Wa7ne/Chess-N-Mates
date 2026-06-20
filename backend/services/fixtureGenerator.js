@@ -168,9 +168,16 @@ function generateRoundRobinPairsCircleMethod(players) {
       const b = all[total - 1 - i];
 
       if (a !== null && b !== null) {
-        roundPairs.push({ player_a_id: a, player_b_id: b });
+        roundPairs.push({ player_a_id: a, player_b_id: b, is_bye: false });
+      } else {
+        // If one is null, that player gets a bye
+        const byePlayer = a !== null ? a : b;
+        roundPairs.push({
+          player_a_id: byePlayer,
+          player_b_id: byePlayer,
+          is_bye: true,
+        });
       }
-      // If one is null, that player gets a bye (skipped)
     }
 
     rounds.push(roundPairs);

@@ -7,6 +7,7 @@ import type {
   SubmitResultPayload,
   ForceResultPayload,
   ExtendDeadlinePayload,
+  MarkAbsentPayload,
 } from '@/src/types/match'
 
 export const matchService = {
@@ -29,6 +30,13 @@ export const matchService = {
 
   forceResult(id: string, payload: ForceResultPayload) {
     return httpClient.post<Match>(API_ENDPOINTS.MATCHES.FORCE_RESULT(id), payload)
+  },
+
+  markAbsent(id: string, payload: MarkAbsentPayload) {
+    return httpClient.post<Match & { action: string; absence_side: string; winner_side: string }>(
+      API_ENDPOINTS.MATCHES.MARK_ABSENT(id),
+      payload
+    )
   },
 
   extendDeadline(id: string, payload: ExtendDeadlinePayload) {

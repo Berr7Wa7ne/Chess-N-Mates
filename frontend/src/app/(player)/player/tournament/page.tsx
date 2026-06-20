@@ -2,65 +2,29 @@
 
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { Download, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getCompetitionFixtures, getCompetitionResults } from "@/lib/admin-data"
+import { Skeleton } from "@/components/ui/skeleton"
+import { MatchesList } from "@/src/components/matches/matches-list"
+import { MatchResultDialog } from "@/src/components/matches/match-result-dialog"
+import { StandingsModal } from "@/src/components/standings/standings-modal"
 import {
   CompetitionStatusBadge,
   TournamentTypeBadge,
 } from "@/src/components/competitions/competition-badges"
 import { useAuth } from "@/src/hooks/useAuth"
+import { useCompetitionMatches } from "@/src/hooks/useMatches"
 import { useCompetitionStandings, useCompetitions } from "@/src/hooks/useCompetitions"
 import { useJoinCompetition, useUserRegistrations, useWithdraw } from "@/src/hooks/useParticipants"
 import { ApiError } from "@/src/types/api"
-import { ChevronLeft, ChevronRight } from "lucide-react"
-
-interface FixtureGroup {
-  round: number
-  matches: ReturnType<typeof getCompetitionFixtures>
-}
-
-interface ResultGroup {
-  round: number
-  matches: ReturnType<typeof getCompetitionResults>
-}
-
-const truncateUsername = (username: string, maxLength: number = 15) => {
-  return username.length > maxLength ? username.substring(0, maxLength - 2) + "..." : username
-}
-
-function MatchupDisplay({ playerA, playerB }: { playerA: any; playerB: any }) {
-  return (
-    <TooltipProvider>
-      <div className="flex items-center gap-2 text-nowrap">
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <span className="inline-block truncate text-sm font-medium">{truncateUsername(playerA.username)}</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {playerA.username} <span className="ml-1 text-muted-foreground">({playerA.elo})</span>
-          </TooltipContent>
-        </Tooltip>
-        <span className="text-xs text-muted-foreground">vs</span>
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <span className="inline-block truncate text-sm font-medium">{truncateUsername(playerB.username)}</span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {playerB.username} <span className="ml-1 text-muted-foreground">({playerB.elo})</span>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    </TooltipProvider>
-  )
-}
+import type { Match } from "@/src/types/match"
 
 export default function PlayerTournamentPage() {
-  const [currentFixtureRound, setCurrentFixtureRound] = useState(0)
-  const [currentResultRound, setCurrentResultRound] = useState(0)
+  const [currentRound, setCurrentRound] = useState(1)
+  const [standingsOpen, setStandingsOpen] = useState(false)
+  const [resultDialogMatch, setResultDialogMatch] = useState<Match | null>(null)
   const { currentUser } = useAuth()
   const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
   const joinMutation = useJoinCompetition()
@@ -77,8 +41,12 @@ export default function PlayerTournamentPage() {
     )
   }, [competitions])
 
+  const matchesQuery = useCompetitionMatches(currentCompetition?.id ?? '')
   const standingsQuery = useCompetitionStandings(currentCompetition?.id ?? '', !!currentCompetition)
+  
   const standings = standingsQuery.data ?? []
+  const matches = matchesQuery.data ?? []
+
   const isRegistered = Boolean(
     currentUser && standings.some((entry) => entry.user_id === currentUser.id)
   )
@@ -88,37 +56,9 @@ export default function PlayerTournamentPage() {
       !standingsQuery.isLoading &&
       !["active", "completed"].includes(currentCompetition.competition_status)
   )
-  
-  const allFixtures = currentCompetition ? getCompetitionFixtures(currentCompetition.id) : []
-  const allResults = currentCompetition ? getCompetitionResults(currentCompetition.id) : []
-
-  // Group fixtures by round
-  const fixturesByRound: FixtureGroup[] = []
-  allFixtures.forEach((fixture) => {
-    const existingRound = fixturesByRound.find((g) => g.round === fixture.round)
-    if (existingRound) {
-      existingRound.matches.push(fixture)
-    } else {
-      fixturesByRound.push({ round: fixture.round, matches: [fixture] })
-    }
-  })
-  fixturesByRound.sort((a, b) => a.round - b.round)
-
-  // Group results by round
-  const resultsByRound: ResultGroup[] = []
-  allResults.forEach((result) => {
-    const existingRound = resultsByRound.find((g) => g.round === result.round)
-    if (existingRound) {
-      existingRound.matches.push(result)
-    } else {
-      resultsByRound.push({ round: result.round, matches: [result] })
-    }
-  })
-  resultsByRound.sort((a, b) => a.round - b.round)
 
   async function handleJoin() {
     if (!currentUser || !currentCompetition) return
-
     try {
       await joinMutation.mutateAsync({
         competitionId: currentCompetition.id,
@@ -132,7 +72,6 @@ export default function PlayerTournamentPage() {
 
   async function handleWithdraw() {
     if (!currentUser || !currentCompetition) return
-
     try {
       await withdrawMutation.mutateAsync({
         competitionId: currentCompetition.id,
@@ -147,7 +86,6 @@ export default function PlayerTournamentPage() {
 
   async function handleJoinCompetition(competitionId: string, competitionName: string) {
     if (!currentUser) return
-
     try {
       await joinMutation.mutateAsync({
         competitionId,
@@ -159,6 +97,30 @@ export default function PlayerTournamentPage() {
     }
   }
 
+  function handleDownloadFixtures() {
+    if (matches.length === 0) return
+    const csv = [
+      ['Round', 'Player A', 'Player B', 'Status', 'Result'].join(','),
+      ...matches.map((m) =>
+        [
+          m.round_number,
+          m.player_a?.display_name || m.player_a_id,
+          m.is_bye ? 'BYE' : m.player_b?.display_name || m.player_b_id,
+          m.match_status,
+          m.result_winner || 'Pending',
+        ].join(',')
+      ),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${currentCompetition?.name || 'fixtures'}-fixtures.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Fixtures downloaded')
+  }
+
   return (
     <div className="space-y-6 pb-8">
       <div>
@@ -166,6 +128,7 @@ export default function PlayerTournamentPage() {
         <p className="text-muted-foreground">View the ongoing tournament, fixtures, results, standings, and past history.</p>
       </div>
 
+      {/* ── Current Tournament Card ── */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Ongoing Tournament</CardTitle>
@@ -173,7 +136,7 @@ export default function PlayerTournamentPage() {
         </CardHeader>
         <CardContent>
           {competitionsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading tournament...</p>
+            <Skeleton className="h-20 w-full" />
           ) : currentCompetition ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -211,204 +174,138 @@ export default function PlayerTournamentPage() {
         </CardContent>
       </Card>
 
-      {currentCompetition ? (
-        <>
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Fixtures</CardTitle>
-                    <CardDescription>Round {fixturesByRound[currentFixtureRound]?.round || "-"}</CardDescription>
-                  </div>
-                  {fixturesByRound.length > 1 && (
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentFixtureRound((r) => (r - 1 + fixturesByRound.length) % fixturesByRound.length)}
-                      >
-                        <ChevronLeft className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentFixtureRound((r) => (r + 1) % fixturesByRound.length)}
-                      >
-                        <ChevronRight className="size-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="px-0 sm:px-6 overflow-hidden">
-                {fixturesByRound.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Match</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {fixturesByRound[currentFixtureRound]?.matches.map((fixture) => (
-                        <TableRow key={fixture.id}>
-                          <TableCell className="font-medium">
-                            <MatchupDisplay playerA={fixture.playerA} playerB={fixture.playerB} />
-                          </TableCell>
-                          <TableCell className="capitalize">{fixture.status}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No fixtures have been generated yet.</p>
-                )}
-              </CardContent>
-            </Card>
+      {/* ── Matches & Standings ── */}
+      {currentCompetition && matches.length > 0 && (
+        <div className="grid gap-6 xl:grid-cols-2">
+          {/* Matches */}
+          <MatchesList
+            matches={matches}
+            currentRound={currentRound}
+            onRoundChange={setCurrentRound}
+            onViewStandings={() => setStandingsOpen(true)}
+            onDownloadAll={handleDownloadFixtures}
+            totalRounds={currentCompetition.rounds}
+            competitionName={currentCompetition.name}
+            renderMatchActions={(match: Match) => {
+              if (match.is_bye || match.match_status !== 'pending') return null
+              if (!currentUser) return null
+              const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
+              if (!isParticipant) return null
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] h-7"
+                  onClick={() => setResultDialogMatch(match)}
+                >
+                  Submit Result
+                </Button>
+              )
+            }}
+          />
 
-            <Card className="shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Results</CardTitle>
-                    <CardDescription>Round {resultsByRound[currentResultRound]?.round || "-"}</CardDescription>
-                  </div>
-                  {resultsByRound.length > 1 && (
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentResultRound((r) => (r - 1 + resultsByRound.length) % resultsByRound.length)}
-                      >
-                        <ChevronLeft className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentResultRound((r) => (r + 1) % resultsByRound.length)}
-                      >
-                        <ChevronRight className="size-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="px-0 sm:px-6 overflow-hidden">
-                {resultsByRound.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Match</TableHead>
-                        <TableHead className="text-right">Score</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resultsByRound[currentResultRound]?.matches.map((result) => (
-                        <TableRow key={result.id}>
-                          <TableCell className="font-medium">
-                            <MatchupDisplay playerA={result.playerA} playerB={result.playerB} />
-                          </TableCell>
-                          <TableCell className="text-right font-mono">{result.scoreA} - {result.scoreB}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No results recorded yet.</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
+          {/* Standings quick preview */}
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Standings</CardTitle>
-              <CardDescription>Tournament standings are shown here, separate from the main community leaderboard.</CardDescription>
+              <CardDescription>Tournament leaderboard</CardDescription>
             </CardHeader>
-            <CardContent className="px-0 sm:px-6 overflow-hidden">
+            <CardContent>
               {standingsQuery.isLoading ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">Loading standings...</p>
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-full" />
+                </div>
               ) : standings.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Rank</TableHead>
-                      <TableHead>Player</TableHead>
-                      <TableHead className="text-right">Score</TableHead>
-                      <TableHead className="text-right">W / D / L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {standings.map((entry) => (
-                      <TableRow key={entry.user_id}>
-                        <TableCell>#{entry.rank}</TableCell>
-                        <TableCell>{entry.display_name}</TableCell>
-                        <TableCell className="text-right">{entry.score}</TableCell>
-                        <TableCell className="text-right">
-                          {entry.wins} / {entry.draws} / {entry.losses}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="space-y-3">
+                  {/* Top 3 players */}
+                  {standings.slice(0, 3).map((entry, index) => (
+                    <div
+                      key={entry.user_id}
+                      className="flex items-center justify-between rounded-xl border p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                        </span>
+                        <div>
+                          <p className="font-medium">{entry.display_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.points} pts · {entry.wins}W {entry.draws}D {entry.losses}L
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xl font-bold">{entry.points}</span>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => setStandingsOpen(true)}
+                  >
+                    <Trophy className="size-4" />
+                    View Full Standings
+                  </Button>
+                </div>
               ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">No standings available yet.</p>
+                <p className="text-sm text-muted-foreground">No standings available yet.</p>
               )}
             </CardContent>
           </Card>
-        </>
-      ) : null}
+        </div>
+      )}
 
+      {/* ── Tournament History ── */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Tournament History</CardTitle>
           <CardDescription>All competitions remain available for review here.</CardDescription>
         </CardHeader>
         <CardContent className="px-0 sm:px-6 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Start Date</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {competitionsLoading && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
                     Loading competitions...
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               )}
               {!competitionsLoading && competitions?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
                     No competitions found.
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               )}
               {competitions?.map((competition) => {
                 const alreadyJoined = userRegisteredSet.has(competition.id)
                 const canJoin = competition.competition_status === "open_registration" && !alreadyJoined
                 return (
-                  <TableRow key={competition.id}>
-                    <TableCell className="font-medium">{competition.name}</TableCell>
-                    <TableCell>
+                  <tr key={competition.id} className="border-b last:border-0">
+                    <td className="px-4 py-3 font-medium">{competition.name}</td>
+                    <td className="px-4 py-3">
                       <TournamentTypeBadge type={competition.tournament_type} />
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="px-4 py-3">
                       <CompetitionStatusBadge status={competition.competition_status} />
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="px-4 py-3">
                       {competition.start_date
                         ? new Date(competition.start_date).toLocaleString()
                         : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       {canJoin ? (
                         <Button
                           size="sm"
@@ -420,14 +317,34 @@ export default function PlayerTournamentPage() {
                       ) : alreadyJoined ? (
                         <span className="text-xs text-muted-foreground">Joined</span>
                       ) : null}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )
               })}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </CardContent>
       </Card>
+
+      {/* ── Standings Modal ── */}
+      {currentCompetition && (
+        <StandingsModal
+          open={standingsOpen}
+          onClose={() => setStandingsOpen(false)}
+          standings={standings}
+          competitionName={currentCompetition.name}
+        />
+      )}
+
+      {/* ── Match Result Dialog ── */}
+      {resultDialogMatch && currentUser && (
+        <MatchResultDialog
+          open={!!resultDialogMatch}
+          onClose={() => setResultDialogMatch(null)}
+          match={resultDialogMatch}
+          userId={currentUser.id}
+        />
+      )}
     </div>
   )
 }

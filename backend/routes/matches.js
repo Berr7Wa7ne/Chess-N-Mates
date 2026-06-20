@@ -17,6 +17,9 @@ router.post('/:id/confirm-result', matchesController.confirmResult);
 // POST /matches/:id/force-result — admin forces result
 router.post('/:id/force-result', matchesController.forceResult);
 
+// POST /matches/:id/mark-absent — admin marks a player absent
+router.post('/:id/mark-absent', matchesController.markAbsent);
+
 // POST /matches/:id/extend-deadline — admin extends deadline
 router.post('/:id/extend-deadline', matchesController.extendDeadline);
 

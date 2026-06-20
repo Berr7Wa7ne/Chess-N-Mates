@@ -8,6 +8,7 @@ import type {
   SubmitResultPayload,
   ForceResultPayload,
   ExtendDeadlinePayload,
+  MarkAbsentPayload,
 } from '@/src/types/match'
 
 export function useCompetitionMatches(competitionId: string, params?: CompetitionMatchListParams) {
@@ -61,6 +62,18 @@ export function useForceResult() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: ForceResultPayload }) =>
       matchService.forceResult(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
+    },
+  })
+}
+
+export function useMarkAbsent() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: MarkAbsentPayload }) =>
+      matchService.markAbsent(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
     },

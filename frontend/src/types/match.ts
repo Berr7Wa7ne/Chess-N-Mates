@@ -27,8 +27,15 @@ export interface Match {
   forced?: boolean
   force_reason?: string | null
   is_bye?: boolean
+  is_absent?: boolean
+  absence_side?: 'a' | 'b' | null
   created_at?: string
   updated_at?: string
+}
+
+export interface MarkAbsentPayload {
+  absence_side: 'a' | 'b'
+  user_id?: string
 }
 
 export interface CompetitionMatchListParams {

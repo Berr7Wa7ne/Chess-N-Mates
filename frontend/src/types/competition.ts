@@ -123,12 +123,16 @@ export interface AdvanceRoundResult {
 
 export interface StandingEntry {
   rank: number
+  rank_display?: string
   user_id: string
   display_name: string
   chess_username?: string | null
   chess_elo?: number
-  score: number
+  played: number
   wins: number
   draws: number
   losses: number
+  points: number
+  absences: number
+  byes: number
 }
