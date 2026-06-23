@@ -258,6 +258,14 @@ exports.forceResult = async (req, res) => {
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
 
+  // If match was already completed/result_submitted, reverse the previous scores first
+  if (
+    (match.match_status === 'completed' || match.match_status === 'result_submitted') &&
+    match.result_winner
+  ) {
+    await reverseParticipantScores(match.competition_id, match);
+  }
+
   await updateParticipantScores(match.competition_id, {
     ...match,
     result_winner,
@@ -425,6 +433,128 @@ async function updateParticipantScores(competitionId, match) {
         .update({
           score: Number(partB.score || 0) + 1,
           draws: (partB.draws || 0) + 1,
+        })
+        .eq('id', partB.id);
+    }
+  }
+}
+
+// ─── Reverse Helper ───────────────────────────────────────────────
+
+async function reverseParticipantScores(competitionId, match) {
+  const { data: participants } = await supabaseAdmin
+    .from('competition_participants')
+    .select('*')
+    .eq('competition_id', competitionId)
+    .in('user_id', [match.player_a_id, match.player_b_id]);
+
+  if (!participants || participants.length === 0) return;
+
+  const partA = participants.find((p) => p.user_id === match.player_a_id);
+  const partB = participants.find((p) => p.user_id === match.player_b_id);
+
+  // Handle reversal of absence scoring
+  if (match.is_absent) {
+    if (match.absence_side === 'a') {
+      // Previously: B got +2 pts +1 win; A got +1 absence
+      if (partB) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            score: Math.max(0, Number(partB.score || 0) - 2),
+            wins: Math.max(0, (partB.wins || 0) - 1),
+          })
+          .eq('id', partB.id);
+      }
+      if (partA) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: Math.max(0, (partA.absences || 0) - 1),
+          })
+          .eq('id', partA.id);
+      }
+    } else if (match.absence_side === 'b') {
+      // Previously: A got +2 pts +1 win; B got +1 absence
+      if (partA) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            score: Math.max(0, Number(partA.score || 0) - 2),
+            wins: Math.max(0, (partA.wins || 0) - 1),
+          })
+          .eq('id', partA.id);
+      }
+      if (partB) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: Math.max(0, (partB.absences || 0) - 1),
+          })
+          .eq('id', partB.id);
+      }
+    }
+    return;
+  }
+
+  if (!match.result_winner) return;
+
+  // Reverse 2-1-0 scoring
+  if (match.result_winner === 'a') {
+    // Previously: A got +2 pts +1 win; B got +1 loss
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partA.score || 0) - 2),
+          wins: Math.max(0, (partA.wins || 0) - 1),
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          losses: Math.max(0, (partB.losses || 0) - 1),
+        })
+        .eq('id', partB.id);
+    }
+  } else if (match.result_winner === 'b') {
+    // Previously: B got +2 pts +1 win; A got +1 loss
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partB.score || 0) - 2),
+          wins: Math.max(0, (partB.wins || 0) - 1),
+        })
+        .eq('id', partB.id);
+    }
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          losses: Math.max(0, (partA.losses || 0) - 1),
+        })
+        .eq('id', partA.id);
+    }
+  } else if (match.result_winner === 'draw') {
+    // Previously: both got +1 pt +1 draw
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partA.score || 0) - 1),
+          draws: Math.max(0, (partA.draws || 0) - 1),
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partB.score || 0) - 1),
+          draws: Math.max(0, (partB.draws || 0) - 1),
         })
         .eq('id', partB.id);
     }

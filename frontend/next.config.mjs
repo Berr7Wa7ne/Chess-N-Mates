@@ -4,8 +4,8 @@ const nextConfig = {
     unoptimized: true,
   },
   turbopack: {
-    root: '.',
-  }
+    root: 'C:/Users/cosyb/Desktop/chess-tournament-app/frontend',
+  },
 }
 
 export default nextConfig

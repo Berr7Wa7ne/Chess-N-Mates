@@ -63,8 +63,8 @@ export function RoundNavigation({
             onClick={() => onRoundChange(round)}
             className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
               round === currentRound
-                ? 'bg-gray-900 text-white shadow-sm'
-                : 'border border-gray-200 bg-white text-muted-foreground hover:bg-gray-50'
+                ? 'bg-foreground text-background shadow-sm'
+                : 'border border-border bg-background text-muted-foreground hover:bg-muted'
             }`}
           >
             Round {round}
@@ -77,7 +77,7 @@ export function RoundNavigation({
         <div className="relative shrink-0" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
           >
             {activeFilterLabel}
             <ChevronDown
@@ -86,7 +86,7 @@ export function RoundNavigation({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 min-w-[130px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-1 min-w-[130px] overflow-hidden rounded-xl border border-border bg-background shadow-lg">
               {FILTER_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -94,9 +94,9 @@ export function RoundNavigation({
                     onFilterChange(opt.value)
                     setDropdownOpen(false)
                   }}
-                  className={`block w-full px-4 py-2 text-left text-xs font-medium transition-colors hover:bg-gray-50 ${
+                  className={`block w-full px-4 py-2 text-left text-xs font-medium transition-colors hover:bg-muted ${
                     activeFilter === opt.value
-                      ? 'text-gray-900 bg-gray-50'
+                      ? 'text-foreground bg-muted'
                       : 'text-muted-foreground'
                   }`}
                 >

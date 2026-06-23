@@ -51,7 +51,15 @@ function computeStandings(participants, matches) {
   );
 
   for (const match of completedMatches) {
-    if (match.is_bye) continue; // BYE doesn't count
+    if (match.is_bye) {
+      // BYE round — award 2 points to the resting player
+      const player = statsMap.get(match.player_a_id);
+      if (player) {
+        player.byes += 1;
+        player.points += 2;
+      }
+      continue;
+    }
 
     const playerA = statsMap.get(match.player_a_id);
     const playerB = statsMap.get(match.player_b_id);

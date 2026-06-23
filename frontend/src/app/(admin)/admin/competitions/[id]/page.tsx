@@ -15,7 +15,6 @@ import {
   MapPin,
   Play,
   Swords,
-  SkipForward,
   Trophy,
   Users,
 } from 'lucide-react'
@@ -28,26 +27,23 @@ import {
   CompetitionStatusBadge,
   TournamentTypeBadge,
 } from '@/src/components/competitions/competition-badges'
-import { MatchesList } from '@/src/components/matches/matches-list'
 import { StandingsModal } from '@/src/components/standings/standings-modal'
 import {
-  useAdvanceRound,
   useCompetition,
   useCompetitionStandings,
   useStartCompetition,
 } from '@/src/hooks/useCompetitions'
 import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
-import type { Match, MatchStatus } from '@/src/types/match'
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function formatDate(value?: string | null) {
   if (!value) return '—'
-  return new Date(value).toLocaleString('en-US', {
-    month: '2-digit',
-    day: '2-digit',
-    year: '2-digit',
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -110,11 +106,8 @@ export default function AdminCompetitionDetailPage() {
   const standingsQuery = useCompetitionStandings(id, !!id)
   const matchesQuery = useCompetitionMatches(id)
   const startMutation = useStartCompetition()
-  const advanceMutation = useAdvanceRound()
 
-  const [currentRound, setCurrentRound] = useState(1)
   const [standingsOpen, setStandingsOpen] = useState(false)
-  const [advanceWithPending, setAdvanceWithPending] = useState(false)
 
   const competition = competitionQuery.data
 
@@ -124,25 +117,6 @@ export default function AdminCompetitionDetailPage() {
       toast.success(`Tournament started — ${result.data.fixtures_generated} fixtures generated`)
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to start tournament')
-    }
-  }
-
-  async function handleAdvanceRound() {
-    try {
-      const result = await advanceMutation.mutateAsync({
-        id,
-        payload: advanceWithPending ? { include_pending_matches: true } : undefined,
-      })
-      const data = result.data
-      if (data.action === 'completed') {
-        toast.success('Tournament completed! 🎉')
-      } else {
-        toast.success(
-          `Advanced to round ${data.current_round} — ${data.fixtures_generated} fixtures generated`
-        )
-      }
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'Failed to advance round')
     }
   }
 
@@ -228,9 +202,7 @@ export default function AdminCompetitionDetailPage() {
   }
 
   const canStart = competition.competition_status === 'open_registration'
-  const canAdvance = competition.competition_status === 'active'
 
-  const matches = matchesQuery.data || []
   const standings = standingsQuery.data || []
 
   return (
@@ -264,20 +236,6 @@ export default function AdminCompetitionDetailPage() {
               <Play className="mr-2 size-4" />
             )}
             Start Tournament
-          </Button>
-        )}
-        {canAdvance && (
-          <Button
-            className="rounded-2xl bg-black hover:bg-slate-900"
-            onClick={handleAdvanceRound}
-            disabled={advanceMutation.isPending}
-          >
-            {advanceMutation.isPending ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <SkipForward className="mr-2 size-4" />
-            )}
-            Advance Round
           </Button>
         )}
       </PageHeader>
@@ -336,7 +294,7 @@ export default function AdminCompetitionDetailPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_1.8fr]">
+      <div>
         {/* ════════════ LEFT COLUMN: Overview + Download Buttons ════════════ */}
         <div className="space-y-6">
           <Card className="rounded-2xl shadow-sm">
@@ -391,9 +349,10 @@ export default function AdminCompetitionDetailPage() {
                   {competition.min_elo ?? 800} – {competition.max_elo ?? 3000}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-3 border-b pb-3">
-                <span className="shrink-0 text-muted-foreground">Registration</span>
-                <span className="min-w-0 text-right text-xs font-medium leading-relaxed">
+              {/* Registration — stacked layout fix */}
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="text-muted-foreground text-sm">Registration</span>
+                <span className="font-medium text-xs leading-relaxed">
                   {formatDate(competition.registration_open_at)}
                   <span className="mx-1 text-muted-foreground">→</span>
                   {formatDate(competition.registration_close_at)}
@@ -413,58 +372,39 @@ export default function AdminCompetitionDetailPage() {
                 <RulesList rules={competition.rules} />
               </div>
 
+              {/* Button to open matches */}
+              <div className='flex justify-center'>
+              <Button asChild className="rounded-xl gap-2">
+                <Link href={`/admin/competitions/${competition.id}/matches`}>
+                  <Swords className="size-4" />
+                  Open Matches
+                </Link>
+              </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* ════════════ RIGHT COLUMN: Matches + Standings Modal ════════════ */}
-        <div className="space-y-6">
-          <MatchesList
-            matches={matches}
-            currentRound={currentRound}
-            onRoundChange={setCurrentRound}
-            onViewStandings={() => setStandingsOpen(true)}
-            onDownloadAll={() => {
-              handleDownloadFixtures()
-              setTimeout(handleDownloadStandings, 500)
-            }}
-            totalRounds={competition.rounds}
-            competitionName={competition.name}
-          />
-
-          {/* Advance Round Controls */}
-          {canAdvance && (
-            <div className="flex flex-col gap-2 rounded-xl border p-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={advanceWithPending}
-                  onChange={(e) => setAdvanceWithPending(e.target.checked)}
-                  className="rounded border-muted-foreground/30"
-                />
-                <span className="text-xs text-muted-foreground">
-                  Include pending matches when advancing
-                </span>
-              </label>
-              <Button
-                onClick={handleAdvanceRound}
-                disabled={advanceMutation.isPending}
-                variant="outline"
-                className="w-full gap-2"
-                size="sm"
-              >
-                {advanceMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <SkipForward className="size-4" />
-                )}
-                {competition.current_round >= competition.rounds
-                  ? 'Complete Tournament'
-                  : `Advance to Round ${competition.current_round + 1}`}
+        {/* ════════════ RIGHT COLUMN: Matches & Scoring link card ════════════ */}
+        {/* <div className="space-y-6">
+          <Card className="rounded-2xl shadow-sm">
+            <CardContent className="flex flex-col items-center gap-4 py-12">
+              <Swords className="size-10 text-muted-foreground/40" />
+              <div className="text-center">
+                <p className="font-semibold">Matches & Scoring</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  View fixtures, score matches, and track live standings
+                </p>
+              </div>
+              <Button asChild className="rounded-xl gap-2">
+                <Link href={`/admin/competitions/${competition.id}/matches`}>
+                  <Swords className="size-4" />
+                  Open Matches
+                </Link>
               </Button>
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        </div> */}
       </div>
 
       {/* ── Standings Modal ── */}

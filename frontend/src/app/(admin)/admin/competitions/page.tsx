@@ -267,6 +267,11 @@ export default function AdminCompetitionsPage() {
                             <DropdownMenuItem asChild>
                               <Link href={`/admin/competitions/${competition.id}`}>View</Link>
                             </DropdownMenuItem>
+                            {(competition.competition_status === 'active' || competition.competition_status === 'completed') && (
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin/competitions/${competition.id}/matches`}>Open Matches</Link>
+                              </DropdownMenuItem>
+                            )}
                             {competition.competition_status === 'draft' && (
                               <DropdownMenuItem
                                 className="gap-2 text-emerald-600"

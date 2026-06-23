@@ -56,14 +56,18 @@ export function useConfirmResult() {
   })
 }
 
-export function useForceResult() {
+export function useForceResult(competitionId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: ForceResultPayload }) =>
       matchService.forceResult(id, payload),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.matches(competitionId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(competitionId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(competitionId) })
+      return data
     },
   })
 }

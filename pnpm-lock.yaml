@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      dom-to-image-more:
+        specifier: ^3.10.0
+        version: 3.10.0
+
+packages:
+
+  dom-to-image-more@3.10.0:
+    resolution: {integrity: sha512-APrFEimSmH4phJKs8DlURuSr3BFwDqNi62l14bx73Wrhx0OhE4dd0qzZR+4E3sH8PnHxvax1LOrosC9oXRFA5A==}
+
+snapshots:
+
+  dom-to-image-more@3.10.0: {}
