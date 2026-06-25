@@ -36,5 +36,14 @@ export const API_ENDPOINTS = {
     FORCE_RESULT: (id: string) => `/matches/${id}/force-result`,
     MARK_ABSENT: (id: string) => `/matches/${id}/mark-absent`,
     EXTEND_DEADLINE: (id: string) => `/matches/${id}/extend-deadline`,
+    ADMIN_SCORE: (id: string) => `/matches/${id}/admin-score`,
+  },
+  DISPUTES: {
+    LIST: '/disputes',
+    GET: (id: string) => `/disputes/${id}`,
+    CREATE: '/disputes',
+    UPDATE_STATUS: (id: string) => `/disputes/${id}/status`,
+    RESOLVE: (id: string) => `/disputes/${id}/resolve`,
+    REJECT: (id: string) => `/disputes/${id}/reject`,
   },
 } as const

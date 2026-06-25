@@ -17,4 +17,9 @@ export const queryKeys = {
     all: ['matches'] as const,
     detail: (id: string) => ['matches', id] as const,
   },
+  disputes: {
+    all: ['disputes'] as const,
+    list: (params?: object) => ['disputes', 'list', params] as const,
+    detail: (id: string) => ['disputes', id] as const,
+  },
 } as const

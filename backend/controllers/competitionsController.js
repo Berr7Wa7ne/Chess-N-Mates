@@ -58,6 +58,19 @@ exports.createCompetition = async (req, res) => {
     round_robin_legs,
   } = req.body;
 
+function isValidUUID(str) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
+// In createCompetition, add:
+if (!created_by || !isValidUUID(created_by)) {
+  return res.status(400).json({
+    success: false,
+    error: { message: 'Invalid user ID format. Expected UUID.' }
+  });
+}
+
+
   if (!name || !tournament_type || !created_by) {
     return res.status(400).json({
       success: false,

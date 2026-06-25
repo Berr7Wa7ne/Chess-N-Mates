@@ -59,3 +59,7 @@ export interface ForceResultPayload {
 export interface ExtendDeadlinePayload {
   hours: number
 }
+
+export interface AdminScorePayload {
+  result_winner: ResultWinner
+}

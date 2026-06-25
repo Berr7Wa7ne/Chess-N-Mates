@@ -45,6 +45,10 @@ export const matchService = {
       payload
     )
   },
+
+  adminScore(id: string, payload: { result_winner: 'a' | 'b' | 'draw' }) {
+    return httpClient.post(API_ENDPOINTS.MATCHES.ADMIN_SCORE(id), payload)
+  },
 }
 
 export type MatchServiceResponse<T> = BackendApiResponse<T>

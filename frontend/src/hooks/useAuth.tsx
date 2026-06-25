@@ -51,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await userService.login({ phone_number: phone.trim() })
     const authUser = response.data
 
+    if (authUser && typeof authUser.id === 'number') {
+      authUser.id = String(authUser.id)
+    }
+
     setStoredUser(authUser)
     setAuthCookies(authUser.role)
     setUserState(authUser as User)

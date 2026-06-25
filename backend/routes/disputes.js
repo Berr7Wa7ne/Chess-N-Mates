@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { supabaseAdmin } = require('../config/supabase');
+const disputesController = require('../controllers/disputesController');
 
-router.get('/', async (req, res) => {
-  const { data, error } = await supabaseAdmin.from('disputes').select('*');
-  if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
-});
+router.get('/', disputesController.getDisputes);
+router.get('/:id', disputesController.getDispute);
+router.post('/', disputesController.createDispute);
+router.patch('/:id/status', disputesController.updateDisputeStatus);
+router.post('/:id/resolve', disputesController.resolveDispute);
+router.post('/:id/reject', disputesController.rejectDispute);
 
 module.exports = router;

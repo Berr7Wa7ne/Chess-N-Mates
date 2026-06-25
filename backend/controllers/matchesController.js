@@ -1,5 +1,6 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
 const { timestamp } = require('../utils/competitionHelpers');
+const { verifyGameAndDetermineWinner } = require('../services/chessComService');
 
 exports.getCompetitionMatches = async (req, res) => {
   const competitionId = req.params.competition_id || req.params.id;
@@ -100,9 +101,46 @@ exports.submitResult = async (req, res) => {
     });
   }
 
+  let verifiedResult = null;
+  let autoScored = false;
+  let flagged = false;
+
+  // If a game link was provided, attempt chess.com verification
+  if (chess_game_link) {
+    const { data: playerA } = await supabaseAdmin
+      .from('users')
+      .select('id, chess_com_username')
+      .eq('id', match.player_a_id)
+      .single();
+
+    const { data: playerB } = await supabaseAdmin
+      .from('users')
+      .select('id, chess_com_username')
+      .eq('id', match.player_b_id)
+      .single();
+
+    if (playerA?.chess_com_username && playerB?.chess_com_username) {
+      const verification = await verifyGameAndDetermineWinner(
+        chess_game_link, playerA, playerB
+      );
+
+      if (verification.matched) {
+        verifiedResult = verification.result_winner;
+        if (verifiedResult === result_winner) {
+          autoScored = true;
+        } else {
+          flagged = true;
+        }
+      }
+    }
+  }
+
+  const newStatus = autoScored ? 'completed' : 'result_submitted';
+  const finalResult = autoScored ? verifiedResult : result_winner;
+
   const updates = {
-    match_status: 'result_submitted',
-    result_winner,
+    match_status: newStatus,
+    result_winner: finalResult,
     result_submitted_by: user_id,
     result_submitted_at: timestamp(),
   };
@@ -118,7 +156,31 @@ exports.submitResult = async (req, res) => {
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+
+  // If auto-scored: update participant scores immediately
+  if (autoScored) {
+    await updateParticipantScores(match.competition_id, { ...match, result_winner: finalResult });
+  }
+
+  // If flagged: create a dispute automatically
+  if (flagged) {
+    await supabaseAdmin.from('disputes').insert({
+      match_id: id,
+      competition_id: match.competition_id,
+      raised_by_user_id: user_id,
+      opponent_user_id: match.player_a_id === user_id ? match.player_b_id : match.player_a_id,
+      filed_by_role: 'player',
+      category: 'result_mismatch',
+      reason: `Submitted result (${result_winner}) does not match chess.com verified result (${verifiedResult}). Flagged for admin review.`,
+      dispute_status: 'open',
+    });
+    await supabaseAdmin
+      .from('matches')
+      .update({ match_status: 'disputed' })
+      .eq('id', id);
+  }
+
+  res.json({ success: true, data: { ...data, auto_scored: autoScored, flagged } });
 };
 
 exports.confirmResult = async (req, res) => {
@@ -244,13 +306,19 @@ exports.forceResult = async (req, res) => {
 
   if (matchError) return res.status(404).json({ success: false, error: { message: 'Match not found' } });
 
+  // If match was already completed, reverse the old scores first
+  if (match.match_status === 'completed' && match.result_winner) {
+    await reverseParticipantScores(match.competition_id, match);
+  }
+
   const { data, error } = await supabaseAdmin
     .from('matches')
     .update({
+      result_winner: result_winner,
       match_status: 'completed',
-      result_winner,
       forced: true,
       force_reason: reason || null,
+      forced_at: new Date().toISOString(),
     })
     .eq('id', id)
     .select()
@@ -258,20 +326,69 @@ exports.forceResult = async (req, res) => {
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
 
-  // If match was already completed/result_submitted, reverse the previous scores first
-  if (
-    (match.match_status === 'completed' || match.match_status === 'result_submitted') &&
-    match.result_winner
-  ) {
-    await reverseParticipantScores(match.competition_id, match);
-  }
-
   await updateParticipantScores(match.competition_id, {
     ...match,
     result_winner,
     is_absent: false,
     absence_side: null,
   });
+
+  res.json({ success: true, data });
+};
+
+exports.adminScoreMatch = async (req, res) => {
+  const { id } = req.params;
+  const { result_winner } = req.body;
+
+  if (!['a', 'b', 'draw'].includes(result_winner)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'result_winner must be a, b, or draw' },
+    });
+  }
+
+  const { data: match, error: matchError } = await supabaseAdmin
+    .from('matches')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (matchError || !match) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Match not found' },
+    });
+  }
+
+  if (!['pending', 'ongoing'].includes(match.match_status)) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: `Cannot admin-score a match with status "${match.match_status}". Use force-result for completed matches.`,
+      },
+    });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('matches')
+    .update({
+      result_winner,
+      match_status: 'completed',
+      forced: false,
+      result_submitted_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      error: { message: error.message },
+    });
+  }
+
+  await updateParticipantScores(match.competition_id, { ...match, result_winner });
 
   res.json({ success: true, data });
 };

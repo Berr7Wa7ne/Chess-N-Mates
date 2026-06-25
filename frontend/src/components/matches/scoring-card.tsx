@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import { Crown, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Match, ResultWinner } from '@/src/types/match'
-import { useForceResult } from '@/src/hooks/useMatches'
+import { useAdminScore, useConfirmResult, useForceResult } from '@/src/hooks/useMatches'
+import { useCreateDispute } from '@/src/hooks/useDisputes'
+import { useAuth } from '@/src/hooks/useAuth'
 import { ApiError } from '@/src/types/api'
 import { ChangeResultModal } from '@/src/components/matches/change-result-modal'
 import { Badge } from '@/components/ui/badge'
@@ -55,16 +57,24 @@ const STATUS_STYLES: Record<string, string> = {
 // ── ScoringCard Component ─────────────────────────────────────────
 
 export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps) {
+  const adminScoreMutation = useAdminScore(competitionId)
+  const confirmResultMutation = useConfirmResult()
   const forceMutation = useForceResult(competitionId)
+  const createDisputeMutation = useCreateDispute()
+  const { user } = useAuth()
+
   const [changeModalOpen, setChangeModalOpen] = useState(false)
   const [pendingNewResult, setPendingNewResult] = useState<ResultWinner | null>(null)
   const [loadingButton, setLoadingButton] = useState<ResultWinner | null>(null)
+  const [changeReason, setChangeReason] = useState('')
 
   const isBye = match.is_bye
   const isAbsent = match.is_absent
   const isDisputed = match.match_status === 'disputed'
-  const isScored =
-    match.match_status === 'completed' || match.match_status === 'result_submitted'
+  const isPending = match.match_status === 'pending' || match.match_status === 'ongoing'
+  const isResultSubmitted = match.match_status === 'result_submitted'
+  const isCompleted = match.match_status === 'completed'
+  const isScored = match.match_status === 'completed' || match.match_status === 'result_submitted'
   const isReadOnly = disabled || isDisputed
 
   const currentResult = match.result_winner
@@ -76,31 +86,50 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     async (winner: ResultWinner) => {
       if (isReadOnly) return
 
-      // If already scored and selecting same option, do nothing
-      if (isScored && currentResult === winner) return
+      // Pending/ongoing: admin-score immediately
+      if (isPending) {
+        setLoadingButton(winner)
+        try {
+          await adminScoreMutation.mutateAsync({
+            id: match.id,
+            payload: { result_winner: winner },
+          })
+          toast.success('Result saved')
+        } catch (error) {
+          toast.error(error instanceof ApiError ? error.message : 'Failed to save result')
+        } finally {
+          setLoadingButton(null)
+        }
+        return
+      }
 
-      // If already scored and selecting a different option, open modal
-      if (isScored && currentResult && currentResult !== winner) {
+      // Result submitted: click same -> confirm, click different -> modal
+      if (isResultSubmitted) {
+        if (currentResult === winner) {
+          setLoadingButton(winner)
+          try {
+            await confirmResultMutation.mutateAsync(match.id)
+            toast.success('Result confirmed')
+          } catch (error) {
+            toast.error(error instanceof ApiError ? error.message : 'Failed to confirm result')
+          } finally {
+            setLoadingButton(null)
+          }
+          return
+        }
         setPendingNewResult(winner)
         setChangeModalOpen(true)
         return
       }
 
-      // Unscored match — score immediately
-      setLoadingButton(winner)
-      try {
-        await forceMutation.mutateAsync({
-          id: match.id,
-          payload: { result_winner: winner },
-        })
-        toast.success('Result saved')
-      } catch (error) {
-        toast.error(error instanceof ApiError ? error.message : 'Failed to save result')
-      } finally {
-        setLoadingButton(null)
+      // Completed: click same -> nothing, click different -> modal
+      if (isCompleted) {
+        if (currentResult === winner) return
+        setPendingNewResult(winner)
+        setChangeModalOpen(true)
       }
     },
-    [match.id, isReadOnly, isScored, currentResult, forceMutation]
+    [match.id, isReadOnly, isPending, isResultSubmitted, isCompleted, currentResult, adminScoreMutation, confirmResultMutation]
   )
 
   const handleConfirmChange = useCallback(async () => {
@@ -109,17 +138,32 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     try {
       await forceMutation.mutateAsync({
         id: match.id,
-        payload: { result_winner: pendingNewResult },
+        payload: { result_winner: pendingNewResult, reason: changeReason },
       })
       toast.success('Result updated')
+
+      // Auto-create dispute record
+      if (user) {
+        await createDisputeMutation.mutateAsync({
+          match_id: match.id,
+          competition_id: competitionId,
+          raised_by_user_id: user.id,
+          category: 'other',
+          reason: changeReason || 'Admin result correction',
+          description: `Result changed from ${currentResult} to ${pendingNewResult}`,
+          filed_by_role: 'admin',
+        })
+      }
+
       setChangeModalOpen(false)
       setPendingNewResult(null)
+      setChangeReason('')
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to update result')
     } finally {
       setLoadingButton(null)
     }
-  }, [match.id, pendingNewResult, forceMutation])
+  }, [match.id, pendingNewResult, forceMutation, createDisputeMutation, user, competitionId, currentResult, changeReason])
 
   function getButtonLabel(winner: ResultWinner): string {
     // Scored: show names on the appropriate buttons
@@ -135,14 +179,13 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
 
   function getButtonStyles(winner: ResultWinner): string {
     const isSelected = isScored && currentResult === winner
-    const isPending = forceMutation.isPending
+    const isLoading = loadingButton === winner
+    const isChanging = forceMutation.isPending || confirmResultMutation.isPending || adminScoreMutation.isPending
 
     if (isReadOnly) {
       return cn(
         'flex-1 rounded-lg px-3 py-2 text-xs font-semibold border cursor-not-allowed opacity-50',
-        isSelected
-          ? 'bg-gray-200 text-gray-400 border-gray-300'
-          : 'bg-gray-50 text-gray-400 border-gray-200'
+        isSelected ? 'bg-muted text-muted-foreground border-border' : 'bg-muted/30 text-muted-foreground border-border'
       )
     }
 
@@ -150,23 +193,22 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
       if (isSelected) {
         const color =
           winner === 'draw'
-            ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-            : 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-        return cn('flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 border', color)
+            ? 'bg-amber-500 text-white border-amber-500'
+            : 'bg-emerald-600 text-white border-emerald-600'
+        return cn('flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 border', color, 'shadow-sm')
       }
       return cn(
         'flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 border',
-        'bg-white text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-700 hover:border-gray-300',
-        isPending && 'opacity-50 cursor-not-allowed'
+        'bg-card text-muted-foreground border-border hover:bg-muted/50',
+        (isChanging || isLoading) && 'opacity-50 cursor-not-allowed'
       )
     }
 
     // Unscored
     return cn(
       'flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 border',
-      'bg-white text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900 hover:border-gray-300',
-      (disabled || isPending) && 'opacity-50 cursor-not-allowed',
-      isPending && 'cursor-not-allowed'
+      'bg-card border-border hover:bg-muted',
+      (disabled || isChanging || isLoading) && 'opacity-50 cursor-not-allowed'
     )
   }
 
@@ -227,13 +269,13 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   // ── DISPUTED match ────────────────────────────────────────────
   if (isDisputed) {
     return (
-      <div className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200">
+      <div className="flex flex-col gap-3 rounded-2xl border border-amber-400 bg-amber-50/50 p-5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Round {match.round_number}
           </span>
-          <Badge className="bg-red-100 text-red-700 border border-red-200 text-[11px]">
-            Under Review
+          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[11px]">
+            ⚠ Disputed
           </Badge>
         </div>
         <div className="flex items-center justify-center gap-4 py-1">
@@ -265,11 +307,11 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     )
   }
 
-  // ── SCORED card ───────────────────────────────────────────────
+  // ── SCORED CARD (result_submitted / completed) ───────────────
   if (isScored) {
     return (
       <>
-        <div className="group flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-200 opacity-70 hover:opacity-100">
+        <div className={cn('group flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all duration-200', isCompleted ? 'opacity-70' : 'opacity-100')}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Round {match.round_number}
@@ -280,18 +322,24 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
                 STATUS_STYLES[match.match_status] || STATUS_STYLES.pending
               )}
             >
-              {match.match_status === 'completed' ? 'Completed' : 'Result Submitted'}
+              {isResultSubmitted ? 'Result Submitted' : 'Completed'}
             </span>
           </div>
+
+          {isResultSubmitted && (
+            <p className="text-xs text-muted-foreground">
+              Player submitted this result — click same to confirm, different to override
+            </p>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-1 items-center gap-2 min-w-0">
               <ChessPiece />
-              <span className="truncate text-sm font-semibold text-gray-800">{playerAName}</span>
+              <span className="truncate text-sm font-semibold text-foreground">{playerAName}</span>
             </div>
             <span className="shrink-0 text-xs font-medium text-muted-foreground">vs</span>
             <div className="flex flex-1 items-center justify-end gap-2 min-w-0">
-              <span className="truncate text-sm font-semibold text-gray-800 text-right">{playerBName}</span>
+              <span className="truncate text-sm font-semibold text-foreground text-right">{playerBName}</span>
               <ChessPiece />
             </div>
           </div>
@@ -305,7 +353,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
                 <button
                   key={winner}
                   onClick={() => handleScore(winner)}
-                  disabled={disabled || forceMutation.isPending}
+                  disabled={isReadOnly || adminScoreMutation.isPending || forceMutation.isPending || confirmResultMutation.isPending}
                   className={getButtonStyles(winner)}
                 >
                   {isLoading ? (

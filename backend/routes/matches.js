@@ -23,4 +23,7 @@ router.post('/:id/mark-absent', matchesController.markAbsent);
 // POST /matches/:id/extend-deadline — admin extends deadline
 router.post('/:id/extend-deadline', matchesController.extendDeadline);
 
+// POST /matches/:id/admin-score — admin scores pending/ongoing match
+router.post('/:id/admin-score', matchesController.adminScoreMatch);
+
 module.exports = router;

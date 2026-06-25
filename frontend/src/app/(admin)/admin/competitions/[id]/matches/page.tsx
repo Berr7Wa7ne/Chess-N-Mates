@@ -12,6 +12,7 @@ import {
   Download,
   Loader2,
   SkipForward,
+  Trophy,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { RoundNavigation } from '@/src/components/matches/round-navigation'
 import { ScoringCard } from '@/src/components/matches/scoring-card'
 import { StandingsSidebar } from '@/src/components/standings/standings-sidebar'
@@ -50,6 +59,7 @@ export default function AdminCompetitionMatchesPage() {
 
   const [currentRound, setCurrentRound] = useState<number | null>(null)
   const [advanceConfirmOpen, setAdvanceConfirmOpen] = useState(false)
+  const [advancePendingModalOpen, setAdvancePendingModalOpen] = useState(false)
 
   const competition = competitionQuery.data
   const matches = matchesQuery.data || []
@@ -80,26 +90,49 @@ export default function AdminCompetitionMatchesPage() {
     (m) => !m.is_bye && m.match_status !== 'completed' && m.match_status !== 'result_submitted'
   ).length
 
-  const isRoundComplete = pendingInRound === 0 && roundMatches.length > 0
+  const pendingInCurrentRound = roundMatches.filter(
+    (m) => m.match_status === 'pending' || m.match_status === 'ongoing'
+  ).length
+
+  const isLastRound = (competition?.current_round ?? 0) >= (competition?.rounds ?? 0)
+
+  const isRoundComplete = pendingInCurrentRound === 0 && roundMatches.length > 0
   const canAdvance = competition?.competition_status === 'active'
   const isCompleted = competition?.competition_status === 'completed'
 
-  async function handleAdvanceRound(includePending: boolean) {
+  async function handleAdvanceRoundWithPending() {
     try {
       const result = await advanceMutation.mutateAsync({
         id,
-        payload: includePending ? { include_pending_matches: true } : undefined,
+        payload: { include_pending_matches: true },
       })
       const data = result.data
       if (data.action === 'completed') {
         toast.success('Tournament completed! 🎉')
       } else {
+        setCurrentRound(data.current_round)
         toast.success(
           `Advanced to round ${data.current_round} — ${data.fixtures_generated} fixtures generated`
         )
-        setCurrentRound(data.current_round)
       }
-      setAdvanceConfirmOpen(false)
+      setAdvancePendingModalOpen(false)
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to advance round')
+    }
+  }
+
+  async function handleAdvanceRound() {
+    try {
+      const result = await advanceMutation.mutateAsync({ id })
+      const data = result.data
+      if (data.action === 'completed') {
+        toast.success('Tournament completed! 🎉')
+      } else {
+        setCurrentRound(data.current_round)
+        toast.success(
+          `Advanced to round ${data.current_round} — ${data.fixtures_generated} fixtures generated`
+        )
+      }
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to advance round')
     }
@@ -248,7 +281,7 @@ export default function AdminCompetitionMatchesPage() {
             )}
 
             {/* Spacer so content isn't hidden behind sticky bottom bar */}
-            {canAdvance && <div className="h-20" />}
+            {canAdvance && <div className="h-24" />}
           </div>
 
           {/* ════════════ RIGHT COLUMN: Standings Sidebar ════════════ */}
@@ -263,53 +296,72 @@ export default function AdminCompetitionMatchesPage() {
 
       {/* ════════════ BOTTOM STICKY BAR ════════════ */}
       {canAdvance && !isCompleted && (
-        <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background shadow-[0_-2px_8px_rgba(0,0,0,0.06)] px-6 py-4">
-          <div className="mx-auto flex max-w-[1280px] items-center justify-between">
-            {isRoundComplete ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-5 text-emerald-500" />
-                  <span className="text-sm font-medium text-foreground">
-                    All results entered · Round {effectiveRound} complete
+        <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.08)] px-6 py-4">
+          <div className="mx-auto flex max-w-screen-xl items-center justify-between gap-4">
+            {/* Left: status message */}
+            {pendingInCurrentRound > 0 ? (
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                  ⚠
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-amber-600">
+                    {pendingInCurrentRound} matches
                   </span>
-                </div>
-                <Button
-                  onClick={() => handleAdvanceRound(false)}
-                  disabled={advanceMutation.isPending}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                >
-                  {advanceMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <SkipForward className="size-4" />
-                  )}
-                  {competition.current_round >= competition.rounds
-                    ? 'Final Round — Complete Tournament'
-                    : `Advance to Round ${competition.current_round + 1} →`}
-                </Button>
-              </>
+                  {' '}still pending in Round {effectiveRound}
+                </span>
+              </div>
             ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="size-5 text-amber-500" />
-                  <span className="text-sm font-medium text-foreground">
-                    {pendingInRound} match{pendingInRound !== 1 ? 'es' : ''} still pending in Round {effectiveRound}
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm">
+                  ✓
+                </span>
+                <span className="text-sm">
+                  <span className="font-semibold text-emerald-600">
+                    All results entered
                   </span>
-                </div>
-                <Button
-                  onClick={() => setAdvanceConfirmOpen(true)}
-                  disabled={advanceMutation.isPending}
-                  variant="outline"
-                  className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 gap-2"
-                >
-                  {advanceMutation.isPending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <SkipForward className="size-4" />
-                  )}
-                  Advance with Pending →
-                </Button>
-              </>
+                  {' · '}Round {effectiveRound} complete
+                </span>
+              </div>
+            )}
+
+            {/* Right: action button */}
+            {pendingInCurrentRound > 0 ? (
+              <Button
+                variant="outline"
+                className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 gap-2"
+                onClick={() => setAdvancePendingModalOpen(true)}
+                disabled={advanceMutation.isPending}
+              >
+                <SkipForward className="size-4" />
+                Advance with Pending
+              </Button>
+            ) : isLastRound ? (
+              <Button
+                className="rounded-xl bg-primary hover:bg-primary/90 gap-2"
+                onClick={handleAdvanceRound}
+                disabled={advanceMutation.isPending}
+              >
+                {advanceMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trophy className="size-4" />
+                )}
+                Final Round — Complete Tournament
+              </Button>
+            ) : (
+              <Button
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                onClick={handleAdvanceRound}
+                disabled={advanceMutation.isPending}
+              >
+                {advanceMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <SkipForward className="size-4" />
+                )}
+                Advance to Round {(competition?.current_round ?? 0) + 1} →
+              </Button>
             )}
           </div>
         </div>
@@ -326,27 +378,33 @@ export default function AdminCompetitionMatchesPage() {
       )}
 
       {/* ── Advance with Pending Confirmation Dialog ── */}
-      <AlertDialog open={advanceConfirmOpen} onOpenChange={setAdvanceConfirmOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Advance with pending matches?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
-              {pendingInRound} match{pendingInRound !== 1 ? 'es' : ''} in Round {effectiveRound} {pendingInRound !== 1 ? 'are' : 'is'} unscored.
-              Unplayed matches will be marked as absent (score: 0).
+      <Dialog open={advancePendingModalOpen} onOpenChange={setAdvancePendingModalOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Advance with pending matches?</DialogTitle>
+            <DialogDescription>
+              {pendingInCurrentRound} match{pendingInCurrentRound > 1 ? 'es' : ''} in Round {effectiveRound} {pendingInCurrentRound > 1 ? 'are' : 'is'} unscored.
+              Unplayed matches will be marked as absent with a score of 0.
               This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => handleAdvanceRound(true)}
-              className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setAdvancePendingModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                setAdvancePendingModalOpen(false)
+                handleAdvanceRoundWithPending()
+              }}
+              disabled={advanceMutation.isPending}
             >
               Advance Anyway
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

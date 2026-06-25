@@ -9,6 +9,7 @@ import type {
   ForceResultPayload,
   ExtendDeadlinePayload,
   MarkAbsentPayload,
+  AdminScorePayload,
 } from '@/src/types/match'
 
 export function useCompetitionMatches(competitionId: string, params?: CompetitionMatchListParams) {
@@ -92,6 +93,20 @@ export function useExtendDeadline() {
       matchService.extendDeadline(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
+    },
+  })
+}
+
+export function useAdminScore(competitionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: AdminScorePayload }) =>
+      matchService.adminScore(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.matches(competitionId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(competitionId) })
     },
   })
 }

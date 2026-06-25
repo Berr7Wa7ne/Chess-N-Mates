@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 interface ChangeResultModalProps {
   open: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (reason?: string) => void
   isPending: boolean
   matchLabel: string
   roundNumber: number
@@ -48,11 +48,11 @@ export function ChangeResultModal({
 
         {/* Current → New comparison */}
         <div className="flex items-center justify-center gap-3 py-2">
-          <div className="flex flex-col items-center gap-1 rounded-xl border bg-gray-50 px-5 py-3 min-w-[120px]">
+          <div className="flex flex-col items-center gap-1 rounded-xl border bg-muted/30 px-5 py-3 min-w-[120px]">
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Current
             </span>
-            <span className="text-sm font-semibold text-gray-900">{currentResult}</span>
+            <span className="text-sm font-semibold text-foreground">{currentResult}</span>
           </div>
 
           <span className="text-xl text-muted-foreground font-medium">›</span>
@@ -63,6 +63,19 @@ export function ChangeResultModal({
             </span>
             <span className="text-sm font-semibold text-emerald-700">{newResult}</span>
           </div>
+        </div>
+
+        {/* Reason */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Reason for change (optional)
+          </label>
+          <textarea
+            id="change-reason"
+            placeholder="Optional reason..."
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            rows={2}
+          />
         </div>
 
         {/* Actions */}
@@ -76,7 +89,10 @@ export function ChangeResultModal({
             Cancel
           </Button>
           <Button
-            onClick={onConfirm}
+            onClick={() => {
+              const reason = (document.getElementById('change-reason') as HTMLTextAreaElement)?.value
+              onConfirm(reason)
+            }}
             disabled={isPending}
             className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
           >
