@@ -34,10 +34,32 @@ exports.joinCompetition = async (req, res) => {
     return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
   }
 
-  if (!isRegistrationOpen(competition)) {
+  // Check if registration has closed based on timestamp
+  if (competition.registration_close_at) {
+    const closeDate = new Date(competition.registration_close_at);
+    if (new Date() > closeDate) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Registration for this competition has closed.',
+        },
+      });
+    }
+  }
+
+  // Check competition status
+  if (competition.competition_status !== 'open_registration') {
+    const statusMessages = {
+      draft: 'This competition is not yet open for registration.',
+      active: 'This competition has already started.',
+      completed: 'This competition has ended.',
+      cancelled: 'This competition has been cancelled.',
+    };
     return res.status(400).json({
       success: false,
-      error: { message: 'Competition not open for registration' },
+      error: {
+        message: statusMessages[competition.competition_status] || 'Registration is not available.',
+      },
     });
   }
 

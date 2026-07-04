@@ -67,7 +67,7 @@ export default async function MemberDetailPage({
           <CardContent>
             {member.chessUsername ? (
               <PlayerIdentity
-                playerId={member.chessUsername.id}
+                playerId={String(member.chessUsername.id)}
                 username={member.chessUsername.username}
                 elo={member.chessUsername.elo}
               />

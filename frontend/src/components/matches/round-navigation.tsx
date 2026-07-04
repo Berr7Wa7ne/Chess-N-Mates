@@ -2,14 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface RoundNavigationProps {
   rounds: number[]
   currentRound: number
   onRoundChange: (round: number) => void
-  /** null means "All Matches" is selected */
-  showAll?: boolean
-  onShowAllChange?: (showAll: boolean) => void
+  activeFilter?: MatchFilter
+  onFilterChange?: (filter: MatchFilter) => void
+  lockedRounds?: number[]
 }
 
 const FILTER_OPTIONS = [
@@ -21,20 +22,13 @@ const FILTER_OPTIONS = [
 
 export type MatchFilter = (typeof FILTER_OPTIONS)[number]['value']
 
-interface RoundNavigationProps {
-  rounds: number[]
-  currentRound: number
-  onRoundChange: (round: number) => void
-  activeFilter?: MatchFilter
-  onFilterChange?: (filter: MatchFilter) => void
-}
-
 export function RoundNavigation({
   rounds,
   currentRound,
   onRoundChange,
   activeFilter = 'all',
   onFilterChange,
+  lockedRounds = [],
 }: RoundNavigationProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -57,19 +51,28 @@ export function RoundNavigation({
     <div className="flex items-center justify-between gap-2">
       {/* ── Round pill tabs ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-        {rounds.map((round) => (
-          <button
-            key={round}
-            onClick={() => onRoundChange(round)}
-            className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
-              round === currentRound
-                ? 'bg-foreground text-background shadow-sm'
-                : 'border border-border bg-background text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Round {round}
-          </button>
-        ))}
+        {rounds.map((round) => {
+          const isLocked = lockedRounds.includes(round)
+          return (
+            <button
+              key={round}
+              onClick={() => !isLocked && onRoundChange(round)}
+              className={cn(
+                'shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all',
+                round === currentRound
+                  ? 'bg-foreground text-background shadow-sm'
+                  : isLocked
+                    ? 'border border-dashed border-border text-muted-foreground/40 cursor-not-allowed'
+                    : 'border border-border bg-background text-muted-foreground hover:bg-muted'
+              )}
+            >
+              Round {round}
+              {isLocked && (
+                <span className="ml-1 text-[10px] opacity-50">🔒</span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Filter dropdown ── */}

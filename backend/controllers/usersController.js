@@ -8,12 +8,20 @@ function normalizeRole(role) {
 }
 
 exports.registerUser = async (req, res) => {
-  const { phone_number, whatsapp_id, display_name, role: rawRole } = req.body;
+  const { 
+    phone_number, 
+    whatsapp_id, 
+    display_name, 
+    role: rawRole,
+    chess_platform,
+    chess_com_username,
+    lichess_username 
+  } = req.body;
 
-  if (!phone_number || !whatsapp_id || !display_name) {
+  if (!phone_number) {
     return res.status(400).json({
       success: false,
-      error: { message: 'phone_number, whatsapp_id, and display_name are required' },
+      error: { message: 'phone_number is required' },
     });
   }
 
@@ -42,14 +50,30 @@ exports.registerUser = async (req, res) => {
     });
   }
 
+  // Determine display_name based on chess platform
+  let finalDisplayName = display_name;
+  if (chess_platform === 'chess.com' && chess_com_username) {
+    finalDisplayName = chess_com_username;
+  } else if (chess_platform === 'lichess' && lichess_username) {
+    finalDisplayName = lichess_username;
+  } else if (!finalDisplayName) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'display_name is required for over_the_board platform' },
+    });
+  }
+
   const { data, error } = await supabaseAdmin
     .from('users')
     .insert([{
       phone_number,
-      whatsapp_id,
-      display_name,
+      whatsapp_id: whatsapp_id || null,
+      display_name: finalDisplayName,
       role,
       email: `${phone_number}@temp.com`,
+      chess_platform: chess_platform || null,
+      chess_com_username: chess_platform === 'chess.com' ? chess_com_username : null,
+      lichess_username: chess_platform === 'lichess' ? lichess_username : null,
     }])
     .select()
     .single();

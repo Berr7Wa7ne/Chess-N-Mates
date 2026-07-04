@@ -56,7 +56,7 @@ export default function LeaderboardPage() {
                 >
                   <TableCell>{getRankBadge(entry.rank)}</TableCell>
                   <TableCell>
-                    <PlayerIdentity playerId={entry.id} username={entry.username} elo={entry.elo} />
+                    <PlayerIdentity playerId={String(entry.id)} username={entry.username} elo={entry.elo} />
                   </TableCell>
                   <TableCell>
                     {entry.isActive ? (

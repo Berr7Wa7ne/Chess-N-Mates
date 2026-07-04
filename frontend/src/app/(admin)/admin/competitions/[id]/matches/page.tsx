@@ -5,9 +5,7 @@ import { useParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   Crown,
   Download,
   Loader2,
@@ -18,16 +16,6 @@ import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -58,7 +46,6 @@ export default function AdminCompetitionMatchesPage() {
   const advanceMutation = useAdvanceRound()
 
   const [currentRound, setCurrentRound] = useState<number | null>(null)
-  const [advanceConfirmOpen, setAdvanceConfirmOpen] = useState(false)
   const [advancePendingModalOpen, setAdvancePendingModalOpen] = useState(false)
 
   const competition = competitionQuery.data
@@ -74,6 +61,24 @@ export default function AdminCompetitionMatchesPage() {
 
   const roundNumbers = [...new Set(matches.map((m) => m.round_number))].sort((a, b) => a - b)
 
+  // Rounds are: past (< current_round), current (= current_round), future (> current_round)
+  const competitionCurrentRound = competition?.current_round ?? 1
+
+  // A round is "locked" if it is strictly greater than current_round
+  const isViewingFutureRound = effectiveRound > competitionCurrentRound
+
+  // Current round completion check
+  // A round is complete when all non-bye matches are scored
+  const currentRoundMatches = matches.filter(
+    m => m.round_number === competitionCurrentRound
+  )
+  const pendingInCurrentRound = currentRoundMatches.filter(
+    m => !m.is_bye &&
+      (m.match_status === 'pending' || m.match_status === 'ongoing')
+  ).length
+  const allCurrentRoundComplete = pendingInCurrentRound === 0 &&
+    currentRoundMatches.length > 0
+
   // Round matches
   const roundMatches = matches.filter((m) => m.round_number === effectiveRound)
 
@@ -85,20 +90,12 @@ export default function AdminCompetitionMatchesPage() {
   const progressPercent =
     totalPlayable > 0 ? Math.round((completedMatches / totalPlayable) * 100) : 0
 
-  // Count pending non-bye matches in current round
-  const pendingInRound = roundMatches.filter(
-    (m) => !m.is_bye && m.match_status !== 'completed' && m.match_status !== 'result_submitted'
-  ).length
-
-  const pendingInCurrentRound = roundMatches.filter(
-    (m) => m.match_status === 'pending' || m.match_status === 'ongoing'
-  ).length
-
   const isLastRound = (competition?.current_round ?? 0) >= (competition?.rounds ?? 0)
 
-  const isRoundComplete = pendingInCurrentRound === 0 && roundMatches.length > 0
   const canAdvance = competition?.competition_status === 'active'
   const isCompleted = competition?.competition_status === 'completed'
+  const showGreenBar = effectiveRound === competitionCurrentRound && allCurrentRoundComplete
+  const showAmberBar = effectiveRound === competitionCurrentRound && !allCurrentRoundComplete
 
   async function handleAdvanceRoundWithPending() {
     try {
@@ -249,6 +246,7 @@ export default function AdminCompetitionMatchesPage() {
                 rounds={roundNumbers}
                 currentRound={effectiveRound}
                 onRoundChange={setCurrentRound}
+                lockedRounds={roundNumbers.filter(r => r > competitionCurrentRound)}
               />
             )}
 
@@ -259,6 +257,21 @@ export default function AdminCompetitionMatchesPage() {
                 <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                   {completedMatches}/{totalPlayable} matches completed
                 </span>
+              </div>
+            )}
+
+            {/* Future round banner */}
+            {isViewingFutureRound && (
+              <div className="flex items-center gap-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-3">
+                <span className="text-muted-foreground text-lg">🔒</span>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Round {effectiveRound} hasn't started yet
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Complete Round {competitionCurrentRound} and advance to unlock this round
+                  </p>
+                </div>
               </div>
             )}
 
@@ -274,7 +287,10 @@ export default function AdminCompetitionMatchesPage() {
                     key={match.id}
                     match={match}
                     competitionId={competition.id}
-                    disabled={isCompleted}
+                    disabled={
+                      competition.competition_status === 'completed' ||
+                      isViewingFutureRound
+                    }
                   />
                 ))}
               </div>
@@ -295,14 +311,14 @@ export default function AdminCompetitionMatchesPage() {
       </div>
 
       {/* ════════════ BOTTOM STICKY BAR ════════════ */}
-      {canAdvance && !isCompleted && (
+      {canAdvance && !isCompleted && (effectiveRound === competitionCurrentRound) && (
         <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.08)] px-6 py-4">
           <div className="mx-auto flex max-w-screen-xl items-center justify-between gap-4">
             {/* Left: status message */}
-            {pendingInCurrentRound > 0 ? (
+            {showAmberBar ? (
               <div className="flex items-center gap-2">
                 <span className="flex size-6 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                  ⚠
+                  �
                 </span>
                 <span className="text-sm text-muted-foreground">
                   <span className="font-semibold text-amber-600">
@@ -311,7 +327,7 @@ export default function AdminCompetitionMatchesPage() {
                   {' '}still pending in Round {effectiveRound}
                 </span>
               </div>
-            ) : (
+            ) : showGreenBar ? (
               <div className="flex items-center gap-2">
                 <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm">
                   ✓
@@ -323,10 +339,10 @@ export default function AdminCompetitionMatchesPage() {
                   {' · '}Round {effectiveRound} complete
                 </span>
               </div>
-            )}
+            ) : null}
 
             {/* Right: action button */}
-            {pendingInCurrentRound > 0 ? (
+            {showAmberBar ? (
               <Button
                 variant="outline"
                 className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 gap-2"

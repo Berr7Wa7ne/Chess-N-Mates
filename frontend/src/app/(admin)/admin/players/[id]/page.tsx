@@ -40,7 +40,7 @@ export default async function PlayerDetailPage({
             <CardDescription>Shared player identity is reused here exactly as it appears in tables and lists.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <PlayerIdentity playerId={player.id} username={player.username} elo={player.elo} />
+            <PlayerIdentity playerId={String(player.id)} username={player.username} elo={player.elo} />
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-muted-foreground">Platform</p>

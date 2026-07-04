@@ -114,7 +114,7 @@ export default function MembersPage() {
                   <TableCell>
                     {member.chessUsername ? (
                       <PlayerIdentity
-                        playerId={member.chessUsername.id}
+                        playerId={String(member.chessUsername.id)}
                         username={member.chessUsername.username}
                         elo={member.chessUsername.elo}
                       />

@@ -50,7 +50,7 @@ const STATUS_STYLES: Record<string, string> = {
   ongoing: 'bg-blue-100 text-blue-700 border border-blue-200',
   result_submitted: 'bg-purple-100 text-purple-700 border border-purple-200',
   completed: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  disputed: 'bg-red-100 text-red-700 border border-red-200',
+  disputed: 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800',
   cancelled: 'bg-gray-100 text-gray-500 border border-gray-200',
 }
 
@@ -75,7 +75,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   const isResultSubmitted = match.match_status === 'result_submitted'
   const isCompleted = match.match_status === 'completed'
   const isScored = match.match_status === 'completed' || match.match_status === 'result_submitted'
-  const isReadOnly = disabled || isDisputed
+  const isReadOnly = disabled
 
   const currentResult = match.result_winner
 
@@ -266,51 +266,27 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     )
   }
 
-  // ── DISPUTED match ────────────────────────────────────────────
-  if (isDisputed) {
-    return (
-      <div className="flex flex-col gap-3 rounded-2xl border border-amber-400 bg-amber-50/50 p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Round {match.round_number}
-          </span>
-          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[11px]">
-            ⚠ Disputed
-          </Badge>
-        </div>
-        <div className="flex items-center justify-center gap-4 py-1">
-          <div className="flex flex-col items-center gap-1">
-            <ChessPiece />
-            <span className="text-sm font-semibold text-gray-800">{playerAName}</span>
-          </div>
-          <span className="text-xs font-medium text-muted-foreground">vs</span>
-          <div className="flex flex-col items-center gap-1">
-            <ChessPiece />
-            <span className="text-sm font-semibold text-gray-800">{playerBName}</span>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {(['a', 'draw', 'b'] as ResultWinner[]).map((winner) => (
-            <button
-              key={winner}
-              disabled
-              className={cn(
-                'flex-1 rounded-lg px-3 py-2 text-xs font-semibold border cursor-not-allowed opacity-50',
-                'bg-gray-50 text-gray-400 border-gray-200'
-              )}
-            >
-              {winner === 'a' ? 'Pick' : winner === 'b' ? 'Pick' : 'Draw'}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
+
 
   // ── SCORED CARD (result_submitted / completed) ───────────────
   if (isScored) {
     return (
       <>
+        {isDisputed && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2">
+            <span className="text-amber-600 dark:text-amber-400 text-sm">⚠</span>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Dispute filed — admin can still update result
+            </p>
+            <a
+              href="/admin/disputes"
+              className="ml-auto text-xs text-amber-600 hover:underline shrink-0 dark:text-amber-400"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View dispute →
+            </a>
+          </div>
+        )}
         <div className={cn('group flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all duration-200', isCompleted ? 'opacity-70' : 'opacity-100')}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -345,11 +321,10 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           </div>
 
           {/* Scoring buttons */}
-          <div className="flex gap-2">
-            {(['a', 'draw', 'b'] as ResultWinner[]).map((winner) => {
-              const isSelected = currentResult === winner
-              const isLoading = loadingButton === winner
-              return (
+        <div className="flex gap-2">
+          {(['a', 'draw', 'b'] as ResultWinner[]).map((winner) => {
+            const isLoading = loadingButton === winner
+            return (
                 <button
                   key={winner}
                   onClick={() => handleScore(winner)}

@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils"
 
 interface PlayerIdentityProps {
-  playerId: number
+  playerId: string
   username: string
   elo: number
   className?: string

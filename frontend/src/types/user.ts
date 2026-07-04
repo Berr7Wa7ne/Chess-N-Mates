@@ -1,5 +1,5 @@
 export type UserStatus = 'active' | 'inactive' | 'banned' | 'pending'
-export type ChessPlatform = 'chess.com' | 'lichess' | 'none'
+export type ChessPlatform = 'chess.com' | 'lichess' | 'over_the_board'
 export type UserRole = 'admin' | 'player'
 
 export interface User {
@@ -13,6 +13,8 @@ export interface User {
   avatar_url?: string | null
   chess_username?: string | null
   chess_platform?: ChessPlatform
+  chess_com_username?: string | null
+  lichess_username?: string | null
   chess_elo?: number
   chess_id?: string | null
   user_status?: UserStatus
@@ -30,9 +32,12 @@ export interface AuthUser {
 
 export interface RegisterUserPayload {
   phone_number: string
-  whatsapp_id: string
-  display_name: string
+  display_name?: string
+  whatsapp_id?: string | null
   role?: UserRole
+  chess_platform?: ChessPlatform | null
+  chess_com_username?: string | null
+  lichess_username?: string | null
 }
 
 export interface LoginPayload {
@@ -41,7 +46,7 @@ export interface LoginPayload {
 
 export interface RegisterChessPayload {
   chess_username: string
-  chess_platform: Exclude<ChessPlatform, 'none'>
+  chess_platform: ChessPlatform
 }
 
 export interface UpdateUserPayload {

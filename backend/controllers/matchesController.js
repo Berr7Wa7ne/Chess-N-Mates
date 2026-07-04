@@ -333,6 +333,29 @@ exports.forceResult = async (req, res) => {
     absence_side: null,
   });
 
+  // Auto-create a resolved audit record for every admin result change
+  // This never blocks the match or creates a workflow interruption
+  try {
+    await supabaseAdmin.from('disputes').insert({
+      match_id: match.id,
+      competition_id: match.competition_id,
+      raised_by_user_id: req.user?.id || match.created_by || null,
+      opponent_user_id: null,
+      filed_by_role: 'admin',
+      category: 'other',
+      reason: req.body.reason?.trim() || 'Admin result correction',
+      description: `Result changed to: ${result_winner}`,
+      dispute_status: 'resolved',
+      admin_decision: 'overturned',
+      admin_notes: req.body.reason?.trim() || null,
+      resolved_by: req.user?.id || null,
+      resolved_at: new Date().toISOString(),
+    });
+  } catch (auditError) {
+    // Audit failure must never block the main operation
+    console.error('Audit record creation failed:', auditError);
+  }
+
   res.json({ success: true, data });
 };
 
