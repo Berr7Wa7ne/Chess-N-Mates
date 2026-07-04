@@ -318,7 +318,7 @@ export default function AdminCompetitionMatchesPage() {
             {showAmberBar ? (
               <div className="flex items-center gap-2">
                 <span className="flex size-6 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                  �
+                  !
                 </span>
                 <span className="text-sm text-muted-foreground">
                   <span className="font-semibold text-amber-600">
@@ -330,7 +330,7 @@ export default function AdminCompetitionMatchesPage() {
             ) : showGreenBar ? (
               <div className="flex items-center gap-2">
                 <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm">
-                  ✓
+                  ✔
                 </span>
                 <span className="text-sm">
                   <span className="font-semibold text-emerald-600">
