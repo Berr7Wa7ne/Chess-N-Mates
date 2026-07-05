@@ -459,6 +459,29 @@ exports.deleteCompetition = async (req, res) => {
     return res.status(400).json({ success: false, error: { message: partError.message } });
   }
 
+  // Get all match IDs for this competition before deleting matches
+  const { data: competitionMatches, error: matchesFetchError } = await supabaseAdmin
+    .from('matches')
+    .select('id')
+    .eq('competition_id', id);
+
+  if (matchesFetchError) {
+    return res.status(400).json({ success: false, error: { message: matchesFetchError.message } });
+  }
+
+  // Delete disputes associated with these matches (must be done before deleting matches)
+  if (competitionMatches && competitionMatches.length > 0) {
+    const matchIds = competitionMatches.map(m => m.id);
+    const { count: deletedDisputes, error: disputeError } = await supabaseAdmin
+      .from('disputes')
+      .delete({ count: 'exact' })
+      .in('match_id', matchIds);
+
+    if (disputeError) {
+      return res.status(400).json({ success: false, error: { message: disputeError.message } });
+    }
+  }
+
   const { count: deletedMatches, error: matchError } = await supabaseAdmin
     .from('matches')
     .delete({ count: 'exact' })
