@@ -289,7 +289,7 @@ exports.markAbsent = async (req, res) => {
 
 exports.forceResult = async (req, res) => {
   const { id } = req.params;
-  const { result_winner, reason } = req.body;
+  const { result_winner, reason, is_absent, absence_side } = req.body;
 
   if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
     return res.status(400).json({
@@ -311,15 +311,22 @@ exports.forceResult = async (req, res) => {
     await reverseParticipantScores(match.competition_id, match);
   }
 
+  const updates = {
+    result_winner: result_winner,
+    match_status: 'completed',
+    forced: true,
+    force_reason: reason || null,
+    forced_at: new Date().toISOString(),
+  };
+
+  if (is_absent && absence_side) {
+    updates.is_absent = true;
+    updates.absence_side = absence_side;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('matches')
-    .update({
-      result_winner: result_winner,
-      match_status: 'completed',
-      forced: true,
-      force_reason: reason || null,
-      forced_at: new Date().toISOString(),
-    })
+    .update(updates)
     .eq('id', id)
     .select()
     .single();
@@ -329,8 +336,8 @@ exports.forceResult = async (req, res) => {
   await updateParticipantScores(match.competition_id, {
     ...match,
     result_winner,
-    is_absent: false,
-    absence_side: null,
+    is_absent: is_absent || false,
+    absence_side: is_absent ? absence_side : null,
   });
 
   // Auto-create a resolved audit record for every admin result change
@@ -361,7 +368,7 @@ exports.forceResult = async (req, res) => {
 
 exports.adminScoreMatch = async (req, res) => {
   const { id } = req.params;
-  const { result_winner } = req.body;
+  const { result_winner, is_absent, absence_side } = req.body;
 
   if (!['a', 'b', 'draw'].includes(result_winner)) {
     return res.status(400).json({
@@ -392,14 +399,21 @@ exports.adminScoreMatch = async (req, res) => {
     });
   }
 
+  const updates = {
+    result_winner,
+    match_status: 'completed',
+    forced: false,
+    result_submitted_at: new Date().toISOString(),
+  };
+
+  if (is_absent && absence_side) {
+    updates.is_absent = true;
+    updates.absence_side = absence_side;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('matches')
-    .update({
-      result_winner,
-      match_status: 'completed',
-      forced: false,
-      result_submitted_at: new Date().toISOString(),
-    })
+    .update(updates)
     .eq('id', id)
     .select()
     .single();
@@ -411,7 +425,12 @@ exports.adminScoreMatch = async (req, res) => {
     });
   }
 
-  await updateParticipantScores(match.competition_id, { ...match, result_winner });
+  await updateParticipantScores(match.competition_id, {
+    ...match,
+    result_winner,
+    is_absent: is_absent || false,
+    absence_side: is_absent ? absence_side : null,
+  });
 
   res.json({ success: true, data });
 };

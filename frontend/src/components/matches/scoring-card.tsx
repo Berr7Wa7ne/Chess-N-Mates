@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { Crown, Loader2 } from 'lucide-react'
+import { AlertTriangle, Crown, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Match, ResultWinner } from '@/src/types/match'
 import { useAdminScore, useConfirmResult, useForceResult } from '@/src/hooks/useMatches'
-import { useCreateDispute } from '@/src/hooks/useDisputes'
 import { useAuth } from '@/src/hooks/useAuth'
 import { ApiError } from '@/src/types/api'
 import { ChangeResultModal } from '@/src/components/matches/change-result-modal'
+import { FileDisputeModal } from '@/src/components/matches/file-dispute-modal'
 import { Badge } from '@/components/ui/badge'
 
 interface ScoringCardProps {
@@ -60,13 +60,14 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   const adminScoreMutation = useAdminScore(competitionId)
   const confirmResultMutation = useConfirmResult()
   const forceMutation = useForceResult(competitionId)
-  const createDisputeMutation = useCreateDispute()
   const { user } = useAuth()
 
   const [changeModalOpen, setChangeModalOpen] = useState(false)
   const [pendingNewResult, setPendingNewResult] = useState<ResultWinner | null>(null)
   const [loadingButton, setLoadingButton] = useState<ResultWinner | null>(null)
   const [changeReason, setChangeReason] = useState('')
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false)
+  const [absentSide, setAbsentSide] = useState<'a' | 'b' | null>(null)
 
   const isBye = match.is_bye
   const isAbsent = match.is_absent
@@ -92,9 +93,14 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
         try {
           await adminScoreMutation.mutateAsync({
             id: match.id,
-            payload: { result_winner: winner },
+            payload: {
+              result_winner: winner,
+              is_absent: absentSide !== null,
+              absence_side: absentSide || undefined,
+            },
           })
           toast.success('Result saved')
+          setAbsentSide(null)
         } catch (error) {
           toast.error(error instanceof ApiError ? error.message : 'Failed to save result')
         } finally {
@@ -129,7 +135,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
         setChangeModalOpen(true)
       }
     },
-    [match.id, isReadOnly, isPending, isResultSubmitted, isCompleted, currentResult, adminScoreMutation, confirmResultMutation]
+    [match.id, isReadOnly, isPending, isResultSubmitted, isCompleted, currentResult, adminScoreMutation, confirmResultMutation, absentSide]
   )
 
   const handleConfirmChange = useCallback(async () => {
@@ -138,32 +144,25 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     try {
       await forceMutation.mutateAsync({
         id: match.id,
-        payload: { result_winner: pendingNewResult, reason: changeReason },
+        payload: {
+          result_winner: pendingNewResult,
+          reason: changeReason,
+          is_absent: absentSide !== null,
+          absence_side: absentSide || undefined,
+        },
       })
       toast.success('Result updated')
-
-      // Auto-create dispute record
-      if (user) {
-        await createDisputeMutation.mutateAsync({
-          match_id: match.id,
-          competition_id: competitionId,
-          raised_by_user_id: user.id,
-          category: 'other',
-          reason: changeReason || 'Admin result correction',
-          description: `Result changed from ${currentResult} to ${pendingNewResult}`,
-          filed_by_role: 'admin',
-        })
-      }
 
       setChangeModalOpen(false)
       setPendingNewResult(null)
       setChangeReason('')
+      setAbsentSide(null)
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to update result')
     } finally {
       setLoadingButton(null)
     }
-  }, [match.id, pendingNewResult, forceMutation, createDisputeMutation, user, competitionId, currentResult, changeReason])
+  }, [match.id, pendingNewResult, forceMutation, changeReason, absentSide])
 
   function getButtonLabel(winner: ResultWinner): string {
     // Scored: show names on the appropriate buttons
@@ -266,7 +265,35 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     )
   }
 
+  // ── Dispute helpers ──────────────────────────────────────────
+  const matchLabel = `${playerAName} vs ${playerBName}`.toUpperCase()
 
+  // ── Absence radio button ─────────────────────────────────────
+  function AbsenceRadio({ side, label }: { side: 'a' | 'b'; label: string }) {
+    const isActive = absentSide === side
+    return (
+      <button
+        type="button"
+        onClick={() => setAbsentSide(isActive ? null : side)}
+        disabled={isReadOnly || isScored}
+        className={cn(
+          'flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium transition-all duration-200 border',
+          isActive
+            ? 'bg-red-50 text-red-600 border-red-300'
+            : 'bg-transparent text-muted-foreground/50 border-transparent hover:text-red-400 hover:border-red-200',
+          (isReadOnly || isScored) && 'opacity-30 cursor-not-allowed'
+        )}
+      >
+        <span className={cn(
+          'flex size-3 items-center justify-center rounded-full border transition-colors',
+          isActive ? 'border-red-500 bg-red-500' : 'border-muted-foreground/30'
+        )}>
+          {isActive && <span className="size-1.5 rounded-full bg-white" />}
+        </span>
+        <span>Absent</span>
+      </button>
+    )
+  }
 
   // ── SCORED CARD (result_submitted / completed) ───────────────
   if (isScored) {
@@ -287,7 +314,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
             </a>
           </div>
         )}
-        <div className={cn('group flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all duration-200', isCompleted ? 'opacity-70' : 'opacity-100')}>
+        <div className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all duration-200', isCompleted ? 'opacity-70' : 'opacity-100')}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Round {match.round_number}
@@ -321,10 +348,10 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           </div>
 
           {/* Scoring buttons */}
-        <div className="flex gap-2">
-          {(['a', 'draw', 'b'] as ResultWinner[]).map((winner) => {
-            const isLoading = loadingButton === winner
-            return (
+          <div className="flex gap-2">
+            {(['a', 'draw', 'b'] as ResultWinner[]).map((winner) => {
+              const isLoading = loadingButton === winner
+              return (
                 <button
                   key={winner}
                   onClick={() => handleScore(winner)}
@@ -339,6 +366,18 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
                 </button>
               )
             })}
+          </div>
+
+          {/* Dispute button - centered below scoring buttons */}
+          <div className="flex justify-center pt-1">
+            <button
+              onClick={() => setDisputeModalOpen(true)}
+              disabled={isReadOnly}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all duration-200 animate-pulse disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <AlertTriangle className="size-3.5" />
+              File Dispute
+            </button>
           </div>
         </div>
 
@@ -355,6 +394,16 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           roundNumber={match.round_number}
           currentResult={currentResult ? getResultLabel(currentResult, match) : '—'}
           newResult={pendingNewResult ? getResultLabel(pendingNewResult, match) : '—'}
+        />
+
+        {/* File Dispute Modal */}
+        <FileDisputeModal
+          open={disputeModalOpen}
+          onClose={() => setDisputeModalOpen(false)}
+          matchId={match.id}
+          competitionId={competitionId}
+          matchLabel={matchLabel}
+          roundNumber={match.round_number}
         />
       </>
     )
@@ -378,15 +427,22 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           </span>
         </div>
 
+        {/* Players row with absence radios above each name */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-1 items-center gap-2 min-w-0">
-            <ChessPiece />
-            <span className="truncate text-sm font-semibold text-gray-800">{playerAName}</span>
+          <div className="flex flex-1 flex-col items-center gap-1 min-w-0">
+            <AbsenceRadio side="a" label={playerAName} />
+            <div className="flex items-center gap-2">
+              <ChessPiece />
+              <span className="truncate text-sm font-semibold text-gray-800">{playerAName}</span>
+            </div>
           </div>
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">vs</span>
-          <div className="flex flex-1 items-center justify-end gap-2 min-w-0">
-            <span className="truncate text-sm font-semibold text-gray-800 text-right">{playerBName}</span>
-            <ChessPiece />
+          <span className="shrink-0 text-xs font-medium text-muted-foreground self-center mt-5">vs</span>
+          <div className="flex flex-1 flex-col items-center gap-1 min-w-0">
+            <AbsenceRadio side="b" label={playerBName} />
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold text-gray-800 text-right">{playerBName}</span>
+              <ChessPiece />
+            </div>
           </div>
         </div>
 
@@ -410,6 +466,18 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
             )
           })}
         </div>
+
+        {/* Dispute button - centered below scoring buttons */}
+        <div className="flex justify-center pt-1">
+          <button
+            onClick={() => setDisputeModalOpen(true)}
+            disabled={isReadOnly}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-all duration-200 animate-pulse disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <AlertTriangle className="size-3.5" />
+            File Dispute
+          </button>
+        </div>
       </div>
 
       {/* Change Result Modal */}
@@ -425,6 +493,16 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
         roundNumber={match.round_number}
         currentResult={currentResult ? getResultLabel(currentResult, match) : '—'}
         newResult={pendingNewResult ? getResultLabel(pendingNewResult, match) : '—'}
+      />
+
+      {/* File Dispute Modal */}
+      <FileDisputeModal
+        open={disputeModalOpen}
+        onClose={() => setDisputeModalOpen(false)}
+        matchId={match.id}
+        competitionId={competitionId}
+        matchLabel={matchLabel}
+        roundNumber={match.round_number}
       />
     </>
   )

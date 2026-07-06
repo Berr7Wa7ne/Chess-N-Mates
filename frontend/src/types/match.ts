@@ -54,6 +54,8 @@ export interface SubmitResultPayload {
 export interface ForceResultPayload {
   result_winner: ResultWinner
   reason?: string
+  is_absent?: boolean
+  absence_side?: 'a' | 'b'
 }
 
 export interface ExtendDeadlinePayload {
@@ -62,4 +64,6 @@ export interface ExtendDeadlinePayload {
 
 export interface AdminScorePayload {
   result_winner: ResultWinner
+  is_absent?: boolean
+  absence_side?: 'a' | 'b'
 }

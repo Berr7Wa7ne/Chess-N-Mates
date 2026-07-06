@@ -27,6 +27,7 @@ import {
 import { RoundNavigation } from '@/src/components/matches/round-navigation'
 import { ScoringCard } from '@/src/components/matches/scoring-card'
 import { StandingsSidebar } from '@/src/components/standings/standings-sidebar'
+import { ChampionModal } from '@/src/components/competitions/champion-modal'
 import {
   useCompetition,
   useCompetitionStandings,
@@ -47,6 +48,8 @@ export default function AdminCompetitionMatchesPage() {
 
   const [currentRound, setCurrentRound] = useState<number | null>(null)
   const [advancePendingModalOpen, setAdvancePendingModalOpen] = useState(false)
+  const [championModalOpen, setChampionModalOpen] = useState(false)
+  const [championDismissed, setChampionDismissed] = useState(false)
 
   const competition = competitionQuery.data
   const matches = matchesQuery.data || []
@@ -96,6 +99,15 @@ export default function AdminCompetitionMatchesPage() {
   const isCompleted = competition?.competition_status === 'completed'
   const showGreenBar = effectiveRound === competitionCurrentRound && allCurrentRoundComplete
   const showAmberBar = effectiveRound === competitionCurrentRound && !allCurrentRoundComplete
+
+  // Winner is rank #1 in standings
+  const winner = standings.find(s => s.rank === 1) || null
+
+  // Show champion modal when competition is completed and not dismissed
+  const showChampion = isCompleted && !championDismissed && !!winner
+  if (showChampion && !championModalOpen) {
+    setChampionModalOpen(true)
+  }
 
   async function handleAdvanceRoundWithPending() {
     try {
@@ -392,6 +404,17 @@ export default function AdminCompetitionMatchesPage() {
           </div>
         </div>
       )}
+
+      {/* ── Champion Modal (completed tournament) ── */}
+      <ChampionModal
+        open={championModalOpen}
+        onClose={() => {
+          setChampionModalOpen(false)
+          setChampionDismissed(true)
+        }}
+        winner={winner}
+        competitionName={competition?.name || ''}
+      />
 
       {/* ── Advance with Pending Confirmation Dialog ── */}
       <Dialog open={advancePendingModalOpen} onOpenChange={setAdvancePendingModalOpen}>
