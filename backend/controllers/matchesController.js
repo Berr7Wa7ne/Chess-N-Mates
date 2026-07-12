@@ -50,14 +50,23 @@ exports.submitResult = async (req, res) => {
   const { id } = req.params;
   const { result_winner, chess_game_link, chess_game_id, user_id } = req.body;
 
-  if (!result_winner || !user_id) {
+  if (!user_id) {
     return res.status(400).json({
       success: false,
-      error: { message: 'result_winner and user_id are required' },
+      error: { message: 'user_id is required' },
     });
   }
 
-  if (!['a', 'b', 'draw'].includes(result_winner)) {
+  // A chess_game_link is required for player result submission
+  if (!chess_game_link) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'chess.com game link is required to submit a result' },
+    });
+  }
+
+  // If result_winner is provided, validate it
+  if (result_winner && !['a', 'b', 'draw'].includes(result_winner)) {
     return res.status(400).json({
       success: false,
       error: { message: 'result_winner must be "a", "b", or "draw"' },
@@ -101,51 +110,57 @@ exports.submitResult = async (req, res) => {
     });
   }
 
-  let verifiedResult = null;
-  let autoScored = false;
-  let flagged = false;
+  // ── Fetch player chess.com usernames ──
+  const { data: playerA } = await supabaseAdmin
+    .from('users')
+    .select('id, chess_com_username')
+    .eq('id', match.player_a_id)
+    .single();
 
-  // If a game link was provided, attempt chess.com verification
-  if (chess_game_link) {
-    const { data: playerA } = await supabaseAdmin
-      .from('users')
-      .select('id, chess_com_username')
-      .eq('id', match.player_a_id)
-      .single();
+  const { data: playerB } = await supabaseAdmin
+    .from('users')
+    .select('id, chess_com_username')
+    .eq('id', match.player_b_id)
+    .single();
 
-    const { data: playerB } = await supabaseAdmin
-      .from('users')
-      .select('id, chess_com_username')
-      .eq('id', match.player_b_id)
-      .single();
-
-    if (playerA?.chess_com_username && playerB?.chess_com_username) {
-      const verification = await verifyGameAndDetermineWinner(
-        chess_game_link, playerA, playerB
-      );
-
-      if (verification.matched) {
-        verifiedResult = verification.result_winner;
-        if (verifiedResult === result_winner) {
-          autoScored = true;
-        } else {
-          flagged = true;
-        }
-      }
-    }
+  if (!playerA?.chess_com_username || !playerB?.chess_com_username) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Both players must have chess.com usernames linked to their accounts to submit a result' },
+    });
   }
 
-  const newStatus = autoScored ? 'completed' : 'result_submitted';
-  const finalResult = autoScored ? verifiedResult : result_winner;
+  // ── Fetch competition for time control validation ──
+  const { data: competition } = await supabaseAdmin
+    .from('competitions')
+    .select('time_control')
+    .eq('id', match.competition_id)
+    .single();
+
+  // ── Verify the game link against all validation rules ──
+  const verification = await verifyGameAndDetermineWinner(
+    chess_game_link, playerA, playerB, competition, match
+  );
+
+  if (!verification.matched) {
+    // Link failed validation — clear error message returned to the player
+    return res.status(400).json({
+      success: false,
+      error: { message: `Game verification failed: ${verification.reason}` },
+    });
+  }
+
+  // ── All validations passed — auto-score the match as completed ──
+  const verifiedResult = verification.result_winner;
 
   const updates = {
-    match_status: newStatus,
-    result_winner: finalResult,
+    match_status: 'completed',
+    result_winner: verifiedResult,
     result_submitted_by: user_id,
     result_submitted_at: timestamp(),
+    chess_game_link: chess_game_link,
   };
 
-  if (chess_game_link) updates.chess_game_link = chess_game_link;
   if (chess_game_id) updates.chess_game_id = chess_game_id;
 
   const { data, error } = await supabaseAdmin
@@ -157,30 +172,17 @@ exports.submitResult = async (req, res) => {
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
 
-  // If auto-scored: update participant scores immediately
-  if (autoScored) {
-    await updateParticipantScores(match.competition_id, { ...match, result_winner: finalResult });
-  }
+  // Update participant scores immediately with the verified result
+  await updateParticipantScores(match.competition_id, { ...match, result_winner: verifiedResult });
 
-  // If flagged: create a dispute automatically
-  if (flagged) {
-    await supabaseAdmin.from('disputes').insert({
-      match_id: id,
-      competition_id: match.competition_id,
-      raised_by_user_id: user_id,
-      opponent_user_id: match.player_a_id === user_id ? match.player_b_id : match.player_a_id,
-      filed_by_role: 'player',
-      category: 'result_mismatch',
-      reason: `Submitted result (${result_winner}) does not match chess.com verified result (${verifiedResult}). Flagged for admin review.`,
-      dispute_status: 'open',
-    });
-    await supabaseAdmin
-      .from('matches')
-      .update({ match_status: 'disputed' })
-      .eq('id', id);
-  }
-
-  res.json({ success: true, data: { ...data, auto_scored: autoScored, flagged } });
+  res.json({
+    success: true,
+    data: {
+      ...data,
+      auto_scored: true,
+      verified_result: verifiedResult,
+    },
+  });
 };
 
 exports.confirmResult = async (req, res) => {

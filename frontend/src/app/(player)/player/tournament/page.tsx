@@ -191,6 +191,8 @@ export default function PlayerTournamentPage() {
               if (!currentUser) return null
               const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
               if (!isParticipant) return null
+              // Hide submit button for future rounds (read-only until admin advances)
+              if (match.round_number > (currentCompetition?.current_round || 1)) return null
               return (
                 <Button
                   variant="outline"

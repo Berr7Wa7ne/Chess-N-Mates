@@ -258,7 +258,6 @@ export default function AdminCompetitionMatchesPage() {
                 rounds={roundNumbers}
                 currentRound={effectiveRound}
                 onRoundChange={setCurrentRound}
-                lockedRounds={roundNumbers.filter(r => r > competitionCurrentRound)}
               />
             )}
 

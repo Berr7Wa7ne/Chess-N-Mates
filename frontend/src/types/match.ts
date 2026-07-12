@@ -45,7 +45,7 @@ export interface CompetitionMatchListParams {
 }
 
 export interface SubmitResultPayload {
-  result_winner: ResultWinner
+  result_winner?: ResultWinner
   chess_game_link?: string
   chess_game_id?: string
   user_id: string
