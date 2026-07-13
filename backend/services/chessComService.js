@@ -93,9 +93,13 @@ function validateTimeControl(competitionTimeControl, gameTimeClass, gameTimeCont
     return { valid: true }
   }
 
-  // Non-daily: check time class category
-  const expectedClass = compParsed.baseSeconds <= 180 ? 'bullet'
-    : compParsed.baseSeconds <= 600 ? 'blitz'
+  // Non-daily: check time class category (matching chess.com's actual thresholds)
+  // Bullet: ≤ 2 min (120s) — 1 min, 1+1, 2+1
+  // Blitz: 3 min to 5 min (121s–300s) — 3 min, 3+2, 5 min
+  // Rapid: 10 min to 30 min (301s–1800s) — 10 min, 15+10, 30 min
+  // Standard: > 30 min
+  const expectedClass = compParsed.baseSeconds <= 120 ? 'bullet'
+    : compParsed.baseSeconds <= 300 ? 'blitz'
     : compParsed.baseSeconds <= 1800 ? 'rapid'
     : 'standard'
 
