@@ -246,6 +246,8 @@ exports.startCompetition = async (req, res) => {
     1
   );
 
+  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
   const matchRows = fixtures
     .filter((f) => f.player_a_id && f.player_b_id)
     .map((f) => ({
@@ -255,6 +257,8 @@ exports.startCompetition = async (req, res) => {
       player_b_id: f.player_b_id,
       match_status: f.is_bye ? 'completed' : 'pending',
       is_bye: f.is_bye || false,
+      // Round 1 deadline = 24 hours from competition start
+      deadline: f.is_bye ? null : deadlineDate,
     }));
 
   if (matchRows.length > 0) {
@@ -400,6 +404,8 @@ exports.advanceRound = async (req, res) => {
     nextRound
   );
 
+  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
   const matchRows = fixtures
     .filter((f) => f.player_a_id && f.player_b_id)
     .map((f) => ({
@@ -408,6 +414,8 @@ exports.advanceRound = async (req, res) => {
       player_a_id: f.player_a_id,
       player_b_id: f.player_b_id,
       match_status: 'pending',
+      // Round deadline = 24 hours from when admin clicks advance
+      deadline: deadlineDate,
     }));
 
   if (matchRows.length > 0) {
