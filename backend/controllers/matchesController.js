@@ -110,6 +110,31 @@ exports.submitResult = async (req, res) => {
     });
   }
 
+  // ── Fetch competition for time control validation ──
+  const { data: competition } = await supabaseAdmin
+    .from('competitions')
+    .select('time_control')
+    .eq('id', match.competition_id)
+    .single();
+
+  // ── Ensure deadline is set for date validation ──
+  // If no deadline exists, compute one from match.created_at + 24hrs
+  // This mirrors the exact same logic used when matches are created
+  // (see competitionsController.js: deadline = Date.now() + 24hrs)
+  if (!match.deadline) {
+    if (match.created_at) {
+      const computedDeadline = new Date(
+        new Date(match.created_at).getTime() + 24 * 60 * 60 * 1000
+      ).toISOString();
+      match = { ...match, deadline: computedDeadline };
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Match has no deadline and cannot verify the game date. Please contact an admin.' },
+      });
+    }
+  }
+
   // ── Fetch player chess.com usernames ──
   const { data: playerA } = await supabaseAdmin
     .from('users')
@@ -129,13 +154,6 @@ exports.submitResult = async (req, res) => {
       error: { message: 'Both players must have chess.com usernames linked to their accounts to submit a result' },
     });
   }
-
-  // ── Fetch competition for time control validation ──
-  const { data: competition } = await supabaseAdmin
-    .from('competitions')
-    .select('time_control')
-    .eq('id', match.competition_id)
-    .single();
 
   // ── Verify the game link against all validation rules ──
   const verification = await verifyGameAndDetermineWinner(
@@ -230,10 +248,10 @@ exports.markAbsent = async (req, res) => {
   const { id } = req.params;
   const { absence_side, user_id } = req.body;
 
-  if (!absence_side || !['a', 'b'].includes(absence_side)) {
+  if (!absence_side || !['a', 'b', 'both'].includes(absence_side)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'absence_side must be "a" or "b"' },
+      error: { message: 'absence_side must be "a", "b", or "both"' },
     });
   }
 
@@ -256,12 +274,16 @@ exports.markAbsent = async (req, res) => {
     // Admin marking - no user_id required for admin action
   }
 
+  // For 'both' absent, no winner — both get 0 points
+  const resultWinner = absence_side === 'both' ? null : (absence_side === 'a' ? 'b' : 'a');
+
   const { data, error } = await supabaseAdmin
     .from('matches')
     .update({
       match_status: 'completed',
-      result_winner: absence_side === 'a' ? 'b' : 'a',
+      result_winner: resultWinner,
       is_absent: true,
+      is_both_absent: absence_side === 'both',
       absence_side,
     })
     .eq('id', id)
@@ -274,8 +296,9 @@ exports.markAbsent = async (req, res) => {
   await updateParticipantScores(match.competition_id, {
     ...match,
     is_absent: true,
+    is_both_absent: absence_side === 'both',
     absence_side,
-    result_winner: absence_side === 'a' ? 'b' : 'a',
+    result_winner: resultWinner,
   });
 
   res.json({
@@ -284,7 +307,7 @@ exports.markAbsent = async (req, res) => {
       ...data,
       action: 'marked_absent',
       absence_side,
-      winner_side: absence_side === 'a' ? 'b' : 'a',
+      winner_side: resultWinner,
     },
   });
 };
@@ -497,7 +520,25 @@ async function updateParticipantScores(competitionId, match) {
 
   // Handle absence
   if (match.is_absent) {
-    if (match.absence_side === 'a') {
+    if (match.absence_side === 'both') {
+      // Both players absent — each gets 0 points, absences incremented
+      if (partA) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: (partA.absences || 0) + 1,
+          })
+          .eq('id', partA.id);
+      }
+      if (partB) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: (partB.absences || 0) + 1,
+          })
+          .eq('id', partB.id);
+      }
+    } else if (match.absence_side === 'a') {
       // Player A absent - B gets auto win (+2 pts)
       if (partB) {
         await supabaseAdmin
@@ -616,7 +657,25 @@ async function reverseParticipantScores(competitionId, match) {
 
   // Handle reversal of absence scoring
   if (match.is_absent) {
-    if (match.absence_side === 'a') {
+    if (match.absence_side === 'both') {
+      // Previously: both got +1 absence each, no score changes
+      if (partA) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: Math.max(0, (partA.absences || 0) - 1),
+          })
+          .eq('id', partA.id);
+      }
+      if (partB) {
+        await supabaseAdmin
+          .from('competition_participants')
+          .update({
+            absences: Math.max(0, (partB.absences || 0) - 1),
+          })
+          .eq('id', partB.id);
+      }
+    } else if (match.absence_side === 'a') {
       // Previously: B got +2 pts +1 win; A got +1 absence
       if (partB) {
         await supabaseAdmin

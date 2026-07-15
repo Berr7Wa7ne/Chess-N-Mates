@@ -23,9 +23,10 @@ interface MatchResultDialogProps {
   onClose: () => void
   match: Match
   userId: string
+  onSuccess?: (updatedMatch: Match) => void
 }
 
-export function MatchResultDialog({ open, onClose, match, userId }: MatchResultDialogProps) {
+export function MatchResultDialog({ open, onClose, match, userId, onSuccess }: MatchResultDialogProps) {
   const [gameLink, setGameLink] = useState('')
   const submitMutation = useSubmitResult()
 
@@ -36,22 +37,20 @@ export function MatchResultDialog({ open, onClose, match, userId }: MatchResultD
   if (!isParticipant) return null
 
   async function handleSubmit() {
-    // Validate link format client-side before sending
     const trimmedLink = gameLink.trim()
     if (!trimmedLink) {
       toast.error('Please enter your chess.com game link')
       return
     }
 
-    if (!trimmedLink.match(/chess\.com\/game\//)) {
-      toast.error('Please enter a valid chess.com game URL')
-      return
-    }
-
     try {
-      // Submit only the game link — the backend will auto-determine the result
-      // via chess.com API verification (player check, time control, game date)
-      await submitMutation.mutateAsync({
+      // Submit only the game link — the backend handles all validation:
+      // - URL format validation
+      // - Player chess.com username match
+      // - Time control match
+      // - Game date vs deadline check
+      // Returns specific error messages for each failure case
+      const response = await submitMutation.mutateAsync({
         id: match.id,
         payload: {
           user_id: userId,
@@ -60,6 +59,10 @@ export function MatchResultDialog({ open, onClose, match, userId }: MatchResultD
       })
       toast.success('Result submitted successfully! The system has verified and scored your match.')
       setGameLink('')
+      // Pass the updated match data back to parent for optimistic update
+      if (onSuccess && response?.data) {
+        onSuccess(response.data)
+      }
       onClose()
     } catch (error) {
       // Display the backend's validation error directly to the player

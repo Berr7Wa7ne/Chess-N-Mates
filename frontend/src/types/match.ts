@@ -28,13 +28,14 @@ export interface Match {
   force_reason?: string | null
   is_bye?: boolean
   is_absent?: boolean
-  absence_side?: 'a' | 'b' | null
+  is_both_absent?: boolean
+  absence_side?: 'a' | 'b' | 'both' | null
   created_at?: string
   updated_at?: string
 }
 
 export interface MarkAbsentPayload {
-  absence_side: 'a' | 'b'
+  absence_side: 'a' | 'b' | 'both'
   user_id?: string
 }
 
@@ -55,7 +56,7 @@ export interface ForceResultPayload {
   result_winner: ResultWinner
   reason?: string
   is_absent?: boolean
-  absence_side?: 'a' | 'b'
+  absence_side?: 'a' | 'b' | 'both'
 }
 
 export interface ExtendDeadlinePayload {
@@ -65,5 +66,5 @@ export interface ExtendDeadlinePayload {
 export interface AdminScorePayload {
   result_winner: ResultWinner
   is_absent?: boolean
-  absence_side?: 'a' | 'b'
+  absence_side?: 'a' | 'b' | 'both'
 }

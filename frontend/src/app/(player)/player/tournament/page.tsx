@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Download, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -22,9 +22,13 @@ import { ApiError } from "@/src/types/api"
 import type { Match } from "@/src/types/match"
 
 export default function PlayerTournamentPage() {
-  const [currentRound, setCurrentRound] = useState(1)
+  const [currentRound, setCurrentRound] = useState<number | null>(null)
   const [standingsOpen, setStandingsOpen] = useState(false)
   const [resultDialogMatch, setResultDialogMatch] = useState<Match | null>(null)
+  // Track submitted matches for immediate UI update (hide submit button, show winner)
+  const [submittedMatchIds, setSubmittedMatchIds] = useState<Set<string>>(new Set())
+  // Store optimistic match data for completed matches
+  const [optimisticMatches, setOptimisticMatches] = useState<Map<string, Partial<Match>>>(new Map())
   const { currentUser } = useAuth()
   const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
   const joinMutation = useJoinCompetition()
@@ -41,11 +45,27 @@ export default function PlayerTournamentPage() {
     )
   }, [competitions])
 
+  // Sync currentRound with competition data when it loads or changes
+  useEffect(() => {
+    if (currentRound === null && currentCompetition?.current_round) {
+      setCurrentRound(currentCompetition.current_round)
+    }
+  }, [currentCompetition?.current_round, currentRound])
+
   const matchesQuery = useCompetitionMatches(currentCompetition?.id ?? '')
   const standingsQuery = useCompetitionStandings(currentCompetition?.id ?? '', !!currentCompetition)
   
   const standings = standingsQuery.data ?? []
-  const matches = matchesQuery.data ?? []
+  const matchesData = matchesQuery.data ?? []
+  // Apply optimistic updates on top of server data
+  const matches = matchesData.map((m: Match) => {
+    const opt = optimisticMatches.get(m.id)
+    if (opt) {
+      return { ...m, ...opt }
+    }
+    return m
+  })
+  const effectiveRound = currentRound ?? currentCompetition?.current_round ?? 1
 
   const isRegistered = Boolean(
     currentUser && standings.some((entry) => entry.user_id === currentUser.id)
@@ -96,6 +116,21 @@ export default function PlayerTournamentPage() {
       toast.error(error instanceof ApiError ? error.message : "Failed to join competition")
     }
   }
+
+  // Called when a result is successfully submitted — update local state immediately
+  const handleMatchSubmitSuccess = useCallback((updatedMatch: Match) => {
+    setSubmittedMatchIds(prev => new Set(prev).add(updatedMatch.id))
+    setOptimisticMatches(prev => {
+      const next = new Map(prev)
+      next.set(updatedMatch.id, {
+        match_status: 'completed',
+        result_winner: updatedMatch.result_winner,
+        chess_game_link: updatedMatch.chess_game_link,
+        result_submitted_at: updatedMatch.result_submitted_at,
+      })
+      return next
+    })
+  }, [])
 
   function handleDownloadFixtures() {
     if (matches.length === 0) return
@@ -180,13 +215,15 @@ export default function PlayerTournamentPage() {
           {/* Matches */}
           <MatchesList
             matches={matches}
-            currentRound={currentRound}
+            currentRound={effectiveRound}
             onRoundChange={setCurrentRound}
             onViewStandings={() => setStandingsOpen(true)}
             onDownloadAll={handleDownloadFixtures}
             totalRounds={currentCompetition.rounds}
             competitionName={currentCompetition.name}
             renderMatchActions={(match: Match) => {
+              // Hide submit button for matches that have been submitted (optimistic update)
+              if (submittedMatchIds.has(match.id)) return null
               if (match.is_bye || match.match_status !== 'pending') return null
               if (!currentUser) return null
               const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
@@ -345,6 +382,7 @@ export default function PlayerTournamentPage() {
           onClose={() => setResultDialogMatch(null)}
           match={resultDialogMatch}
           userId={currentUser.id}
+          onSuccess={handleMatchSubmitSuccess}
         />
       )}
     </div>

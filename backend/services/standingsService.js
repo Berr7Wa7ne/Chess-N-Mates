@@ -67,7 +67,11 @@ function computeStandings(participants, matches) {
 
     // Absence handling
     if (match.is_absent) {
-      if (match.absence_side === 'a') {
+      if (match.absence_side === 'both') {
+        // Both players absent — each gets 0 points, absences incremented
+        playerA.absences += 1;
+        playerB.absences += 1;
+      } else if (match.absence_side === 'a') {
         // Player A was absent - B gets auto win
         playerB.played += 1;
         playerB.wins += 1;

@@ -5,12 +5,21 @@ import { toast } from 'sonner'
 import { AlertTriangle, Crown, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Match, ResultWinner } from '@/src/types/match'
-import { useAdminScore, useConfirmResult, useForceResult } from '@/src/hooks/useMatches'
+import { useAdminScore, useConfirmResult, useForceResult, useMarkAbsent } from '@/src/hooks/useMatches'
 import { useAuth } from '@/src/hooks/useAuth'
 import { ApiError } from '@/src/types/api'
 import { ChangeResultModal } from '@/src/components/matches/change-result-modal'
 import { FileDisputeModal } from '@/src/components/matches/file-dispute-modal'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 interface ScoringCardProps {
   match: Match
@@ -60,6 +69,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   const adminScoreMutation = useAdminScore(competitionId)
   const confirmResultMutation = useConfirmResult()
   const forceMutation = useForceResult(competitionId)
+  const markAbsentMutation = useMarkAbsent()
   const { user } = useAuth()
 
   const [changeModalOpen, setChangeModalOpen] = useState(false)
@@ -67,10 +77,19 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   const [loadingButton, setLoadingButton] = useState<ResultWinner | null>(null)
   const [changeReason, setChangeReason] = useState('')
   const [disputeModalOpen, setDisputeModalOpen] = useState(false)
-  const [absentSide, setAbsentSide] = useState<'a' | 'b' | null>(null)
+
+  // Track absent sides as a Set to allow both to be selected independently
+  const [absentSides, setAbsentSides] = useState<Set<'a' | 'b'>>(new Set())
+  // Shows warning banner above the round label when hinting at both-absent
+  const [showBothAbsentWarning, setShowBothAbsentWarning] = useState(false)
+  // Confirmation dialog for both-absent
+  const [bothAbsentConfirmOpen, setBothAbsentConfirmOpen] = useState(false)
+  // Optimistic state: immediately show absent view after save without waiting for refetch
+  const [optimisticAbsent, setOptimisticAbsent] = useState<{ is_both_absent: boolean; absence_side: 'both' } | null>(null)
 
   const isBye = match.is_bye
-  const isAbsent = match.is_absent
+  const isAbsent = match.is_absent || optimisticAbsent !== null
+  const isBothAbsent = match.is_both_absent || match.absence_side === 'both' || optimisticAbsent?.is_both_absent === true
   const isDisputed = match.match_status === 'disputed'
   const isPending = match.match_status === 'pending' || match.match_status === 'ongoing'
   const isResultSubmitted = match.match_status === 'result_submitted'
@@ -87,6 +106,11 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     async (winner: ResultWinner) => {
       if (isReadOnly) return
 
+      // Determine the final absence side from the set
+      const finalAbsenceSide = absentSides.size === 2 ? 'both'
+        : absentSides.size === 1 ? [...absentSides][0]
+        : null
+
       // Pending/ongoing: admin-score immediately
       if (isPending) {
         setLoadingButton(winner)
@@ -95,12 +119,13 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
             id: match.id,
             payload: {
               result_winner: winner,
-              is_absent: absentSide !== null,
-              absence_side: absentSide || undefined,
+              is_absent: finalAbsenceSide !== null,
+              absence_side: finalAbsenceSide || undefined,
             },
           })
           toast.success('Result saved')
-          setAbsentSide(null)
+          setAbsentSides(new Set())
+          setShowBothAbsentWarning(false)
         } catch (error) {
           toast.error(error instanceof ApiError ? error.message : 'Failed to save result')
         } finally {
@@ -135,7 +160,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
         setChangeModalOpen(true)
       }
     },
-    [match.id, isReadOnly, isPending, isResultSubmitted, isCompleted, currentResult, adminScoreMutation, confirmResultMutation, absentSide]
+    [match.id, isReadOnly, isPending, isResultSubmitted, isCompleted, currentResult, adminScoreMutation, confirmResultMutation, absentSides]
   )
 
   const handleConfirmChange = useCallback(async () => {
@@ -147,8 +172,8 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
         payload: {
           result_winner: pendingNewResult,
           reason: changeReason,
-          is_absent: absentSide !== null,
-          absence_side: absentSide || undefined,
+          is_absent: absentSides.size > 0,
+          absence_side: absentSides.size === 2 ? 'both' : (absentSides.size === 1 ? [...absentSides][0] : undefined),
         },
       })
       toast.success('Result updated')
@@ -156,13 +181,14 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
       setChangeModalOpen(false)
       setPendingNewResult(null)
       setChangeReason('')
-      setAbsentSide(null)
+      setAbsentSides(new Set())
+      setShowBothAbsentWarning(false)
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to update result')
     } finally {
       setLoadingButton(null)
     }
-  }, [match.id, pendingNewResult, forceMutation, changeReason, absentSide])
+  }, [match.id, pendingNewResult, forceMutation, changeReason, absentSides])
 
   function getButtonLabel(winner: ResultWinner): string {
     // Scored: show names on the appropriate buttons
@@ -211,6 +237,61 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
     )
   }
 
+  // ── Absent toggle logic ─────────────────────────────────
+  const toggleAbsent = useCallback((side: 'a' | 'b') => {
+    setAbsentSides(prev => {
+      const next = new Set(prev)
+      if (next.has(side)) {
+        // Removing this side
+        next.delete(side)
+        setShowBothAbsentWarning(false)
+      } else {
+        next.add(side)
+        if (next.size === 2) {
+          // Both sides now selected → open confirmation dialog
+          setBothAbsentConfirmOpen(true)
+        } else {
+          // First absent clicked → show toast message
+          toast.info('Click the second absent radio button to mark both players as absent.')
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const confirmBothAbsent = useCallback(async () => {
+    setBothAbsentConfirmOpen(false)
+    // Set optimistic state immediately so the card switches to absent view
+    setOptimisticAbsent({ is_both_absent: true, absence_side: 'both' })
+    setAbsentSides(new Set())
+    setShowBothAbsentWarning(false)
+    try {
+      await markAbsentMutation.mutateAsync({
+        id: match.id,
+        payload: { absence_side: 'both' },
+      })
+      toast.success('Both players marked as absent — 0 points each.')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to mark both absent')
+      // Revert optimistic state on failure
+      setOptimisticAbsent(null)
+    }
+  }, [match.id, markAbsentMutation])
+
+  const cancelBothAbsent = useCallback(() => {
+    setBothAbsentConfirmOpen(false)
+    // Remove the second absent that was just added
+    setAbsentSides(prev => {
+      const next = new Set(prev)
+      const arr = [...next]
+      if (arr.length === 2) {
+        next.delete(arr[1])
+      }
+      setShowBothAbsentWarning(false)
+      return next
+    })
+  }, [])
+
   // ── BYE match ─────────────────────────────────────────────────
   if (isBye) {
     return (
@@ -236,15 +317,22 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
 
   // ── ABSENT match ──────────────────────────────────────────────
   if (isAbsent) {
-    const absentPlayer = match.absence_side === 'a' ? playerAName : playerBName
+    const absentLabel = isBothAbsent
+      ? 'Both players were absent'
+      : `${match.absence_side === 'a' ? playerAName : playerBName} was absent`
     return (
       <div className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Round {match.round_number}
           </span>
-          <Badge className="bg-red-100 text-red-700 border border-red-200 text-[11px]">
-            Absent
+          <Badge className={cn(
+            'text-[11px] border',
+            isBothAbsent
+              ? 'bg-orange-100 text-orange-700 border-orange-200'
+              : 'bg-red-100 text-red-700 border border-red-200'
+          )}>
+            {isBothAbsent ? 'Both Absent' : 'Absent'}
           </Badge>
         </div>
         <div className="flex items-center justify-center gap-4 py-1">
@@ -259,7 +347,7 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           </div>
         </div>
         <p className="text-center text-xs text-red-600 font-medium">
-          {absentPlayer} was absent
+          {absentLabel}
         </p>
       </div>
     )
@@ -270,11 +358,11 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
 
   // ── Absence radio button ─────────────────────────────────────
   function AbsenceRadio({ side, label }: { side: 'a' | 'b'; label: string }) {
-    const isActive = absentSide === side
+    const isActive = absentSides.has(side)
     return (
       <button
         type="button"
-        onClick={() => setAbsentSide(isActive ? null : side)}
+        onClick={() => toggleAbsent(side)}
         disabled={isReadOnly || isScored}
         className={cn(
           'flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium transition-all duration-200 border',
@@ -413,6 +501,15 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
   return (
     <>
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-200 hover:bg-gray-50/60">
+        {/* ═══════ Both-absent warning banner ═══════ */}
+        {showBothAbsentWarning && (
+          <div className="-mx-5 -mt-5 rounded-t-2xl bg-orange-50 border-b border-orange-200 px-5 py-2.5">
+            <p className="text-xs font-medium text-orange-700 text-center">
+              Both players marked as absent. Both players will receive zero points.
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Round {match.round_number}
@@ -479,6 +576,37 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           </button>
         </div>
       </div>
+
+      {/* ═══════ Both-absent confirmation dialog ═══════ */}
+      <Dialog open={bothAbsentConfirmOpen} onOpenChange={(open) => {
+        if (!open) cancelBothAbsent()
+      }}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark both players as absent?</DialogTitle>
+            <DialogDescription>
+              Both {playerAName} and {playerBName} will receive 0 points for this match.
+              This action will immediately complete the match.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={cancelBothAbsent} disabled={markAbsentMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={confirmBothAbsent}
+              disabled={markAbsentMutation.isPending}
+            >
+              {markAbsentMutation.isPending ? (
+                <><Loader2 className="mr-2 size-4 animate-spin" /> Saving...</>
+              ) : (
+                'Confirm Both Absent'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Change Result Modal */}
       <ChangeResultModal

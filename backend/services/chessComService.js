@@ -40,24 +40,23 @@ function parseTimeControl(timeControlStr) {
     return { baseSeconds: null, increment: null, isDaily: true }
   }
 
-  // Handle "300+2" or "600" style
+  // Handle "5+2" or "600+10" style (minutes+seconds)
   const incMatch = trimmed.match(/^(\d+)\+(\d+)$/)
   if (incMatch) {
-    return {
-      baseSeconds: parseInt(incMatch[1], 10),
-      increment: parseInt(incMatch[2], 10),
-      isDaily: false,
-    }
+    let baseSeconds = parseInt(incMatch[1], 10)
+    const increment = parseInt(incMatch[2], 10)
+    // If base ≤ 180, assume it was entered as minutes (e.g. "5+2" = 5 min + 2s)
+    if (baseSeconds <= 180) baseSeconds *= 60
+    return { baseSeconds, increment, isDaily: false }
   }
 
-  // Handle plain seconds like "600"
+  // Handle plain like "10" (minutes) or "600" (already seconds)
   const plainMatch = trimmed.match(/^(\d+)$/)
   if (plainMatch) {
-    return {
-      baseSeconds: parseInt(plainMatch[1], 10),
-      increment: 0,
-      isDaily: false,
-    }
+    let baseSeconds = parseInt(plainMatch[1], 10)
+    // If ≤ 180, assume it was entered as minutes (e.g. "10" = 10 min)
+    if (baseSeconds <= 180) baseSeconds *= 60
+    return { baseSeconds, increment: 0, isDaily: false }
   }
 
   return null
@@ -153,7 +152,7 @@ function validateGameDate(gameEndTime, matchDeadline) {
   if (gameEndMs > deadlineMs) {
     return {
       valid: false,
-      reason: `Game was played after the round deadline (${new Date(deadlineMs).toLocaleString()})`,
+      reason: `This game was played outside the round's time window. Games must be played within 24 hours of the round starting.`,
     }
   }
 
@@ -173,18 +172,62 @@ async function verifyPlayer(username) {
   }
 }
 
-async function fetchGameResult(gameUrl) {
+/**
+ * chess.com has NO "get game by ID" endpoint.
+ * Games are only available via per-player monthly archives:
+ *   GET /pub/player/{username}/games/{YYYY}/{MM}
+ * Each game object has: url (ends with the game ID), white.username,
+ * black.username, time_class, time_control, end_time, pgn.
+ *
+ * We search both players' recent monthly archives for the game whose
+ * `url` ends with the given game ID.
+ */
+async function fetchGameFromArchives(username, gameId) {
+  if (!username) return null
   try {
-    const match = gameUrl.match(/chess\.com\/game\/(?:live|daily)\/(\d+)/)
+    // 1. Get list of archive months
+    const archRes = await fetch(
+      `${CHESS_COM_BASE}/player/${username.toLowerCase()}/games/archives`,
+      { headers: { 'User-Agent': 'ChessMates Tournament App' } }
+    )
+    if (!archRes.ok) return null
+    const { archives } = await archRes.json()
+    if (!archives || !archives.length) return null
+
+    // 2. Search most recent months first (current + previous 3)
+    const recent = archives.slice(-4)
+    for (const archiveUrl of recent) {
+      const res = await fetch(archiveUrl, {
+        headers: { 'User-Agent': 'ChessMates Tournament App' }
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const games = data.games || []
+      const game = games.find((g) => (g.url || '').endsWith(`/${gameId}`))
+      if (game) return game
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function fetchGameResult(gameUrl, playerAUsername, playerBUsername) {
+  try {
+    // Accept both old format (chess.com/game/live/ID) and new format (chess.com/live/game/ID)
+    const match = gameUrl.match(/chess\.com\/(?:.+\/)?(\d+)$/)
     if (!match) return { found: false, reason: 'Invalid chess.com game URL format' }
 
     const gameId = match[1]
-    const res = await fetch(`${CHESS_COM_BASE}/game/${gameId}`, {
-      headers: { 'User-Agent': 'ChessMates Tournament App' }
-    })
-    if (!res.ok) return { found: false, reason: 'Game not found on chess.com' }
 
-    const game = await res.json()
+    // chess.com has no direct game-by-ID endpoint; search both players' archives
+    let game =
+      (await fetchGameFromArchives(playerAUsername, gameId)) ||
+      (await fetchGameFromArchives(playerBUsername, gameId))
+
+    if (!game) {
+      return { found: false, reason: 'Game not found on chess.com for either player' }
+    }
 
     let result = null
     if (game.pgn) {
@@ -222,7 +265,11 @@ async function fetchGameResult(gameUrl) {
  * @returns {{ matched: boolean, result_winner?: string, verified?: boolean, gameId?: string, reason?: string }}
  */
 async function verifyGameAndDetermineWinner(gameUrl, playerA, playerB, competition, match) {
-  const game = await fetchGameResult(gameUrl)
+  const game = await fetchGameResult(
+    gameUrl,
+    playerA?.chess_com_username,
+    playerB?.chess_com_username
+  )
   if (!game.found) return { matched: false, reason: game.reason }
   if (!game.result) return { matched: false, reason: 'Could not determine result from game PGN' }
 

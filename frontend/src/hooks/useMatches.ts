@@ -42,6 +42,9 @@ export function useSubmitResult() {
       matchService.submitResult(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.matches.all })
+      // Also invalidate competition-specific match queries so the player
+      // page (which uses ['competitions', id, 'matches']) refreshes immediately
+      queryClient.invalidateQueries({ queryKey: ['competitions'] })
     },
   })
 }

@@ -1,0 +1,2 @@
+CASE1 (rapid/600, no deadline): {"matched":true,"result_winner":"a","verified":true,"gameId":"171501546692"}
+CASE2 (blitz/300, should FAIL): {"matched":false,"reason":"Game is \"rapid\" (600) but competition requires \"blitz\" (300)"}
