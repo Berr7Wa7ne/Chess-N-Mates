@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MatchesList } from "@/src/components/matches/matches-list"
+import { PlayerDoubleLegView } from "@/src/components/matches/player-double-leg-view"
 import { MatchResultDialog } from "@/src/components/matches/match-result-dialog"
 import { StandingsModal } from "@/src/components/standings/standings-modal"
 import {
@@ -213,35 +214,40 @@ export default function PlayerTournamentPage() {
       {currentCompetition && matches.length > 0 && (
         <div className="grid gap-6 xl:grid-cols-2">
           {/* Matches */}
-          <MatchesList
-            matches={matches}
-            currentRound={effectiveRound}
-            onRoundChange={setCurrentRound}
-            onViewStandings={() => setStandingsOpen(true)}
-            onDownloadAll={handleDownloadFixtures}
-            totalRounds={currentCompetition.rounds}
-            competitionName={currentCompetition.name}
-            renderMatchActions={(match: Match) => {
-              // Hide submit button for matches that have been submitted (optimistic update)
-              if (submittedMatchIds.has(match.id)) return null
-              if (match.is_bye || match.match_status !== 'pending') return null
-              if (!currentUser) return null
-              const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
-              if (!isParticipant) return null
-              // Hide submit button for future rounds (read-only until admin advances)
-              if (match.round_number > (currentCompetition?.current_round || 1)) return null
-              return (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-[10px] h-7"
-                  onClick={() => setResultDialogMatch(match)}
-                >
-                  Submit Result
-                </Button>
-              )
-            }}
-          />
+          {currentCompetition.match_length === 'double_game' && currentCompetition.tournament_type === 'round_robin' ? (
+            <div className="space-y-4">
+              <PlayerDoubleLegView
+                matches={matches.filter((m) => m.round_number === effectiveRound)}
+                currentRound={effectiveRound}
+                currentUser={currentUser}
+                submittedMatchIds={submittedMatchIds}
+                onSuccess={handleMatchSubmitSuccess}
+              />
+            </div>
+          ) : (
+            <MatchesList
+              matches={matches}
+              currentRound={effectiveRound}
+              onRoundChange={setCurrentRound}
+              onViewStandings={() => setStandingsOpen(true)}
+              onDownloadAll={handleDownloadFixtures}
+              totalRounds={currentCompetition.rounds}
+              competitionName={currentCompetition.name}
+              renderMatchActions={(match: Match) => {
+                if (submittedMatchIds.has(match.id)) return null
+                if (match.is_bye || match.match_status !== 'pending') return null
+                if (!currentUser) return null
+                const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
+                if (!isParticipant) return null
+                if (match.round_number > (currentCompetition?.current_round || 1)) return null
+                return (
+                  <Button variant="outline" size="sm" className="text-[10px] h-7" onClick={() => setResultDialogMatch(match)}>
+                    Submit Result
+                  </Button>
+                )
+              }}
+            />
+          )}
 
           {/* Standings quick preview */}
           <Card className="shadow-sm">
