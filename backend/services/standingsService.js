@@ -188,25 +188,47 @@ function areTied(a, b, completedMatches) {
 }
 
 function headToHeadScore(playerA, playerB, completedMatches) {
+  let aScore = 0;
+  let bScore = 0;
+  let hasMatch = false;
+
   for (const match of completedMatches) {
     if (match.is_bye || match.is_absent) continue;
 
-    const involvesBoth =
-      (match.player_a_id === playerA && match.player_b_id === playerB) ||
-      (match.player_a_id === playerB && match.player_b_id === playerA);
+    const aIsPlayerA = match.player_a_id === playerA;
+    const bIsPlayerB = match.player_b_id === playerB;
+    const aIsPlayerB = match.player_a_id === playerB;
+    const bIsPlayerA = match.player_b_id === playerA;
 
+    const involvesBoth = (aIsPlayerA && bIsPlayerB) || (aIsPlayerB && bIsPlayerA);
     if (!involvesBoth) continue;
 
-    // Return positive if playerA beat playerB, negative if playerB beat playerA
+    hasMatch = true;
+
+    // Aggregate 2-1-0 scoring across both legs
     if (match.result_winner === 'a') {
-      return match.player_a_id === playerA ? -1 : 1;
+      if (aIsPlayerA || bIsPlayerA) {
+        // PlayerA won this match (regardless of which side they played)
+        aScore += 2;
+      } else {
+        bScore += 2;
+      }
+    } else if (match.result_winner === 'b') {
+      if (aIsPlayerB || bIsPlayerB) {
+        // PlayerB won this match
+        bScore += 2;
+      } else {
+        aScore += 2;
+      }
+    } else if (match.result_winner === 'draw') {
+      aScore += 1;
+      bScore += 1;
     }
-    if (match.result_winner === 'b') {
-      return match.player_b_id === playerA ? -1 : 1;
-    }
-    if (match.result_winner === 'draw') return 0;
   }
-  return 0;
+
+  if (!hasMatch) return 0;
+  // Return positive if playerA leads, negative if playerB leads
+  return bScore - aScore;
 }
 
 module.exports = { computeStandings };

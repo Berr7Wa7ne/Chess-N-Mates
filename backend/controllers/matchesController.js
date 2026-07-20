@@ -73,7 +73,7 @@ exports.submitResult = async (req, res) => {
     });
   }
 
-  const { data: match, error: matchError } = await supabaseAdmin
+  let { data: match, error: matchError } = await supabaseAdmin
     .from('matches')
     .select('*')
     .eq('id', id)
@@ -118,21 +118,33 @@ exports.submitResult = async (req, res) => {
     .single();
 
   // ── Ensure deadline is set for date validation ──
-  // If no deadline exists, compute one from match.created_at + 24hrs
-  // This mirrors the exact same logic used when matches are created
-  // (see competitionsController.js: deadline = Date.now() + 24hrs)
+  // If no deadline exists, compute one from match.created_at + 24hrs.
+  // created_at is set when matches are inserted during startCompetition
+  // or advanceRound, so it reflects the round start time.
   if (!match.deadline) {
     if (match.created_at) {
-      const computedDeadline = new Date(
-        new Date(match.created_at).getTime() + 24 * 60 * 60 * 1000
-      ).toISOString();
-      match = { ...match, deadline: computedDeadline };
+      match = {
+        ...match,
+        deadline: new Date(
+          new Date(match.created_at).getTime() + 24 * 60 * 60 * 1000
+        ).toISOString(),
+      };
     } else {
       return res.status(400).json({
         success: false,
         error: { message: 'Match has no deadline and cannot verify the game date. Please contact an admin.' },
       });
     }
+  }
+
+  // ── Submission Deadline Gate ──
+  // Block player submissions after the deadline has passed.
+  // Admins can still use forceResult / adminScoreMatch to override.
+  if (new Date() > new Date(match.deadline)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'The submission window for this match has closed. Please contact an admin if you need to submit a late result.' },
+    });
   }
 
   // ── Fetch player chess.com usernames ──
@@ -156,9 +168,18 @@ exports.submitResult = async (req, res) => {
   }
 
   // ── Verify the game link against all validation rules ──
-  const verification = await verifyGameAndDetermineWinner(
-    chess_game_link, playerA, playerB, competition, match
-  );
+  let verification
+  try {
+    verification = await verifyGameAndDetermineWinner(
+      chess_game_link, playerA, playerB, competition, match
+    );
+  } catch (err) {
+    console.error('Game verification threw an unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred while verifying the game. Please try again or contact an admin.' },
+    });
+  }
 
   if (!verification.matched) {
     // Link failed validation — clear error message returned to the player

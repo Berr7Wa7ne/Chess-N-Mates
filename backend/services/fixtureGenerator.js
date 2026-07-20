@@ -202,29 +202,37 @@ function generateRoundRobinFixtures(participants, totalRounds, legs = 1) {
 
   const fixtures = [];
 
-  // Single leg: use rounds as-is
+  // For each round, generate leg 1 and optionally leg 2
   for (let r = 0; r < roundPairings.length; r++) {
     for (const pair of roundPairings[r]) {
+      // Leg 1: original pairing
       fixtures.push({
         ...pair,
         round_number: r + 1,
+        leg: 1,
       });
-    }
-  }
-
-  // Double leg: mirror all pairings with swapped sides
-  if (legs >= 2) {
-    const offset = roundPairings.length;
-    for (let r = 0; r < roundPairings.length; r++) {
-      for (const pair of roundPairings[r]) {
+      
+      // Leg 2: swapped sides (double-leg only)
+      if (legs >= 2) {
         fixtures.push({
           player_a_id: pair.player_b_id,
           player_b_id: pair.player_a_id,
-          round_number: r + 1 + offset,
+          round_number: r + 1,
+          leg: 2,
         });
       }
     }
   }
+
+  // DEBUG: Log fixture generation
+  console.log('[FIXTURE DEBUG] Generated fixtures:', JSON.stringify(fixtures, null, 2));
+  console.log('[FIXTURE DEBUG] Total rounds:', Math.max(...fixtures.map(f => f.round_number), 0));
+  console.log('[FIXTURE DEBUG] Legs per round:', 
+    fixtures.reduce((acc, f) => {
+      acc[f.round_number] = (acc[f.round_number] || 0) + 1;
+      return acc;
+    }, {})
+  );
 
   return fixtures;
 }

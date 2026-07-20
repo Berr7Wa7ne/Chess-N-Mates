@@ -12,6 +12,7 @@ export interface Match {
   id: string
   competition_id: string
   round_number: number
+  leg: number
   player_a_id: string
   player_b_id: string
   player_a?: MatchPlayer

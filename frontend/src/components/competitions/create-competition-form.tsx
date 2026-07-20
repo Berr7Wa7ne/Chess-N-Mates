@@ -151,8 +151,8 @@ function computeRounds(tournamentType: TournamentType, maxPlayers: number, match
   }
   if (tournamentType === 'round_robin') {
     const n = maxPlayers
-    const singleLegRounds = n < 2 ? 0 : n - 1
-    return matchLength === 'double_game' ? singleLegRounds * 2 : singleLegRounds
+    // Both single and double leg use n-1 rounds (legs are in the same round)
+    return n < 2 ? 0 : n - 1
   }
   // Swiss — user-provided, return 0 to indicate "editable"
   return 0
@@ -397,6 +397,8 @@ export function CreateCompetitionForm({
       platform: platform as Platform,
       match_length: matchLength,
       format_match_rules: deriveFormatMatchRules(tournamentType, matchLength),
+      // For round robin, set legs based on match length
+      round_robin_legs: tournamentType === 'round_robin' && matchLength === 'double_game' ? 2 : 1,
       rules: rules.length > 0 ? rules : undefined,
       ...schedulePayload,
     }

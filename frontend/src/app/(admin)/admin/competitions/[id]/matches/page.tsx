@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { RoundNavigation } from '@/src/components/matches/round-navigation'
 import { ScoringCard } from '@/src/components/matches/scoring-card'
+import { DoubleLegCard } from '@/src/components/matches/double-leg-card'
 import { StandingsSidebar } from '@/src/components/standings/standings-sidebar'
 import { ChampionModal } from '@/src/components/competitions/champion-modal'
 import {
@@ -293,17 +294,74 @@ export default function AdminCompetitionMatchesPage() {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                {roundMatches.map((match) => (
-                  <ScoringCard
-                    key={match.id}
-                    match={match}
-                    competitionId={competition.id}
-                    disabled={
-                      competition.competition_status === 'completed' ||
-                      isViewingFutureRound
+                {(() => {
+                  // DEBUG: Log what we're working with
+                  console.log('[UI DEBUG] Round:', effectiveRound, 'Matches:', roundMatches.map(m => ({
+                    id: m.id,
+                    leg: m.leg,
+                    player_a: m.player_a_id?.slice(0, 8),
+                    player_b: m.player_b_id?.slice(0, 8),
+                    status: m.match_status
+                  })));
+
+                  // Group matches: pair leg 1 with leg 2 for double-leg display
+                  const cards: React.ReactNode[] = [];
+                  const paired = new Set<string>();
+
+                  // First pass: find all double-leg pairs
+                  for (const match of roundMatches) {
+                    if (paired.has(match.id)) continue;
+                    if (match.leg !== 1) continue;
+
+                    // Look for the corresponding leg 2
+                    const leg2 = roundMatches.find(
+                      (m) =>
+                        m.id !== match.id &&
+                        !paired.has(m.id) &&
+                        m.leg === 2 &&
+                        m.player_a_id === match.player_b_id &&
+                        m.player_b_id === match.player_a_id
+                    );
+
+                    if (leg2) {
+                      console.log('[UI DEBUG] Paired:', match.id, 'with', leg2.id);
+                      paired.add(match.id);
+                      paired.add(leg2.id);
+                      cards.push(
+                        <DoubleLegCard
+                          key={`double-${match.id}-${leg2.id}`}
+                          leg1={match}
+                          leg2={leg2}
+                          competitionId={competition.id}
+                          disabled={
+                            competition.competition_status === 'completed' ||
+                            isViewingFutureRound
+                          }
+                        />
+                      );
                     }
-                  />
-                ))}
+                  }
+
+                  // Second pass: render remaining unpaired matches as single cards
+                  for (const match of roundMatches) {
+                    if (paired.has(match.id)) continue;
+                    console.log('[UI DEBUG] Single card:', match.id, 'leg:', match.leg);
+                    cards.push(
+                      <ScoringCard
+                        key={match.id}
+                        match={match}
+                        competitionId={competition.id}
+                        disabled={
+                          competition.competition_status === 'completed' ||
+                          isViewingFutureRound
+                        }
+                      />
+                    );
+                  }
+
+                  console.log('[UI DEBUG] Total cards rendered:', cards.length);
+                  return cards;
+                })()}
               </div>
             )}
 

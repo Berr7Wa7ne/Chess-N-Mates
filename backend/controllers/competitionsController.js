@@ -257,6 +257,8 @@ exports.startCompetition = async (req, res) => {
       player_b_id: f.player_b_id,
       match_status: f.is_bye ? 'completed' : 'pending',
       is_bye: f.is_bye || false,
+      // Double-game round robin: leg = 2 for reverse fixtures
+      leg: f.leg || 1,
       // Round 1 deadline = 24 hours from competition start
       deadline: f.is_bye ? null : deadlineDate,
     }));
@@ -414,6 +416,7 @@ exports.advanceRound = async (req, res) => {
       player_a_id: f.player_a_id,
       player_b_id: f.player_b_id,
       match_status: 'pending',
+      leg: f.leg || 1,
       // Round deadline = 24 hours from when admin clicks advance
       deadline: deadlineDate,
     }));
@@ -544,6 +547,11 @@ exports.getStandings = async (req, res) => {
   if (matchError) {
     return res.status(400).json({ success: false, error: { message: matchError.message } });
   }
+
+  // DEBUG: Log match data
+  console.log('[STANDINGS DEBUG] Matches for competition:', id);
+  console.log('[STANDINGS DEBUG] Match count:', matches?.length || 0);
+  console.log('[STANDINGS DEBUG] Sample matches:', JSON.stringify(matches?.slice(0, 4), null, 2));
 
   const standings = computeStandings(participants, matches || []);
 
