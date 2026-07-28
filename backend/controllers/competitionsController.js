@@ -1,6 +1,7 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
 const { generateFixtures } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
+const { emitWebhook } = require('../services/webhookService');
 const {
   attachParticipantCounts,
   fetchParticipantsWithUsers,
@@ -200,6 +201,18 @@ exports.updateCompetition = async (req, res) => {
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
 
   const participant_count = await getParticipantCount(id);
+
+  // Emit webhook if competition_status changed
+  if (updates.competition_status) {
+    emitWebhook('competition.status_changed', {
+      competition_id: id,
+      previous_status: data.competition_status,
+      new_status: updates.competition_status,
+      name: data.name,
+      participant_count,
+    });
+  }
+
   res.json({ success: true, data: { ...data, participant_count } });
 };
 
@@ -284,6 +297,15 @@ exports.startCompetition = async (req, res) => {
   if (updateError) {
     return res.status(400).json({ success: false, error: { message: updateError.message } });
   }
+
+  // Emit webhook for competition started
+  emitWebhook('competition.started', {
+    competition_id: id,
+    name: competition.name,
+    round: 1,
+    fixtures_generated: matchRows.length,
+    participant_count: eligible.length,
+  });
 
   res.json({
     success: true,
@@ -432,6 +454,16 @@ exports.advanceRound = async (req, res) => {
     .from('competitions')
     .update({ current_round: nextRound })
     .eq('id', id);
+
+  // Emit webhook for round advanced
+  emitWebhook('round.advanced', {
+    competition_id: id,
+    name: competition.name,
+    previous_round: currentRound,
+    current_round: nextRound,
+    fixtures_generated: matchRows.length,
+    unresolved_matches: unresolved.length,
+  });
 
   res.json({
     success: true,

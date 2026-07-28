@@ -6,6 +6,8 @@ const usersRoutes = require('./routes/users');
 const competitionsRoutes = require('./routes/competitions');
 const matchesRoutes = require('./routes/matches');
 const disputesRoutes = require('./routes/disputes');
+const botRoutes = require('./routes/bot');
+const { validateBotApiKey } = require('./middleware/auth');
 
 const app = express();
 
@@ -14,13 +16,28 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Public routes (no auth required)
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/competitions', competitionsRoutes);
 app.use('/api/v1/matches', matchesRoutes);
 app.use('/api/v1/disputes', disputesRoutes);
 
+// Bot routes (require BOT_API_KEY auth)
+app.use('/api/v1/bot', validateBotApiKey, botRoutes);
+
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to the Chess Community API' });
+});
+
+app.get('/api/v1/health', (req, res) => {
+  res.json({ 
+    success: true, 
+    data: { 
+      status: 'ok', 
+      time: new Date().toISOString(),
+      version: '1.0.0'
+    } 
+  });
 });
 
 const PORT = Number(process.env.PORT) || 3001;

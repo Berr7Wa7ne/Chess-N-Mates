@@ -1,6 +1,7 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
 const { timestamp } = require('../utils/competitionHelpers');
 const { verifyGameAndDetermineWinner } = require('../services/chessComService');
+const { emitWebhook } = require('../services/webhookService');
 
 exports.getCompetitionMatches = async (req, res) => {
   const competitionId = req.params.competition_id || req.params.id;
@@ -214,6 +215,15 @@ exports.submitResult = async (req, res) => {
   // Update participant scores immediately with the verified result
   await updateParticipantScores(match.competition_id, { ...match, result_winner: verifiedResult });
 
+  // Emit webhook for match result submitted (auto-scored via verification)
+  emitWebhook('match.result_submitted', {
+    match_id: id,
+    competition_id: match.competition_id,
+    result_winner: verifiedResult,
+    auto_scored: true,
+    submitted_by: user_id,
+  });
+
   res.json({
     success: true,
     data: {
@@ -255,6 +265,14 @@ exports.confirmResult = async (req, res) => {
 
   // Update participant scores with 2-1-0 system
   await updateParticipantScores(match.competition_id, match);
+
+  // Emit webhook for match result confirmed by admin
+  emitWebhook('match.result_confirmed', {
+    match_id: id,
+    competition_id: match.competition_id,
+    result_winner: match.result_winner,
+    confirmed: true,
+  });
 
   res.json({
     success: true,
@@ -408,6 +426,15 @@ exports.forceResult = async (req, res) => {
     // Audit failure must never block the main operation
     console.error('Audit record creation failed:', auditError);
   }
+
+  // Emit webhook for force result
+  emitWebhook('match.force_result', {
+    match_id: id,
+    competition_id: match.competition_id,
+    result_winner,
+    reason: reason || null,
+    forced: true,
+  });
 
   res.json({ success: true, data });
 };

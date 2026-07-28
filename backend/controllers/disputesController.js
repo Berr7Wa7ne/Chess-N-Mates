@@ -1,5 +1,6 @@
 const { supabaseAdmin } = require('../config/supabase')
 const { forceResult } = require('./matchesController')
+const { emitWebhook } = require('../services/webhookService')
 
 const timestamp = () => new Date().toISOString()
 
@@ -69,6 +70,17 @@ exports.createDispute = async (req, res) => {
     .select()
     .single()
   if (error) return res.status(400).json({ success: false, error: { message: error.message } })
+
+  // Emit webhook for dispute created
+  emitWebhook('dispute.created', {
+    dispute_id: data.id,
+    match_id,
+    competition_id,
+    raised_by_user_id,
+    reason,
+    category: category || 'other',
+  })
+
   res.status(201).json({ success: true, data })
 }
 
@@ -132,6 +144,17 @@ exports.resolveDispute = async (req, res) => {
     .select()
     .single()
   if (error) return res.status(400).json({ success: false, error: { message: error.message } })
+
+  // Emit webhook for dispute resolved
+  emitWebhook('dispute.resolved', {
+    dispute_id: id,
+    match_id: dispute.match_id,
+    competition_id: dispute.competition_id || data.competition_id,
+    admin_decision,
+    new_result_winner: new_result_winner || null,
+    admin_notes: admin_notes || null,
+  })
+
   res.json({ success: true, data })
 }
 
