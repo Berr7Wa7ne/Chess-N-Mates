@@ -760,4 +760,94 @@ Before launching bot:
 
 ---
 
+---
+
+## 📋 COMPLETE BOT COMMAND REFERENCE
+
+All endpoints are at `/api/v1/bot/*` and require `Authorization: Bearer <BOT_API_KEY>` header.
+All endpoints accept `phone_number` as the primary user identifier (the bot knows this from the LID→phone mapping).
+Alternatively, `whatsapp_id` or `lid` can be used.
+
+### 👤 PLAYER COMMANDS
+
+| Bot Command | API Endpoint | Body Params |
+|---|---|---|
+| `reg-chess <username>` | `POST /bot/join` | `{ phone_number, chess_username? }` |
+| `my-matches` | `GET /bot/my-matches/:whatsappId` | URL param: whatsappId |
+| `result <game-link>` | `POST /bot/submit-result` | `{ phone_number, chess_game_link, match_id? }` |
+| `fixtures` | `GET /bot/fixtures` | Query: `{ phone_number, competition_id?, round?, status? }` |
+| `standings` | `GET /bot/standings` | Query: `{ competition_id? }` |
+| `withdraw` | `POST /bot/withdraw` | `{ phone_number, competition_id? }` |
+| `dispute <match_id> <reason>` | `POST /bot/file-dispute` | `{ phone_number, match_id, reason, description? }` |
+| `status` | `GET /bot/status` | None |
+| `Chess.com <username>` | `POST /bot/lookup-user` | `{ chess_username }` |
+
+### 🛡️ ADMIN COMMANDS
+
+| Bot Command | API Endpoint | Body Params |
+|---|---|---|
+| `comp-start round-robin-single` | `POST /bot/comp-create` | `{ phone_number, command, name?, time_control?, min_elo?, max_elo?, max_participants? }` |
+| `comp-begin` | `POST /bot/comp-begin` | `{ phone_number, competition_id? }` |
+| `comp-next-round` | `POST /bot/comp-advance` | `{ phone_number, competition_id?, include_pending_matches? }` |
+| `comp-delete <id>` | `POST /bot/comp-delete` | `{ phone_number, competition_id }` |
+| `force-result <match_id> <a/b/draw>` | `POST /bot/force-result` | `{ phone_number, match_id, result_winner, reason?, is_absent?, absence_side? }` |
+| `mark-absent <match_id> <a/b/both>` | `POST /bot/mark-absent` | `{ phone_number, match_id, absence_side }` |
+| `extend <match_id> <hours>` | `POST /bot/extend-deadline` | `{ phone_number, match_id, hours }` |
+| `admin-score <match_id> <a/b/draw>` | `POST /bot/admin-score` | `{ phone_number, match_id, result_winner, is_absent?, absence_side? }` |
+| `disputes` | `GET /bot/disputes` | Query: `{ phone_number, competition_id?, status? }` |
+| `resolve-dispute <id> <decision>` | `POST /bot/resolve-dispute` | `{ phone_number, dispute_id, admin_decision, admin_notes?, new_result_winner? }` |
+| `reject-dispute <id>` | `POST /bot/reject-dispute` | `{ phone_number, dispute_id, admin_notes? }` |
+
+### 🎮 COMP-START COMMAND FORMATS
+
+| Command String | Tournament Type | Match Length |
+|---|---|---|
+| `round-robin-single` | Round Robin | Single Game |
+| `round-robin-double` | Round Robin | Double Game (home & away) |
+| `swiss-single` | Swiss | Single Game |
+| `swiss-double` | Swiss | Double Game |
+| `knockout-single` | Knockout | Single Game |
+| `knockout-best-of-3` | Knockout | Best of 3 |
+| `knockout-best-of-5` | Knockout | Best of 5 |
+
+### 📝 COMP-START DEFAULTS
+
+When creating a competition via `comp-start`, these defaults are used:
+- **time_control**: `5+0` (5 minutes, no increment)
+- **min_elo**: `900`
+- **max_elo**: `3000`
+- **max_participants**: `50`
+- **registration_close_hours**: `24` (registration closes 24 hours from now)
+- **start_in_hours**: `24` (competition starts 24 hours from now)
+- **duration_days**: `30` (competition runs for 30 days)
+- **platform**: `chess.com`
+- **timezone**: `UTC+1:00`
+- **competition_status**: `open_registration` (skips draft, immediately open)
+
+All defaults can be overridden by passing the corresponding parameter in the request body.
+
+### 🔄 TYPICAL TOURNAMENT FLOW
+
+1. **Admin**: `comp-start round-robin-single` → Creates competition, opens registration
+2. **Players**: `reg-chess <username>` → Join the competition
+3. **Admin**: `comp-begin` → Generates fixtures, starts Round 1
+4. **Players**: `result <game-link>` → Submit game results (auto-verified via chess.com API)
+5. **Admin**: `comp-next-round` → Advances to Round 2 (generates new fixtures)
+6. Repeat steps 4-5 until all rounds complete
+7. **Anyone**: `standings` → View current standings
+
+### 🔔 WEBHOOK EVENTS
+
+The backend emits these webhook events to the bot:
+- `competition.created` — New competition created
+- `competition.started` — Tournament started (fixtures generated)
+- `round.advanced` — Round advanced
+- `match.result_submitted` — Player submitted result (auto-scored)
+- `match.force_result` — Admin forced result
+- `match.result_confirmed` — Admin confirmed result
+- `dispute.created` — Player filed dispute
+- `dispute.resolved` — Admin resolved dispute
+
+---
+
 **END OF BOT INTEGRATION GUIDE**
