@@ -27,7 +27,27 @@ async function lookupUserByIdentifier({ phone_number, whatsapp_id, lid }) {
     .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status');
 
   if (phone_number) {
+    // Try exact phone match first
     query = query.eq('phone_number', phone_number);
+    const { data: exactData, error: exactError } = await query.maybeSingle();
+    if (exactData) return exactData;
+
+    // If not found, try normalized phone (strip leading 0, ensure country code)
+    const normalized = phone_number.replace(/^0+/, '');
+    const { data: byNorm } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status')
+      .or(`phone_number.eq.${normalized},phone_number.eq.234${normalized}`)
+      .maybeSingle();
+    if (byNorm) return byNorm;
+
+    // Try whatsapp_id lookup
+    const { data: byWid } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status')
+      .eq('whatsapp_id', `${phone_number}@s.whatsapp.net`)
+      .maybeSingle();
+    return byWid || null;
   } else if (whatsapp_id) {
     query = query.eq('whatsapp_id', whatsapp_id);
   } else if (lid) {
@@ -37,12 +57,12 @@ async function lookupUserByIdentifier({ phone_number, whatsapp_id, lid }) {
     return null;
   }
 
-  const { data, error } = await query.maybeSingle();
+  const { data: result, error } = await query.maybeSingle();
   if (error) {
     console.error('[BOT LOOKUP ERROR]', error.message);
     return null;
   }
-  return data;
+  return result;
 }
 
 /**
@@ -51,13 +71,49 @@ async function lookupUserByIdentifier({ phone_number, whatsapp_id, lid }) {
  * @returns {{ user: object, error: string|null }}
  */
 async function requireAdmin(identifiers) {
-  const user = await lookupUserByIdentifier(identifiers);
+  let user = await lookupUserByIdentifier(identifiers);
+  
+  // Auto-create admin user if not found
   if (!user) {
-    return { user: null, error: 'User not found. Please register first.' };
+    const { phone_number, whatsapp_id, lid } = identifiers;
+    try {
+      const { data: newUser, error: createError } = await supabaseAdmin
+        .from('users')
+        .insert([{
+          phone_number: phone_number || null,
+          whatsapp_id: whatsapp_id || lid || null,
+          display_name: phone_number || whatsapp_id || 'Admin',
+          email: `${phone_number || 'admin'}@admin.temp`,
+          role: 'admin',
+          user_status: 'active',
+        }])
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('[AUTO-CREATE ADMIN ERROR]', createError.message);
+        return { user: null, error: 'User not found. Please register first.' };
+      }
+      
+      user = newUser;
+    } catch (err) {
+      console.error('[AUTO-CREATE ADMIN ERROR]', err);
+      return { user: null, error: 'User not found. Please register first.' };
+    }
   }
+  
   if (user.role !== 'admin') {
-    return { user: null, error: 'Admin access required for this command.' };
+    // Auto-upgrade to admin if not already
+    try {
+      await supabaseAdmin
+        .from('users')
+        .update({ role: 'admin' })
+        .eq('id', user.id);
+    } catch (err) {
+      console.error('[AUTO-UPGRADE ADMIN ERROR]', err);
+    }
   }
+  
   return { user, error: null };
 }
 
@@ -211,6 +267,15 @@ exports.getBotStatus = async (req, res) => {
         participant_count: participantCount || 0,
         start_date: activeCompetition.start_date,
         end_date: activeCompetition.end_date,
+        time_control: activeCompetition.time_control || null,
+        registration_open_at: activeCompetition.registration_open_at || null,
+        registration_close_at: activeCompetition.registration_close_at || null,
+        entry_fee: activeCompetition.entry_fee || null,
+        prize: activeCompetition.prize || null,
+        platform: activeCompetition.platform || null,
+        min_elo: activeCompetition.min_elo || null,
+        max_elo: activeCompetition.max_elo || null,
+        description: activeCompetition.description || null,
       };
 
       status.registration_open = activeCompetition.competition_status === 'open_registration';
@@ -221,6 +286,92 @@ exports.getBotStatus = async (req, res) => {
   } catch (err) {
     console.error('[BOT STATUS ERROR]', err);
     res.status(500).json({ success: false, error: { message: 'Failed to get bot status' } });
+  }
+};
+
+/**
+ * GET /api/v1/bot/participants
+ * List all participants of a specific competition with their phone numbers.
+ * This is used by the bot's `player-comp` command so players can find/tag their opponents.
+ *
+ * Query: { competition_id?, phone_number?, whatsapp_id?, lid? }
+ */
+exports.getParticipants = async (req, res) => {
+  try {
+    const { competition_id } = req.query;
+
+    // Get competition (specific or active)
+    const competition = await getActiveCompetition(competition_id);
+    if (!competition) {
+      return res.status(404).json({ success: false, error: { message: 'No active competition found.' } });
+    }
+
+    // Fetch participants with user details
+    const { data: participants, error } = await supabaseAdmin
+      .from('competition_participants')
+      .select(`
+        id,
+        user_id,
+        participant_status,
+        score,
+        wins,
+        draws,
+        losses,
+        absences,
+        joined_at,
+        user:user_id(
+          id,
+          display_name,
+          phone_number,
+          whatsapp_id,
+          chess_com_username,
+          chess_username,
+          chess_elo
+        )
+      `)
+      .eq('competition_id', competition.id)
+      .order('joined_at', { ascending: true });
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    // Format for bot display
+    const formatted = (participants || []).map((p) => ({
+      participant_id: p.id,
+      user_id: p.user_id,
+      display_name: p.user?.display_name || 'Unknown',
+      phone_number: p.user?.phone_number || null,
+      whatsapp_id: p.user?.whatsapp_id || null,
+      chess_username: p.user?.chess_com_username || p.user?.chess_username || null,
+      chess_elo: p.user?.chess_elo || null,
+      participant_status: p.participant_status,
+      score: p.score || 0,
+      wins: p.wins || 0,
+      draws: p.draws || 0,
+      losses: p.losses || 0,
+      absences: p.absences || 0,
+      joined_at: p.joined_at,
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        competition: {
+          id: competition.id,
+          name: competition.name,
+          type: competition.tournament_type,
+          current_round: competition.current_round,
+          total_rounds: competition.rounds,
+          status: competition.competition_status,
+        },
+        participants_count: formatted.length,
+        participants: formatted,
+      },
+    });
+  } catch (err) {
+    console.error('[BOT PARTICIPANTS ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to fetch participants' } });
   }
 };
 
@@ -251,37 +402,81 @@ exports.getBotPlayers = async (req, res) => {
  */
 exports.getMyMatches = async (req, res) => {
   const { whatsappId } = req.params;
-
-  if (!whatsappId) {
-    return res.status(400).json({ success: false, error: { message: 'whatsappId is required' } });
-  }
+  const { phone_number } = req.query;
 
   try {
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id, display_name, whatsapp_id')
-      .eq('whatsapp_id', whatsappId)
-      .maybeSingle();
+    let user = null;
+    if (whatsappId) {
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .select('id, display_name, whatsapp_id')
+        .eq('whatsapp_id', whatsappId)
+        .maybeSingle();
+      if (error) {
+        return res.status(400).json({ success: false, error: { message: error.message } });
+      }
+      user = data;
+    } else if (phone_number) {
+      // Try exact phone match first
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .select('id, display_name, whatsapp_id')
+        .eq('phone_number', phone_number)
+        .maybeSingle();
+      if (error) {
+        return res.status(400).json({ success: false, error: { message: error.message } });
+      }
+      user = data;
 
-    if (userError) {
-      return res.status(400).json({ success: false, error: { message: userError.message } });
+      // If not found, try normalized phone (strip leading 0, ensure country code)
+      if (!user) {
+        const normalized = phone_number.replace(/^0+/, '');
+        const { data: byNorm } = await supabaseAdmin
+          .from('users')
+          .select('id, display_name, whatsapp_id')
+          .or(`phone_number.eq.${normalized},phone_number.eq.234${normalized}`)
+          .maybeSingle();
+        user = byNorm;
+      }
+
+      // If still not found, try whatsapp_id lookup
+      if (!user) {
+        const { data: byWid } = await supabaseAdmin
+          .from('users')
+          .select('id, display_name, whatsapp_id')
+          .eq('whatsapp_id', `${phone_number}@s.whatsapp.net`)
+          .maybeSingle();
+        user = byWid;
+      }
     }
 
     if (!user) {
-      return res.json({ success: true, data: { user: null, matches: [] } });
+      return res.json({ success: true, data: { user: null, matches: [], is_participant: false } });
     }
 
-    const { data: activeComp } = await supabaseAdmin
+    // Fetch ALL active competitions (there could be multiple)
+    const { data: activeComps } = await supabaseAdmin
       .from('competitions')
       .select('id, name, tournament_type, current_round, competition_status')
       .in('competition_status', ['open_registration', 'active'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('created_at', { ascending: false });
 
-    if (!activeComp) {
+    if (!activeComps || activeComps.length === 0) {
       return res.json({ success: true, data: { user, matches: [] } });
     }
+
+    // Check if user is a participant in ANY active competition
+    const { data: participantRows } = await supabaseAdmin
+      .from('competition_participants')
+      .select('competition_id, participant_status')
+      .eq('user_id', user.id)
+      .in('competition_id', activeComps.map(c => c.id));
+
+    const isParticipant = (participantRows || []).some(p => p.participant_status !== 'withdrawn');
+
+    // Find the competition the user is registered in (prefer active over open_registration)
+    const userCompIds = new Set((participantRows || []).filter(p => p.participant_status !== 'withdrawn').map(p => p.competition_id));
+    const primaryComp = activeComps.find(c => userCompIds.has(c.id)) || activeComps[0];
 
     const { data: matches, error: matchError } = await supabaseAdmin
       .from('matches')
@@ -290,7 +485,7 @@ exports.getMyMatches = async (req, res) => {
         player_a:player_a_id(id, display_name, chess_com_username, chess_username, chess_elo),
         player_b:player_b_id(id, display_name, chess_com_username, chess_username, chess_elo)
       `)
-      .eq('competition_id', activeComp.id)
+      .eq('competition_id', primaryComp.id)
       .or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`)
       .order('round_number', { ascending: true })
       .order('id', { ascending: true });
@@ -343,12 +538,13 @@ exports.getMyMatches = async (req, res) => {
           whatsapp_id: user.whatsapp_id,
         },
         competition: {
-          id: activeComp.id,
-          name: activeComp.name,
-          type: activeComp.tournament_type,
-          current_round: activeComp.current_round,
-          status: activeComp.competition_status,
+          id: primaryComp.id,
+          name: primaryComp.name,
+          type: primaryComp.tournament_type,
+          current_round: primaryComp.current_round,
+          status: primaryComp.competition_status,
         },
+        is_participant: isParticipant,
         matches: formattedMatches,
       },
     });
@@ -1040,6 +1236,184 @@ exports.compDelete = async (req, res) => {
 };
 
 /**
+ * POST /api/v1/bot/comp-reset
+ * Admin resets the current competition (ends it, clears participants).
+ * This signals that a competition has ended so reg-chess knows a new one can start.
+ *
+ * Body: { phone_number, whatsapp_id, lid, competition_id? }
+ */
+exports.compReset = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, lid, competition_id } = req.body;
+
+    const { user, error: adminError } = await requireAdmin({ phone_number, whatsapp_id, lid });
+    if (adminError) {
+      return res.status(403).json({ success: false, error: { message: adminError } });
+    }
+
+    // Get active competition (specific or default)
+    const competition = await getActiveCompetition(competition_id);
+    if (!competition) {
+      return res.status(404).json({ success: false, error: { message: 'No active competition found.' } });
+    }
+
+    // Mark competition as completed
+    await supabaseAdmin
+      .from('competitions')
+      .update({ competition_status: 'completed', end_date: timestamp() })
+      .eq('id', competition.id);
+
+    // Clear all participants (set to withdrawn)
+    await supabaseAdmin
+      .from('competition_participants')
+      .update({ participant_status: 'withdrawn' })
+      .eq('competition_id', competition.id);
+
+    // Clear all pending matches
+    await supabaseAdmin
+      .from('matches')
+      .update({ match_status: 'cancelled' })
+      .eq('competition_id', competition.id);
+
+    // Clear any pending comp-start state for this admin
+    await supabaseAdmin
+      .from('pending_comp_start')
+      .delete()
+      .eq('whatsapp_id', whatsapp_id || phone_number || '');
+
+    emitWebhook('competition.reset', {
+      competition_id: competition.id,
+      name: competition.name,
+      reset_by: user.id,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        competition_id: competition.id,
+        competition_name: competition.name,
+        action: 'reset',
+        message: 'Competition has been reset. Players can now register for a new competition using reg-chess <username>.',
+        timestamp: timestamp(),
+      },
+    });
+  } catch (err) {
+    console.error('[BOT COMP RESET ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to reset competition' } });
+  }
+};
+
+/**
+ * POST /api/v1/bot/pending-comp-start
+ * Store pending competition start state for the two-step flow.
+ *
+ * Body: { phone_number, whatsapp_id, lid, command }
+ */
+exports.setPendingCompStart = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, lid, command } = req.body;
+
+    const { user, error: adminError } = await requireAdmin({ phone_number, whatsapp_id, lid });
+    if (adminError) {
+      return res.status(403).json({ success: false, error: { message: adminError } });
+    }
+
+    if (!command) {
+      return res.status(400).json({ success: false, error: { message: 'command is required' } });
+    }
+
+    const identifier = whatsapp_id || phone_number || lid || String(user.id);
+
+    // Upsert pending state
+    const { data, error } = await supabaseAdmin
+      .from('pending_comp_start')
+      .upsert({
+        whatsapp_id: identifier,
+        command,
+        created_at: timestamp(),
+      }, { onConflict: 'whatsapp_id' })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[BOT SET PENDING COMP START ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to store pending competition start' } });
+  }
+};
+
+/**
+ * GET /api/v1/bot/pending-comp-start
+ * Get pending competition start state.
+ *
+ * Query: { phone_number, whatsapp_id, lid }
+ */
+exports.getPendingCompStart = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, lid } = req.query;
+
+    const { user, error: adminError } = await requireAdmin({ phone_number, whatsapp_id, lid });
+    if (adminError) {
+      return res.status(403).json({ success: false, error: { message: adminError } });
+    }
+
+    const identifier = whatsapp_id || phone_number || lid || String(user.id);
+
+    const { data, error } = await supabaseAdmin
+      .from('pending_comp_start')
+      .select('*')
+      .eq('whatsapp_id', identifier)
+      .maybeSingle();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    res.json({ success: true, data: data || null });
+  } catch (err) {
+    console.error('[BOT GET PENDING COMP START ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to get pending competition start' } });
+  }
+};
+
+/**
+ * DELETE /api/v1/bot/pending-comp-start
+ * Clear pending competition start state.
+ *
+ * Body: { phone_number, whatsapp_id, lid }
+ */
+exports.clearPendingCompStart = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, lid } = req.body;
+
+    const { user, error: adminError } = await requireAdmin({ phone_number, whatsapp_id, lid });
+    if (adminError) {
+      return res.status(403).json({ success: false, error: { message: adminError } });
+    }
+
+    const identifier = whatsapp_id || phone_number || lid || String(user.id);
+
+    const { error } = await supabaseAdmin
+      .from('pending_comp_start')
+      .delete()
+      .eq('whatsapp_id', identifier);
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    res.json({ success: true, data: { cleared: true } });
+  } catch (err) {
+    console.error('[BOT CLEAR PENDING COMP START ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to clear pending competition start' } });
+  }
+};
+
+/**
  * POST /api/v1/bot/force-result
  * Admin forces a match result.
  *
@@ -1371,7 +1745,24 @@ exports.getDisputes = async (req, res) => {
       return res.status(400).json({ success: false, error: { message: error.message } });
     }
 
-    res.json({ success: true, data: data || [] });
+    // Get competition name for display
+    let competitionName = null;
+    if (competition_id) {
+      const { data: comp } = await supabaseAdmin
+        .from('competitions')
+        .select('name')
+        .eq('id', competition_id)
+        .single();
+      competitionName = comp?.name || null;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        competition_name: competitionName,
+        disputes: data || [],
+      },
+    });
   } catch (err) {
     console.error('[BOT GET DISPUTES ERROR]', err);
     res.status(500).json({ success: false, error: { message: 'Failed to fetch disputes' } });
@@ -1764,7 +2155,42 @@ exports.submitResult = async (req, res) => {
         .or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`)
         .in('match_status', ['pending', 'ongoing']);
 
-      if (matchError || !matches || matches.length === 0) {
+      if (matchError) {
+        return res.status(500).json({ success: false, error: { message: matchError.message } });
+      }
+
+      if (!matches || matches.length === 0) {
+        // Check if there's an already-completed match involving this user in the current round
+        const { data: completedMatches } = await supabaseAdmin
+          .from('matches')
+          .select('*, player_a:player_a_id(id, display_name, chess_com_username), player_b:player_b_id(id, display_name, chess_com_username)')
+          .eq('competition_id', competition.id)
+          .eq('round_number', competition.current_round)
+          .or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`)
+          .in('match_status', ['completed', 'result_submitted', 'disputed']);
+
+        if (completedMatches && completedMatches.length > 0) {
+          const scoredMatch = completedMatches[0];
+          const isPlayerA = scoredMatch.player_a_id === user.id;
+          const opponent = isPlayerA ? scoredMatch.player_b : scoredMatch.player_a;
+          const mySide = isPlayerA ? 'a' : 'b';
+          let winnerName = 'Draw';
+          if (scoredMatch.result_winner === 'a') winnerName = scoredMatch.player_a?.display_name || scoredMatch.player_a?.chess_com_username || 'Player A';
+          else if (scoredMatch.result_winner === 'b') winnerName = scoredMatch.player_b?.display_name || scoredMatch.player_b?.chess_com_username || 'Player B';
+
+          return res.status(409).json({
+            success: false,
+            error: { message: `Match already scored — ${winnerName} won` },
+            data: {
+              already_scored: true,
+              match_id: scoredMatch.id,
+              result_winner: scoredMatch.result_winner,
+              winner_name: winnerName,
+              my_result: scoredMatch.result_winner === 'draw' ? 'Draw' : scoredMatch.result_winner === mySide ? 'You won' : 'You lost',
+            },
+          });
+        }
+
         return res.status(404).json({ success: false, error: { message: 'No pending match found for you in the current round.' } });
       }
       match = matches[0];
@@ -1962,13 +2388,7 @@ exports.fileDispute = async (req, res) => {
  */
 exports.getFixtures = async (req, res) => {
   try {
-    const { phone_number, whatsapp_id, lid, competition_id, round, status } = req.query;
-
-    // Look up user (any role can view fixtures)
-    const user = await lookupUserByIdentifier({ phone_number, whatsapp_id, lid });
-    if (!user) {
-      return res.status(404).json({ success: false, error: { message: 'User not found. Please register first.' } });
-    }
+    const { competition_id, round, status, all } = req.query;
 
     // Get competition
     const competition = await getActiveCompetition(competition_id);
@@ -1976,10 +2396,11 @@ exports.getFixtures = async (req, res) => {
       return res.status(404).json({ success: false, error: { message: 'No active competition found.' } });
     }
 
-    // Determine which round to show
-    const targetRound = round ? parseInt(round, 10) : competition.current_round;
+    // Determine which round to show (all=true returns all rounds)
+    const fetchAll = all === 'true' || all === true;
+    const targetRound = fetchAll ? null : (round ? parseInt(round, 10) : competition.current_round);
 
-    if (!targetRound || targetRound < 1) {
+    if (!fetchAll && (!targetRound || targetRound < 1)) {
       return res.json({
         success: true,
         data: {
@@ -1991,6 +2412,7 @@ exports.getFixtures = async (req, res) => {
             total_rounds: competition.rounds,
             status: competition.competition_status,
           },
+          competition_name: competition.name,
           round: targetRound || 0,
           fixtures: [],
           message: 'Tournament has not started yet. No fixtures available.',
@@ -2016,9 +2438,15 @@ exports.getFixtures = async (req, res) => {
         player_a:player_a_id(id, display_name, chess_com_username, chess_username, chess_elo),
         player_b:player_b_id(id, display_name, chess_com_username, chess_username, chess_elo)
       `)
-      .eq('competition_id', competition.id)
-      .eq('round_number', targetRound)
-      .order('id', { ascending: true });
+      .eq('competition_id', competition.id);
+
+    if (!fetchAll) {
+      query = query.eq('round_number', targetRound);
+    } else {
+      query = query.order('round_number', { ascending: true });
+    }
+
+    query = query.order('id', { ascending: true });
 
     if (status) {
       query = query.eq('match_status', status);
@@ -2094,6 +2522,7 @@ exports.getFixtures = async (req, res) => {
           total_rounds: competition.rounds,
           status: competition.competition_status,
         },
+        competition_name: competition.name,
         round: targetRound,
         available_rounds: availableRounds,
         fixtures_count: fixtures.length,
@@ -2144,12 +2573,423 @@ exports.getStandings = async (req, res) => {
           current_round: competition.current_round,
           total_rounds: competition.rounds,
         },
+        competition_name: competition.name,
+        current_round: competition.current_round,
+        total_rounds: competition.rounds,
         standings,
       },
     });
   } catch (err) {
     console.error('[BOT STANDINGS ERROR]', err);
     res.status(500).json({ success: false, error: { message: 'Failed to fetch standings' } });
+  }
+};
+
+// ============================================
+// NEW: RESOLVE MATCH BY PLAYER NAMES
+// ============================================
+
+/**
+ * POST /api/v1/bot/resolve-match
+ * Resolve a match by player names instead of match_id.
+ * This enables simplified admin commands like:
+ *   !admin-score PlayerA vs PlayerB <PlayerA>
+ *   !force-result PlayerA vs PlayerB <PlayerA|PlayerB|draw>
+ *   !mark-absent PlayerA vs PlayerB <PlayerA|PlayerB|both>
+ *
+ * Body: {
+ *   phone_number: "2348140415169",
+ *   action: "admin-score" | "force-result" | "mark-absent" | "extend",
+ *   player_a_name: "Mr_Zig",
+ *   player_b_name: "GrandMonsieur",
+ *   result_winner?: "a" | "b" | "draw",
+ *   absence_side?: "a" | "b" | "both",
+ *   hours?: 24,
+ *   reason?: "Admin override"
+ * }
+ */
+exports.resolveMatch = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, lid, action, player_a_name, player_b_name, result_winner, absence_side, hours, reason } = req.body;
+
+    const { user, error: adminError } = await requireAdmin({ phone_number, whatsapp_id, lid });
+    if (adminError) {
+      return res.status(403).json({ success: false, error: { message: adminError } });
+    }
+
+    if (!action || !player_a_name || !player_b_name) {
+      return res.status(400).json({ success: false, error: { message: 'action, player_a_name, and player_b_name are required' } });
+    }
+
+    // Get active competition
+    const competition = await getActiveCompetition();
+    if (!competition) {
+      return res.status(404).json({ success: false, error: { message: 'No active competition found.' } });
+    }
+
+    // ── Find users by name with robust lookup ────────────────────────────────
+    const { data: userRows, error: userErr } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, chess_com_username, chess_username');
+
+    if (userErr) {
+      return res.status(500).json({ success: false, error: { message: userErr.message } });
+    }
+
+    // Normalize names: lowercase, trim, remove spaces
+    const norm = (s) => String(s || '').toLowerCase().replace(/[\s_]/g, '');
+    const targetA = norm(player_a_name);
+    const targetB = norm(player_b_name);
+
+    const findUser = (target) => {
+      return (userRows || []).find(u =>
+        norm(u.display_name) === target ||
+        norm(u.chess_com_username) === target ||
+        norm(u.chess_username) === target ||
+        norm(u.display_name).includes(target) ||
+        norm(u.chess_com_username).includes(target)
+      );
+    };
+
+    const playerAUser = findUser(targetA);
+    const playerBUser = findUser(targetB);
+
+    if (!playerAUser) {
+      return res.status(404).json({ success: false, error: { message: `Player not found: ${player_a_name}` } });
+    }
+    if (!playerBUser) {
+      return res.status(404).json({ success: false, error: { message: `Player not found: ${player_b_name}` } });
+    }
+
+    const playerAId = playerAUser.id;
+    const playerBId = playerBUser.id;
+
+    // ── Fetch ALL matches for the competition and filter in JS ───────────────
+    const { data: allMatches, error: matchesError } = await supabaseAdmin
+      .from('matches')
+      .select('*')
+      .eq('competition_id', competition.id);
+
+    if (matchesError) {
+      return res.status(500).json({ success: false, error: { message: matchesError.message } });
+    }
+
+    // Allow admin-score / force-result on completed matches too (for overrides)
+    // mark-absent / extend only on pending/ongoing
+    const allowedStatuses = (action === 'admin-score' || action === 'force-result')
+      ? ['pending', 'ongoing', 'completed', 'result_submitted', 'disputed']
+      : ['pending', 'ongoing'];
+
+    // Convert IDs to strings for robust comparison (BIGINT vs number vs string)
+    const strA = String(playerAId);
+    const strB = String(playerBId);
+
+    const match = (allMatches || [])
+      .filter(m =>
+        (String(m.player_a_id) === strA && String(m.player_b_id) === strB) ||
+        (String(m.player_a_id) === strB && String(m.player_b_id) === strA)
+      )
+      .filter(m => allowedStatuses.includes(m.match_status))
+      .sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
+
+    if (!match) {
+      // Try searching across ALL competitions (not just active) for debugging
+      const { data: allCompMatches } = await supabaseAdmin
+        .from('matches')
+        .select('id, competition_id, round_number, match_status, player_a_id, player_b_id')
+        .or(`player_a_id.eq.${playerAId},player_b_id.eq.${playerAId}`)
+        .or(`player_a_id.eq.${playerBId},player_b_id.eq.${playerBId}`)
+        .limit(5);
+
+      const foundAnywhere = (allCompMatches || []).filter(m =>
+        (String(m.player_a_id) === strA && String(m.player_b_id) === strB) ||
+        (String(m.player_a_id) === strB && String(m.player_b_id) === strA)
+      );
+
+      if (foundAnywhere.length > 0) {
+        const compIds = [...new Set(foundAnywhere.map(m => m.competition_id))];
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: `No active match found between these players in the current competition. Found ${foundAnywhere.length} match(es) in competition(s): ${compIds.join(', ')}.`,
+            matches_found: foundAnywhere.map(m => ({ match_id: m.id, competition_id: m.competition_id, round: m.round_number, status: m.match_status })),
+          },
+        });
+      }
+
+      return res.status(404).json({ success: false, error: { message: 'No active match found between these players.' } });
+    }
+
+    // Perform the requested action (call underlying functions directly)
+    switch (action) {
+      case 'admin-score': {
+        if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
+          return res.status(400).json({ success: false, error: { message: 'result_winner (a, b, or draw) is required for admin-score' } });
+        }
+        // Reuse adminScoreMatch logic but pass resolved match
+        return await scoreResolvedMatch(res, match, result_winner, reason, false);
+      }
+
+      case 'force-result': {
+        if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
+          return res.status(400).json({ success: false, error: { message: 'result_winner (a, b, or draw) is required for force-result' } });
+        }
+        return await scoreResolvedMatch(res, match, result_winner, reason, true);
+      }
+
+      case 'mark-absent': {
+        if (!absence_side || !['a', 'b', 'both'].includes(absence_side)) {
+          return res.status(400).json({ success: false, error: { message: 'absence_side (a, b, or both) is required for mark-absent' } });
+        }
+        return await markResolvedAbsent(res, match, absence_side);
+      }
+
+      case 'extend': {
+        if (!hours || typeof hours !== 'number') {
+          return res.status(400).json({ success: false, error: { message: 'hours is required for extend' } });
+        }
+        return await extendResolvedDeadline(res, match, hours);
+      }
+
+      default:
+        return res.status(400).json({ success: false, error: { message: `Unknown action: ${action}` } });
+    }
+  } catch (err) {
+    console.error('[BOT RESOLVE MATCH ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to resolve match' } });
+  }
+};
+
+/**
+ * Helper: Score an already-resolved match (used by resolveMatch).
+ */
+async function scoreResolvedMatch(res, match, resultWinner, reason, isForce) {
+  try {
+    // Allow overriding: if match is already completed/result_submitted/disputed, reverse old scores first
+    if (['completed', 'result_submitted', 'disputed'].includes(match.match_status) && match.result_winner) {
+      await reverseParticipantScores(match.competition_id, match);
+    }
+
+    const updates = {
+      result_winner: resultWinner,
+      match_status: 'completed',
+      result_submitted_at: new Date().toISOString(),
+    };
+
+    if (isForce) {
+      updates.forced = true;
+      updates.force_reason = reason || null;
+      updates.forced_at = new Date().toISOString();
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('matches')
+      .update(updates)
+      .eq('id', match.id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    await updateParticipantScores(match.competition_id, {
+      ...match,
+      result_winner: resultWinner,
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[SCORE RESOLVED MATCH ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to score match' } });
+  }
+}
+
+/**
+ * Helper: Mark absence on an already-resolved match (used by resolveMatch).
+ */
+async function markResolvedAbsent(res, match, absenceSide) {
+  try {
+    if (!['pending', 'ongoing'].includes(match.match_status)) {
+      return res.status(400).json({ success: false, error: { message: 'Match must be pending or ongoing to mark absent' } });
+    }
+
+    const resultWinner = absenceSide === 'both' ? null : (absenceSide === 'a' ? 'b' : 'a');
+
+    const { data, error } = await supabaseAdmin
+      .from('matches')
+      .update({
+        match_status: 'completed',
+        result_winner: resultWinner,
+        is_absent: true,
+        is_both_absent: absenceSide === 'both',
+        absence_side: absenceSide,
+      })
+      .eq('id', match.id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    await updateParticipantScores(match.competition_id, {
+      ...match,
+      is_absent: true,
+      is_both_absent: absenceSide === 'both',
+      absence_side: absenceSide,
+      result_winner: resultWinner,
+    });
+
+    res.json({
+      success: true,
+      data: { ...data, action: 'marked_absent', absence_side: absenceSide, winner_side: resultWinner },
+    });
+  } catch (err) {
+    console.error('[MARK RESOLVED ABSENT ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to mark absent' } });
+  }
+}
+
+/**
+ * Helper: Extend deadline on an already-resolved match (used by resolveMatch).
+ */
+async function extendResolvedDeadline(res, match, hours) {
+  try {
+    const previousDeadline = match.deadline;
+    const newDeadline = new Date(
+      (previousDeadline ? new Date(previousDeadline).getTime() : Date.now()) + hours * 60 * 60 * 1000
+    ).toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('matches')
+      .update({ deadline: newDeadline })
+      .eq('id', match.id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    res.json({
+      success: true,
+      data: { id: data.id, previous_deadline: previousDeadline, new_deadline: newDeadline, hours_extended: hours },
+    });
+  } catch (err) {
+    console.error('[EXTEND RESOLVED DEADLINE ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to extend deadline' } });
+  }
+}
+
+/**
+ * POST /api/v1/bot/register
+ * Register a new user (for Chess.com <username> command).
+ * This creates a user in the users table without joining a competition.
+ *
+ * Body: {
+ *   phone_number: "2348140415169",
+ *   whatsapp_id: "2348140415169@s.whatsapp.net",
+ *   display_name: "Mr_Zig",
+ *   chess_platform: "chess.com",
+ *   chess_com_username: "Mr_Zig"
+ * }
+ */
+exports.registerUser = async (req, res) => {
+  try {
+    const { phone_number, whatsapp_id, display_name, chess_platform, chess_com_username, lichess_username } = req.body;
+
+    if (!phone_number) {
+      return res.status(400).json({ success: false, error: { message: 'phone_number is required' } });
+    }
+
+    // Determine display name first (needed for existing-user updates)
+    let finalDisplayName = display_name;
+    if (chess_platform === 'chess.com' && chess_com_username) {
+      finalDisplayName = chess_com_username;
+    } else if (chess_platform === 'lichess' && lichess_username) {
+      finalDisplayName = lichess_username;
+    } else if (!finalDisplayName) {
+      return res.status(400).json({ success: false, error: { message: 'display_name is required' } });
+    }
+
+    // Check if user already exists by phone_number OR whatsapp_id OR chess_com_username
+    let existing = null;
+    const { data: byPhone } = await supabaseAdmin
+      .from('users')
+      .select('id, display_name, whatsapp_id, chess_com_username')
+      .eq('phone_number', phone_number)
+      .maybeSingle();
+
+    if (byPhone) {
+      existing = byPhone;
+    } else if (whatsapp_id) {
+      const { data: byWid } = await supabaseAdmin
+        .from('users')
+        .select('id, display_name, whatsapp_id, chess_com_username')
+        .eq('whatsapp_id', whatsapp_id)
+        .maybeSingle();
+      if (byWid) existing = byWid;
+    }
+
+    if (!existing && chess_com_username) {
+      const { data: byChess } = await supabaseAdmin
+        .from('users')
+        .select('id, display_name, whatsapp_id, chess_com_username')
+        .eq('chess_com_username', chess_com_username)
+        .maybeSingle();
+      if (byChess) existing = byChess;
+    }
+
+    if (existing) {
+      // User exists — return friendly message, optionally update their whatsapp_id/display_name
+      const existingUpdates = {};
+      if (whatsapp_id && existing.whatsapp_id !== whatsapp_id) {
+        existingUpdates.whatsapp_id = whatsapp_id;
+      }
+      if (chess_com_username && existing.chess_com_username !== chess_com_username) {
+        existingUpdates.chess_com_username = chess_com_username;
+        existingUpdates.display_name = finalDisplayName || existing.display_name;
+      }
+      if (Object.keys(existingUpdates).length > 0) {
+        await supabaseAdmin
+          .from('users')
+          .update(existingUpdates)
+          .eq('id', existing.id);
+      }
+      return res.status(200).json({
+        success: true,
+        data: existing,
+        already_registered: true,
+        message: 'Already a member',
+      });
+    }
+
+    // Create user
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .insert([{
+        phone_number,
+        whatsapp_id: whatsapp_id || null,
+        display_name: finalDisplayName,
+        email: `${phone_number}@temp.com`,
+        role: 'player',
+        chess_platform: chess_platform || null,
+        chess_com_username: chess_platform === 'chess.com' ? chess_com_username : null,
+        lichess_username: chess_platform === 'lichess' ? lichess_username : null,
+        user_status: 'active',
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ success: false, error: { message: error.message } });
+    }
+
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    console.error('[BOT REGISTER ERROR]', err);
+    res.status(500).json({ success: false, error: { message: 'Failed to register user' } });
   }
 };
 
@@ -2173,11 +3013,11 @@ async function updateParticipantScores(competitionId, match) {
     if (match.absence_side === 'both') {
       if (partA) {
         await supabaseAdmin.from('competition_participants')
-          .update({ absences: (partA.absences || 0) + 1 }).eq('id', partA.id);
+          .update({ absences: (partA.absences || 0) + 1, losses: (partA.losses || 0) + 1 }).eq('id', partA.id);
       }
       if (partB) {
         await supabaseAdmin.from('competition_participants')
-          .update({ absences: (partB.absences || 0) + 1 }).eq('id', partB.id);
+          .update({ absences: (partB.absences || 0) + 1, losses: (partB.losses || 0) + 1 }).eq('id', partB.id);
       }
     } else if (match.absence_side === 'a') {
       if (partB) {
@@ -2186,7 +3026,7 @@ async function updateParticipantScores(competitionId, match) {
       }
       if (partA) {
         await supabaseAdmin.from('competition_participants')
-          .update({ absences: (partA.absences || 0) + 1 }).eq('id', partA.id);
+          .update({ absences: (partA.absences || 0) + 1, losses: (partA.losses || 0) + 1 }).eq('id', partA.id);
       }
     } else if (match.absence_side === 'b') {
       if (partA) {
@@ -2195,7 +3035,7 @@ async function updateParticipantScores(competitionId, match) {
       }
       if (partB) {
         await supabaseAdmin.from('competition_participants')
-          .update({ absences: (partB.absences || 0) + 1 }).eq('id', partB.id);
+          .update({ absences: (partB.absences || 0) + 1, losses: (partB.losses || 0) + 1 }).eq('id', partB.id);
       }
     }
     return;

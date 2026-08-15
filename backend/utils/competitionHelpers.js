@@ -39,17 +39,20 @@ async function fetchParticipantsWithUsers(competitionId) {
     .from('competition_participants')
     .select(`
       *,
-      users ( id, display_name, chess_username, chess_elo )
+      users ( id, display_name, chess_username, chess_com_username, chess_elo )
     `)
     .eq('competition_id', competitionId);
 
   if (error) throw new Error(error.message);
 
-  return (data || []).map((p) => ({
-    ...p,
-    chess_elo: p.users?.chess_elo ?? 1000,
-    display_name: p.users?.display_name,
-  }));
+  return (data || []).map((p) => {
+    const user = p.users || {};
+    return {
+      ...p,
+      chess_elo: user.chess_elo ?? 1000,
+      display_name: user.display_name || user.chess_com_username || user.chess_username || `Player ${p.user_id}`,
+    };
+  });
 }
 
 function isRegistrationOpen(competition) {

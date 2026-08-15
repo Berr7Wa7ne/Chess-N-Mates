@@ -115,9 +115,29 @@ exports.loginUser = async (req, res) => {
 exports.registerChess = async (req, res) => {
   const { id } = req.params;
   const { chess_username, chess_platform } = req.body;
+
+  if (!chess_username || !chess_platform) {
+    return res.status(400).json({ success: false, error: { message: 'chess_username and chess_platform are required' } });
+  }
+
+  const updates = {
+    chess_username,
+    chess_platform,
+    chess_elo: 1200,
+  };
+
+  // Also update chess_com_username and display_name for chess.com users
+  if (chess_platform === 'chess.com') {
+    updates.chess_com_username = chess_username;
+    updates.display_name = chess_username;
+  } else if (chess_platform === 'lichess') {
+    updates.lichess_username = chess_username;
+    updates.display_name = chess_username;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('users')
-    .update({ chess_username, chess_platform, chess_elo: 1200 })
+    .update(updates)
     .eq('id', id)
     .select()
     .single();

@@ -189,6 +189,18 @@ CREATE TABLE disputes (
 
 CREATE INDEX idx_d_status ON disputes(dispute_status);
 
+-- pending_comp_start table (for !comp-start two-step flow)
+CREATE TABLE pending_comp_start (
+  id BIGSERIAL PRIMARY KEY,
+  whatsapp_id VARCHAR(100) NOT NULL,
+  command VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+  UNIQUE (whatsapp_id)
+);
+
+CREATE INDEX idx_pc_whatsapp_id ON pending_comp_start(whatsapp_id);
+
 -- admin_logs table
 CREATE TABLE admin_logs (
   id BIGSERIAL PRIMARY KEY,

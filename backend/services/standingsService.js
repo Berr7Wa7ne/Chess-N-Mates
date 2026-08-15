@@ -31,8 +31,8 @@ function computeStandings(participants, matches) {
     const user = p.users || {};
     statsMap.set(p.user_id, {
       user_id: p.user_id,
-      display_name: user.display_name || `Player ${p.user_id}`,
-      chess_username: user.chess_username || null,
+      display_name: user.display_name || user.chess_com_username || user.chess_username || `Player ${p.user_id}`,
+      chess_username: user.chess_com_username || user.chess_username || null,
       chess_elo: user.chess_elo ?? 1000,
       // Core stats
       played: 0,

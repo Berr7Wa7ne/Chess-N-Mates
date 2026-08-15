@@ -8,11 +8,13 @@ const botController = require('../controllers/botController');
 // ============================================
 router.get('/status', botController.getBotStatus);
 router.get('/players', botController.getBotPlayers);
+router.get('/participants', botController.getParticipants);
 
 // ============================================
 // USER LOOKUP & MANAGEMENT (existing)
 // ============================================
 router.get('/my-matches/:whatsappId', botController.getMyMatches);
+router.get('/my-matches', botController.getMyMatches);
 router.post('/lookup-user', botController.lookupUser);
 router.post('/import-members', botController.importMembers);
 router.post('/update-activity', botController.updateActivity);
@@ -42,6 +44,16 @@ router.post('/comp-advance', botController.compAdvance);
 // Delete competition
 // Bot command: comp-delete <id>
 router.post('/comp-delete', botController.compDelete);
+
+// Reset competition (end it, clear participants)
+// Bot command: comp-reset
+router.post('/comp-reset', botController.compReset);
+
+// Pending competition start (two-step flow)
+// Bot command: comp-start <type> → stores pending state
+router.post('/pending-comp-start', botController.setPendingCompStart);
+router.get('/pending-comp-start', botController.getPendingCompStart);
+router.delete('/pending-comp-start', botController.clearPendingCompStart);
 
 // Force match result
 // Bot command: force-result <match_id> <a/b/draw> <reason>
@@ -98,5 +110,25 @@ router.get('/fixtures', botController.getFixtures);
 // View standings
 // Bot command: standings
 router.get('/standings', botController.getStandings);
+
+// ============================================
+// NEW: SIMPLIFIED ADMIN COMMANDS
+// ============================================
+
+// Resolve match by player names (instead of match_id)
+// Bot commands:
+//   !admin-score PlayerA vs PlayerB <PlayerA>
+//   !force-result PlayerA vs PlayerB <PlayerA|PlayerB|draw>
+//   !mark-absent PlayerA vs PlayerB <PlayerA|PlayerB|both>
+//   !extend PlayerA vs PlayerB <hours>
+router.post('/resolve-match', botController.resolveMatch);
+
+// ============================================
+// NEW: BOT USER REGISTRATION
+// ============================================
+
+// Register a new user (for Chess.com <username> command)
+// Creates user in users table without joining a competition
+router.post('/register', botController.registerUser);
 
 module.exports = router;
