@@ -17,13 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { StandingEntry } from '@/src/types/competition'
+import type { StandingEntry, TournamentType } from '@/src/types/competition'
 
 interface StandingsModalProps {
   open: boolean
   onClose: () => void
   standings: StandingEntry[]
   competitionName: string
+  tournamentType?: TournamentType
 }
 
 function getRankDisplay(row: StandingEntry, index: number): React.ReactNode {
@@ -33,16 +34,27 @@ function getRankDisplay(row: StandingEntry, index: number): React.ReactNode {
   return <span className="text-sm tabular-nums">{row.rank}</span>
 }
 
-export function StandingsModal({ open, onClose, standings, competitionName }: StandingsModalProps) {
+export function StandingsModal({
+  open,
+  onClose,
+  standings,
+  competitionName,
+  tournamentType,
+}: StandingsModalProps) {
+  const isSwiss = tournamentType === 'swiss'
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Trophy className="size-5 text-amber-500" />
             <DialogTitle>Standings</DialogTitle>
           </div>
-          <DialogDescription>{competitionName}</DialogDescription>
+          <DialogDescription>
+            {competitionName}
+            {isSwiss ? ' · Tiebreaks: Buchholz → Cut-1 → Sonneborn-Berger' : ''}
+          </DialogDescription>
         </DialogHeader>
 
         {standings.length === 0 ? (
@@ -61,6 +73,19 @@ export function StandingsModal({ open, onClose, standings, competitionName }: St
                   <TableHead className="text-center tabular-nums">D</TableHead>
                   <TableHead className="text-center tabular-nums">L</TableHead>
                   <TableHead className="text-center tabular-nums font-bold">Pts</TableHead>
+                  {isSwiss && (
+                    <>
+                      <TableHead className="text-center tabular-nums" title="Buchholz">
+                        BH
+                      </TableHead>
+                      <TableHead className="text-center tabular-nums" title="Buchholz Cut-1">
+                        BH-C1
+                      </TableHead>
+                      <TableHead className="text-center tabular-nums" title="Sonneborn-Berger">
+                        SB
+                      </TableHead>
+                    </>
+                  )}
                   <TableHead className="text-center tabular-nums">Abs</TableHead>
                   <TableHead className="text-center tabular-nums">BYE</TableHead>
                 </TableRow>
@@ -85,6 +110,19 @@ export function StandingsModal({ open, onClose, standings, competitionName }: St
                     <TableCell className="text-center tabular-nums text-amber-600">{row.draws}</TableCell>
                     <TableCell className="text-center tabular-nums text-red-600">{row.losses}</TableCell>
                     <TableCell className="text-center tabular-nums font-bold">{row.points}</TableCell>
+                    {isSwiss && (
+                      <>
+                        <TableCell className="text-center tabular-nums text-muted-foreground">
+                          {row.buchholz ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums text-muted-foreground">
+                          {row.buchholz_cut1 ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums text-muted-foreground">
+                          {row.sonneborn_berger ?? '—'}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell className={`text-center tabular-nums ${row.absences > 0 ? 'text-red-600 font-semibold' : ''}`}>
                       {row.absences}
                     </TableCell>

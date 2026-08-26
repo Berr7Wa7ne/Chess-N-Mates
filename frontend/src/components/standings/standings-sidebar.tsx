@@ -57,7 +57,7 @@ export function StandingsSidebar({
             <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
               <Info className="mt-0.5 size-3.5 shrink-0 text-amber-600" />
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Swiss standings update after each Advance Round
+                Swiss ranking: Points → Buchholz → Cut-1 → Sonneborn-Berger. Pairings rebuild each Advance Round.
               </p>
             </div>
           )}
@@ -108,6 +108,9 @@ export function StandingsSidebar({
                         {row.played}P · {row.wins}W · {row.draws}D · {row.losses}L
                         {row.absences > 0 ? ` · ${row.absences}A` : ''}
                         {hasByes && row.byes > 0 ? ` · ${row.byes}B` : ''}
+                        {tournamentType === 'swiss' && row.buchholz != null
+                          ? ` · BH ${row.buchholz}`
+                          : ''}
                       </p>
                     </div>
                   </div>

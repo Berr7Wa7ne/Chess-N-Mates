@@ -135,4 +135,9 @@ export interface StandingEntry {
   points: number
   absences: number
   byes: number
+  buchholz?: number
+  buchholz_cut1?: number
+  sonneborn_berger?: number
+  knockout_round_reached?: number
+  participant_status?: string
 }

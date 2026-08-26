@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
     START: (id: string) => `/competitions/${id}/start`,
     ADVANCE_ROUND: (id: string) => `/competitions/${id}/advance-round`,
     STANDINGS: (id: string) => `/competitions/${id}/standings`,
+    FORMAT_ADVICE: '/competitions/format-advice',
     MATCHES: (id: string) => `/competitions/${id}/matches`,
   },
 

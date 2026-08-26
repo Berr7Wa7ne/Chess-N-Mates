@@ -47,6 +47,7 @@ import type {
   MatchLength,
   Platform,
 } from '@/src/types/competition'
+import { recommendTournamentFormat } from '@/src/lib/tournament-advisor'
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -293,6 +294,21 @@ export function CreateCompetitionForm({
   )
   const isRoundsEditable = tournamentType === 'swiss'
   const roundsDisplayValue = isRoundsEditable ? rounds : String(computedRounds)
+  const formatAdvice = recommendTournamentFormat(Number(maxParticipants) || 0)
+
+  function applyFormatRecommendation() {
+    const advice = formatAdvice
+    setTournamentType(advice.recommended)
+    if (advice.recommended === 'round_robin') {
+      setMatchLength(advice.recommended_legs === 2 ? 'double_game' : 'single_game')
+    } else if (advice.recommended === 'swiss') {
+      setMatchLength('single_game')
+      setRounds(String(advice.recommended_rounds))
+    } else {
+      setMatchLength('single_game')
+    }
+    toast.success(`Applied ${advice.recommended.replace('_', ' ')} recommendation`)
+  }
 
   // Sync edit mode competition data
   useEffect(() => {
@@ -520,6 +536,7 @@ export function CreateCompetitionForm({
                 <div className="grid gap-3 sm:grid-cols-3">
                   {TOURNAMENT_TYPES.map((type) => {
                     const selected = tournamentType === type.value
+                    const isRecommended = formatAdvice.recommended === type.value
                     return (
                       <button
                         key={type.value}
@@ -531,12 +548,53 @@ export function CreateCompetitionForm({
                             : 'hover:border-primary/40 hover:bg-muted/50'
                         }`}
                       >
-                        <p className="font-semibold">{type.label}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold">{type.label}</p>
+                          {isRecommended && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Suggested
+                            </Badge>
+                          )}
+                        </div>
                         <p className="mt-1 text-xs text-muted-foreground">{type.description}</p>
                       </button>
                     )
                   })}
                 </div>
+
+                {Number(maxParticipants) >= 2 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 space-y-2">
+                    <p className="text-sm font-medium text-amber-950">
+                      For {Number(maxParticipants)} players
+                    </p>
+                    <p className="text-xs text-amber-900 leading-relaxed">{formatAdvice.rationale}</p>
+                    <ul className="space-y-1">
+                      {formatAdvice.options.map((opt) => (
+                        <li
+                          key={`${opt.type}-${opt.legs}`}
+                          className={`text-[11px] leading-snug ${
+                            opt.suitable ? 'text-amber-900' : 'text-amber-700/80'
+                          }`}
+                        >
+                          <span className="font-semibold">{opt.label}</span>
+                          {opt.suitable ? '' : ' (heavy)'}
+                          {' — '}
+                          {opt.note}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 h-8 border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+                      onClick={applyFormatRecommendation}
+                    >
+                      <Sparkles className="mr-1.5 size-3.5" />
+                      Use suggested format
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

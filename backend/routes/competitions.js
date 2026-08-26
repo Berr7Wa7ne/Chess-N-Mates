@@ -6,6 +6,7 @@ const matchesController = require('../controllers/matchesController');
 
 router.post('/', competitionsController.createCompetition);
 router.get('/', competitionsController.getCompetitions);
+router.get('/format-advice', competitionsController.getFormatAdvice);
 router.get('/registered/:userId', participantsController.getUserRegistrations);
 router.get('/:id', competitionsController.getCompetition);
 router.patch('/:id', competitionsController.updateCompetition);

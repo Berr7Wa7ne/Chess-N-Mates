@@ -493,6 +493,7 @@ export default function AdminCompetitionDetailPage() {
         onClose={() => setStandingsOpen(false)}
         standings={standings}
         competitionName={competition.name}
+        tournamentType={competition.tournament_type}
       />
     </div>
   )
