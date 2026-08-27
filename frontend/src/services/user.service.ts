@@ -26,7 +26,10 @@ export const userService = {
   },
 
   listUsers(params?: ListUsersParams) {
-    return httpClient.get<User[]>(API_ENDPOINTS.USERS.LIST, { params })
+    return httpClient.get<User[]>(
+      API_ENDPOINTS.USERS.LIST,
+      params as Record<string, string | number | undefined> | undefined
+    )
   },
 
   registerChessAccount(id: string, payload: RegisterChessPayload) {

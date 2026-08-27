@@ -22,10 +22,11 @@ import {
 } from "@/components/layout"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useDisputes } from "@/src/hooks/useDisputes"
-import { members } from "@/lib/admin-data"
+import { useUsers } from "@/src/hooks/useUsers"
 
 export default function AdminDashboardPage() {
   const { data: competitions } = useCompetitions()
+  const { data: members = [] } = useUsers()
   const disputesQuery = useDisputes()
   const disputes = Array.isArray(disputesQuery.data) ? disputesQuery.data : []
 
@@ -41,11 +42,15 @@ export default function AdminDashboardPage() {
     ["open", "under_review"].includes(d.dispute_status)
   ).length
 
+  const activeMembers = members.filter(
+    (m) => (m.user_status || "active") === "active"
+  ).length
+
   const stats = [
     {
       label: "Members",
       value: members.length,
-      hint: `${members.filter((m) => m.status === "active").length} active`,
+      hint: `${activeMembers} active`,
     },
     {
       label: "Competitions",
@@ -177,7 +182,7 @@ export default function AdminDashboardPage() {
             {
               id: 3,
               title: "Members",
-              body: `${members.length} community members tracked`,
+              body: `${members.length} community members registered`,
             },
           ].map((item) => (
             <li

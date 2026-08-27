@@ -1,10 +1,27 @@
-import { notFound } from "next/navigation"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { PageHeader, PlayerIdentity } from "@/components/shared"
-import { leaderboard, players } from "@/lib/admin-data"
+"use client"
 
-function formatRelativeTime(date: Date): string {
+import { useMemo } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+  AdminPanelTitle,
+} from "@/components/layout"
+import { Badge } from "@/components/ui/badge"
+import { PlayerIdentity } from "@/components/shared"
+import { useCommunityLeaderboard } from "@/src/hooks/useCommunityLeaderboard"
+import { useCompetitions } from "@/src/hooks/useCompetitions"
+import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
+import { useUserRegistrations } from "@/src/hooks/useParticipants"
+import { useUser } from "@/src/hooks/useUsers"
+
+function formatRelativeTime(iso?: string): string {
+  if (!iso) return "—"
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return "—"
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMinutes = Math.floor(diffMs / (1000 * 60))
@@ -17,81 +34,153 @@ function formatRelativeTime(date: Date): string {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
 }
 
-export default async function PlayerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const player = players.find((entry) => entry.id === Number(id))
+export default function PlayerDetailPage() {
+  const params = useParams()
+  const id = params.id as string
+  const { data: player, isLoading, isError } = useUser(id)
+  const { data: registrationIds } = useUserRegistrations(id)
+  const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
 
-  if (!player) notFound()
+  const rankingCompetitionIds = useMemo(
+    () =>
+      (competitions ?? [])
+        .filter((c) => ["active", "completed"].includes(c.competition_status))
+        .map((c) => c.id),
+    [competitions]
+  )
 
-  const standing = leaderboard.find((entry) => entry.id === player.id)
+  const { byCompetitionId, isLoading: standingsLoading } =
+    useCompetitionsStandings(rankingCompetitionIds)
+
+  const { entries, isLoading: leaderboardLoading } = useCommunityLeaderboard(
+    byCompetitionId,
+    competitionsLoading || standingsLoading
+  )
+
+  const standing = entries.find((entry) => String(entry.userId) === String(id))
+
+  const activeTournamentCount = useMemo(() => {
+    const ids = new Set((registrationIds ?? []).map(String))
+    return (competitions ?? []).filter(
+      (c) => ids.has(String(c.id)) && c.competition_status === "active"
+    ).length
+  }, [competitions, registrationIds])
+
+  if (isLoading) {
+    return (
+      <AdminPageShell>
+        <p className="text-sm text-text-secondary">Loading player…</p>
+      </AdminPageShell>
+    )
+  }
+
+  if (isError || !player) {
+    return (
+      <AdminPageShell>
+        <Link
+          href="/admin/members"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
+        >
+          <ArrowLeft className="size-4" />
+          Members
+        </Link>
+        <p className="mt-4 text-sm text-text-secondary">Player not found.</p>
+      </AdminPageShell>
+    )
+  }
+
+  const username =
+    player.chess_username ||
+    player.chess_com_username ||
+    player.lichess_username ||
+    player.display_name
+  const elo = player.chess_elo ?? 0
+  const status = player.user_status || "active"
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={player.username} subtitle="Player profile, activity, and current community leaderboard standing." />
+    <AdminPageShell>
+      <Link
+        href="/admin/members"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
+      >
+        <ArrowLeft className="size-4" />
+        Members
+      </Link>
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-lg shadow-sm">
-          <CardHeader>
-            <CardTitle>Player Overview</CardTitle>
-            <CardDescription>Shared player identity is reused here exactly as it appears in tables and lists.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <PlayerIdentity playerId={String(player.id)} username={player.username} elo={player.elo} />
-            <div className="grid gap-5 sm:grid-cols-2">
+      <AdminPageHeader
+        title={player.display_name}
+        description="Player profile, activity, and community leaderboard standing."
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AdminPanel>
+          <AdminPanelTitle title="Player overview" />
+          <div className="mt-3 space-y-5">
+            <PlayerIdentity playerId={String(player.id)} username={username} elo={elo} />
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-sm text-muted-foreground">Platform</p>
-                <p className="mt-1 font-medium">{player.platform}</p>
+                <p className="text-sm text-text-secondary">Platform</p>
+                <p className="mt-1 font-medium capitalize">
+                  {player.chess_platform?.replaceAll("_", " ") || "—"}
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="text-sm text-text-secondary">Status</p>
                 <div className="mt-2">
-                  <Badge className={player.status === "active" ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600" : "border-amber-500/20 bg-amber-500/10 text-amber-600"}>
-                    {player.status}
+                  <Badge
+                    className={
+                      status === "active"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-600"
+                    }
+                  >
+                    {status}
                   </Badge>
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Active Tournament</p>
-                <p className="mt-1 font-medium">{player.activeTournament ? "Yes" : "No"}</p>
+                <p className="text-sm text-text-secondary">Active tournaments</p>
+                <p className="mt-1 font-medium">{activeTournamentCount}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Last Active</p>
-                <p className="mt-1 font-medium">{formatRelativeTime(player.lastActiveAt)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-lg shadow-sm">
-          <CardHeader>
-            <CardTitle>Community Leaderboard Snapshot</CardTitle>
-            <CardDescription>Quick community ELO standing context for this player.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {standing ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Rank</p>
-                  <p className="mt-1 text-2xl font-semibold">#{standing.rank}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Points</p>
-                  <p className="mt-1 text-2xl font-semibold">{standing.points.toFixed(1)}</p>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Record: {standing.wins} wins, {standing.draws} draws, {standing.losses} losses.
+                <p className="text-sm text-text-secondary">Last active</p>
+                <p className="mt-1 font-medium">
+                  {formatRelativeTime(player.last_activity_at || player.updated_at)}
                 </p>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">This player does not have a current leaderboard entry.</p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+        </AdminPanel>
+
+        <AdminPanel>
+          <AdminPanelTitle
+            title="Community leaderboard"
+            description="Standing from tournament results"
+          />
+          {leaderboardLoading ? (
+            <p className="mt-3 text-sm text-text-secondary">Loading rankings…</p>
+          ) : standing ? (
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-sm text-text-secondary">Rank</p>
+                <p className="mt-1 text-2xl font-semibold">#{standing.rank}</p>
+              </div>
+              <div>
+                <p className="text-sm text-text-secondary">Tournament wins</p>
+                <p className="mt-1 text-2xl font-semibold">{standing.firstPlaces}</p>
+              </div>
+              <p className="text-sm text-text-secondary">
+                Record: {standing.matchWins} wins, {standing.matchDraws} draws,{" "}
+                {standing.matchLosses} losses · {standing.tournamentsPlayed} tournaments
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-text-secondary">
+              This player does not have a current leaderboard entry.
+            </p>
+          )}
+        </AdminPanel>
       </div>
-    </div>
+    </AdminPageShell>
   )
 }
