@@ -2,33 +2,33 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Download, Trophy } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Trophy } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  PlayerPageHeader,
+  PlayerPageShell,
+  PlayerPanel,
+  PlayerPanelTitle,
+} from "@/components/layout/player-page-shell"
 import { MatchesList } from "@/src/components/matches/matches-list"
 import { PlayerDoubleLegView } from "@/src/components/matches/player-double-leg-view"
 import { MatchResultDialog } from "@/src/components/matches/match-result-dialog"
 import { StandingsModal } from "@/src/components/standings/standings-modal"
-import {
-  CompetitionStatusBadge,
-  TournamentTypeBadge,
-} from "@/src/components/competitions/competition-badges"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitionMatches } from "@/src/hooks/useMatches"
 import { useCompetitionStandings, useCompetitions } from "@/src/hooks/useCompetitions"
+import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
 import { useJoinCompetition, useUserRegistrations, useWithdraw } from "@/src/hooks/useParticipants"
 import { ApiError } from "@/src/types/api"
 import type { Match } from "@/src/types/match"
+import { formatTournamentType } from "@/src/components/competitions/competition-badges"
+import { cn } from "@/lib/utils"
 
 export default function PlayerTournamentPage() {
   const [currentRound, setCurrentRound] = useState<number | null>(null)
   const [standingsOpen, setStandingsOpen] = useState(false)
   const [resultDialogMatch, setResultDialogMatch] = useState<Match | null>(null)
-  // Track submitted matches for immediate UI update (hide submit button, show winner)
   const [submittedMatchIds, setSubmittedMatchIds] = useState<Set<string>>(new Set())
-  // Store optimistic match data for completed matches
   const [optimisticMatches, setOptimisticMatches] = useState<Map<string, Partial<Match>>>(new Map())
   const { currentUser } = useAuth()
   const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
@@ -36,6 +36,24 @@ export default function PlayerTournamentPage() {
   const withdrawMutation = useWithdraw()
   const { data: userRegisteredIds = [] } = useUserRegistrations(currentUser?.id)
   const userRegisteredSet = useMemo(() => new Set(userRegisteredIds), [userRegisteredIds])
+
+  const historyIds = useMemo(
+    () => (competitions ?? []).map((c) => c.id),
+    [competitions]
+  )
+  const { byCompetitionId: historyStandings, isLoading: historyStandingsLoading } =
+    useCompetitionsStandings(historyIds)
+
+  function getUserPosition(competitionId: string): string {
+    if (!currentUser) return "—"
+    if (!userRegisteredSet.has(competitionId)) return "—"
+    const rows = historyStandings[competitionId] ?? []
+    const mine = rows.find((row) => String(row.user_id) === String(currentUser.id))
+    if (!mine) {
+      return historyStandingsLoading ? "…" : "—"
+    }
+    return `#${mine.rank_display || mine.rank}`
+  }
 
   const currentCompetition = useMemo(() => {
     if (!competitions?.length) return null
@@ -46,24 +64,23 @@ export default function PlayerTournamentPage() {
     )
   }, [competitions])
 
-  // Sync currentRound with competition data when it loads or changes
   useEffect(() => {
     if (currentRound === null && currentCompetition?.current_round) {
       setCurrentRound(currentCompetition.current_round)
     }
   }, [currentCompetition?.current_round, currentRound])
 
-  const matchesQuery = useCompetitionMatches(currentCompetition?.id ?? '')
-  const standingsQuery = useCompetitionStandings(currentCompetition?.id ?? '', !!currentCompetition)
-  
+  const matchesQuery = useCompetitionMatches(currentCompetition?.id ?? "")
+  const standingsQuery = useCompetitionStandings(
+    currentCompetition?.id ?? "",
+    !!currentCompetition
+  )
+
   const standings = standingsQuery.data ?? []
   const matchesData = matchesQuery.data ?? []
-  // Apply optimistic updates on top of server data
   const matches = matchesData.map((m: Match) => {
     const opt = optimisticMatches.get(m.id)
-    if (opt) {
-      return { ...m, ...opt }
-    }
+    if (opt) return { ...m, ...opt }
     return m
   })
   const effectiveRound = currentRound ?? currentCompetition?.current_round ?? 1
@@ -118,13 +135,12 @@ export default function PlayerTournamentPage() {
     }
   }
 
-  // Called when a result is successfully submitted — update local state immediately
   const handleMatchSubmitSuccess = useCallback((updatedMatch: Match) => {
-    setSubmittedMatchIds(prev => new Set(prev).add(updatedMatch.id))
-    setOptimisticMatches(prev => {
+    setSubmittedMatchIds((prev) => new Set(prev).add(updatedMatch.id))
+    setOptimisticMatches((prev) => {
       const next = new Map(prev)
       next.set(updatedMatch.id, {
-        match_status: 'completed',
+        match_status: "completed",
         result_winner: updatedMatch.result_winner,
         chess_game_link: updatedMatch.chess_game_link,
         result_submitted_at: updatedMatch.result_submitted_at,
@@ -136,94 +152,93 @@ export default function PlayerTournamentPage() {
   function handleDownloadFixtures() {
     if (matches.length === 0) return
     const csv = [
-      ['Round', 'Player A', 'Player B', 'Status', 'Result'].join(','),
+      ["Round", "Player A", "Player B", "Status", "Result"].join(","),
       ...matches.map((m) =>
         [
           m.round_number,
           m.player_a?.display_name || m.player_a_id,
-          m.is_bye ? 'BYE' : m.player_b?.display_name || m.player_b_id,
+          m.is_bye ? "BYE" : m.player_b?.display_name || m.player_b_id,
           m.match_status,
-          m.result_winner || 'Pending',
-        ].join(',')
+          m.result_winner || "Pending",
+        ].join(",")
       ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const a = document.createElement("a")
     a.href = url
-    a.download = `${currentCompetition?.name || 'fixtures'}-fixtures.csv`
+    a.download = `${currentCompetition?.name || "fixtures"}-fixtures.csv`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Fixtures downloaded')
+    toast.success("Fixtures downloaded")
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Tournament</h1>
-        <p className="text-muted-foreground">View the ongoing tournament, fixtures, results, standings, and past history.</p>
-      </div>
+    <PlayerPageShell wide>
+      <PlayerPageHeader
+        title="Tournament"
+        description="Ongoing event, fixtures, standings, and history"
+      />
 
-      {/* ── Current Tournament Card ── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Ongoing Tournament</CardTitle>
-          <CardDescription>Current tournament details appear here first.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {competitionsLoading ? (
-            <Skeleton className="h-20 w-full" />
-          ) : currentCompetition ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-semibold">{currentCompetition.name}</h2>
-                  <TournamentTypeBadge type={currentCompetition.tournament_type} />
-                  <Badge variant="outline">
-                    Round {currentCompetition.current_round || currentCompetition.rounds}
-                  </Badge>
-                </div>
-                <div className="flex gap-2">
-                  {!standingsQuery.isLoading && !isRegistered && (
-                    <Button onClick={handleJoin} disabled={joinMutation.isPending}>
-                      Join
-                    </Button>
-                  )}
-                  {canWithdraw && (
-                    <Button
-                      variant="outline"
-                      onClick={handleWithdraw}
-                      disabled={withdrawMutation.isPending}
-                    >
-                      Withdraw
-                    </Button>
-                  )}
-                </div>
+      <PlayerPanel>
+        <PlayerPanelTitle title="Ongoing tournament" />
+        {competitionsLoading ? (
+          <Skeleton className="h-16 w-full rounded-xl" />
+        ) : currentCompetition ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-text-primary">
+                  {currentCompetition.name}
+                </h3>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {formatTournamentType(currentCompetition.tournament_type)} · Round{" "}
+                  {currentCompetition.current_round || currentCompetition.rounds}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {currentCompetition.description || "No description provided."}
-              </p>
+              <div className="flex gap-2">
+                {!standingsQuery.isLoading && !isRegistered && (
+                  <button
+                    type="button"
+                    onClick={handleJoin}
+                    disabled={joinMutation.isPending}
+                    className="rounded-xl bg-accent-lime px-4 py-2 text-sm font-bold text-text-primary disabled:opacity-60"
+                  >
+                    Join
+                  </button>
+                )}
+                {canWithdraw && (
+                  <button
+                    type="button"
+                    onClick={handleWithdraw}
+                    disabled={withdrawMutation.isPending}
+                    className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-semibold text-text-primary"
+                  >
+                    Withdraw
+                  </button>
+                )}
+              </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No ongoing tournament.</p>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-sm text-text-secondary">
+              {currentCompetition.description || "No description provided."}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">No ongoing tournament.</p>
+        )}
+      </PlayerPanel>
 
-      {/* ── Matches & Standings ── */}
       {currentCompetition && matches.length > 0 && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          {/* Matches */}
-          {currentCompetition.match_length === 'double_game' && currentCompetition.tournament_type === 'round_robin' ? (
-            <div className="space-y-4">
-              <PlayerDoubleLegView
-                matches={matches.filter((m) => m.round_number === effectiveRound)}
-                currentRound={effectiveRound}
-                currentUser={currentUser}
-                submittedMatchIds={submittedMatchIds}
-                onSuccess={handleMatchSubmitSuccess}
-              />
-            </div>
+        <div className="flex flex-col gap-5">
+          {currentCompetition.match_length === "double_game" &&
+          currentCompetition.tournament_type === "round_robin" ? (
+            <PlayerDoubleLegView
+              matches={matches.filter((m) => m.round_number === effectiveRound)}
+              currentRound={effectiveRound}
+              currentUser={currentUser}
+              submittedMatchIds={submittedMatchIds}
+              onSuccess={handleMatchSubmitSuccess}
+            />
           ) : (
             <MatchesList
               matches={matches}
@@ -235,143 +250,134 @@ export default function PlayerTournamentPage() {
               competitionName={currentCompetition.name}
               renderMatchActions={(match: Match) => {
                 if (submittedMatchIds.has(match.id)) return null
-                if (match.is_bye || match.match_status !== 'pending') return null
+                if (match.is_bye || match.match_status !== "pending") return null
                 if (!currentUser) return null
-                const isParticipant = match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
+                const isParticipant =
+                  match.player_a_id === currentUser.id || match.player_b_id === currentUser.id
                 if (!isParticipant) return null
                 if (match.round_number > (currentCompetition?.current_round || 1)) return null
                 return (
-                  <Button variant="outline" size="sm" className="text-[10px] h-7" onClick={() => setResultDialogMatch(match)}>
+                  <button
+                    type="button"
+                    className="h-7 rounded-lg border border-border-subtle px-2 text-[10px] font-semibold"
+                    onClick={() => setResultDialogMatch(match)}
+                  >
                     Submit Result
-                  </Button>
+                  </button>
                 )
               }}
             />
           )}
 
-          {/* Standings quick preview */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Standings</CardTitle>
-              <CardDescription>Tournament leaderboard</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {standingsQuery.isLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-full" />
-                  <Skeleton className="h-6 w-full" />
-                  <Skeleton className="h-6 w-full" />
-                </div>
-              ) : standings.length > 0 ? (
-                <div className="space-y-3">
-                  {/* Top 3 players */}
-                  {standings.slice(0, 3).map((entry, index) => (
-                    <div
-                      key={entry.user_id}
-                      className="flex items-center justify-between rounded-xl border p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                        </span>
-                        <div>
-                          <p className="font-medium">{entry.display_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {entry.points} pts · {entry.wins}W {entry.draws}D {entry.losses}L
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-xl font-bold">{entry.points}</span>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => setStandingsOpen(true)}
+          <PlayerPanel>
+            <PlayerPanelTitle title="Standings" description="Top of the table" />
+            {standingsQuery.isLoading ? (
+              <p className="text-sm text-text-secondary">Loading…</p>
+            ) : standings.length > 0 ? (
+              <div className="space-y-1">
+                {standings.slice(0, 3).map((entry, index) => (
+                  <div
+                    key={entry.user_id}
+                    className="flex items-center justify-between border-b border-border-subtle py-3 last:border-b-0"
                   >
-                    <Trophy className="size-4" />
-                    View Full Standings
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No standings available yet.</p>
-              )}
-            </CardContent>
-          </Card>
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 text-sm font-bold text-text-secondary">
+                        #{index + 1}
+                      </span>
+                      <div>
+                        <p className="font-semibold text-text-primary">{entry.display_name}</p>
+                        <p className="text-xs text-text-secondary">
+                          {entry.wins}W · {entry.draws}D · {entry.losses}L
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-lg font-extrabold tabular-nums text-text-primary">
+                      {entry.points}
+                    </span>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setStandingsOpen(true)}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border-subtle py-2.5 text-sm font-semibold text-text-primary"
+                >
+                  <Trophy className="size-4" />
+                  View full standings
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-text-secondary">No standings available yet.</p>
+            )}
+          </PlayerPanel>
         </div>
       )}
 
-      {/* ── Tournament History ── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Tournament History</CardTitle>
-          <CardDescription>All competitions remain available for review here.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 sm:px-6 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Start Date</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {competitionsLoading && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Loading competitions...
-                  </td>
-                </tr>
-              )}
-              {!competitionsLoading && competitions?.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                    No competitions found.
-                  </td>
-                </tr>
-              )}
-              {competitions?.map((competition) => {
+      <PlayerPanel className="px-0 py-0 sm:px-0">
+        <div className="border-b border-border-subtle px-6 py-4 sm:px-8">
+          <PlayerPanelTitle
+            title="Tournament history"
+            description="Your position in each competition"
+          />
+        </div>
+        <div className="scrollbar-none max-h-[420px] overflow-y-auto px-6 sm:px-8">
+          {competitionsLoading ? (
+            <p className="py-8 text-center text-sm text-text-secondary">Loading…</p>
+          ) : !competitions?.length ? (
+            <p className="py-8 text-center text-sm text-text-secondary">No competitions found.</p>
+          ) : (
+            <div>
+              {competitions.map((competition) => {
                 const alreadyJoined = userRegisteredSet.has(competition.id)
-                const canJoin = competition.competition_status === "open_registration" && !alreadyJoined
+                const canJoin =
+                  competition.competition_status === "open_registration" && !alreadyJoined
+                const position = getUserPosition(competition.id)
                 return (
-                  <tr key={competition.id} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-medium">{competition.name}</td>
-                    <td className="px-4 py-3">
-                      <TournamentTypeBadge type={competition.tournament_type} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <CompetitionStatusBadge status={competition.competition_status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {competition.start_date
-                        ? new Date(competition.start_date).toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
+                  <div
+                    key={competition.id}
+                    className="flex flex-col gap-2 border-b border-border-subtle py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-text-primary">
+                        {competition.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {formatTournamentType(competition.tournament_type)} ·{" "}
+                        {competition.competition_status.replaceAll("_", " ")}
+                        {competition.start_date
+                          ? ` · ${new Date(competition.start_date).toLocaleDateString()}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span
+                        className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          alreadyJoined ? "text-text-primary" : "text-text-secondary"
+                        )}
+                      >
+                        {alreadyJoined ? position : "Not entered"}
+                      </span>
                       {canJoin ? (
-                        <Button
-                          size="sm"
-                          onClick={() => handleJoinCompetition(competition.id, competition.name)}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleJoinCompetition(competition.id, competition.name)
+                          }
                           disabled={joinMutation.isPending}
+                          className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
-                        </Button>
-                      ) : alreadyJoined ? (
-                        <span className="text-xs text-muted-foreground">Joined</span>
+                        </button>
                       ) : null}
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </div>
+      </PlayerPanel>
 
-      {/* ── Standings Modal ── */}
       {currentCompetition && (
         <StandingsModal
           open={standingsOpen}
@@ -382,7 +388,6 @@ export default function PlayerTournamentPage() {
         />
       )}
 
-      {/* ── Match Result Dialog ── */}
       {resultDialogMatch && currentUser && (
         <MatchResultDialog
           open={!!resultDialogMatch}
@@ -392,6 +397,6 @@ export default function PlayerTournamentPage() {
           onSuccess={handleMatchSubmitSuccess}
         />
       )}
-    </div>
+    </PlayerPageShell>
   )
 }

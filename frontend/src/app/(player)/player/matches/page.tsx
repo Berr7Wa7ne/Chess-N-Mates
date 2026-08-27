@@ -2,62 +2,52 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Filter, Info } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ExternalLink } from "lucide-react"
+import {
+  PlayerPageHeader,
+  PlayerPageShell,
+  PlayerPanel,
+  PlayerPanelTitle,
+} from "@/components/layout/player-page-shell"
 import { currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
+import { cn } from "@/lib/utils"
 
 type FilterType = "all" | "pending" | "awaiting_review" | "confirmed" | "disputed"
 
 const allMatches = getPlayerMatches(currentPlayerId)
 
-const statusDescriptions = {
-  pending: "Awaiting your result submission",
-  awaiting_review: "You submitted the result - waiting for admin review",
-  confirmed: "Result confirmed by admin - match is complete",
-  disputed: "Match has a dispute filed - under admin review",
-}
-
-function getStatusBadge(status: string) {
-  // Map old statuses to new ones for display
-  const displayStatus = status === "submitted" ? "awaiting_review" : status === "completed" ? "confirmed" : status
-  
-  switch (displayStatus) {
-    case "pending":
-      return <Badge className="bg-amber-500 text-white">Pending</Badge>
-    case "awaiting_review":
-      return <Badge className="bg-blue-500 text-white">Awaiting Review</Badge>
-    case "confirmed":
-      return <Badge className="bg-emerald-500 text-white">Confirmed</Badge>
-    case "disputed":
-      return <Badge className="bg-red-500 text-white">Disputed</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
-  }
-}
-
-function getResultBadge(result: string | undefined) {
-  if (!result) return <span className="text-muted-foreground">-</span>
-  switch (result) {
-    case "win":
-      return <Badge className="bg-emerald-500 text-white">Win</Badge>
-    case "loss":
-      return <Badge className="bg-red-500 text-white">Loss</Badge>
-    case "draw":
-      return <Badge className="bg-slate-500 text-white">Draw</Badge>
-    default:
-      return <span>{result}</span>
-  }
-}
-
-// Helper to map statuses for filtering
 const mapStatusForFilter = (status: string): FilterType | string => {
   if (status === "submitted") return "awaiting_review"
   if (status === "completed") return "confirmed"
   return status as FilterType
+}
+
+function normalizeGameUrl(url: string) {
+  if (/^https?:\/\//i.test(url)) return url
+  return `https://${url}`
+}
+
+function statusLabel(status: string) {
+  const mapped = mapStatusForFilter(status)
+  if (mapped === "awaiting_review") return "Awaiting review"
+  if (mapped === "confirmed") return "Confirmed"
+  return String(mapped).replaceAll("_", " ")
+}
+
+function statusClass(status: string) {
+  const mapped = mapStatusForFilter(status)
+  switch (mapped) {
+    case "pending":
+      return "text-amber-700"
+    case "awaiting_review":
+      return "text-sky-700"
+    case "confirmed":
+      return "text-emerald-700"
+    case "disputed":
+      return "text-red-600"
+    default:
+      return "text-text-secondary"
+  }
 }
 
 export default function PlayerMatchesPage() {
@@ -69,90 +59,95 @@ export default function PlayerMatchesPage() {
       : allMatches.filter((match) => mapStatusForFilter(match.status) === filter)
   }, [filter])
 
-  const filterOptions: Array<{ value: FilterType; label: string; description: string }> = [
-    { value: "all", label: "All Matches", description: "" },
-    { value: "pending", label: "Pending", description: "Awaiting your result submission" },
-    { value: "awaiting_review", label: "Awaiting Review", description: "Waiting for admin verification" },
-    { value: "confirmed", label: "Confirmed", description: "Admin verified results" },
-    { value: "disputed", label: "Disputed", description: "Under dispute review" },
+  const filterOptions: Array<{ value: FilterType; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "pending", label: "Pending" },
+    { value: "awaiting_review", label: "Awaiting" },
+    { value: "confirmed", label: "Confirmed" },
+    { value: "disputed", label: "Disputed" },
   ]
 
   return (
-    <div className="space-y-4 pb-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">My Matches</h1>
-        <p className="text-muted-foreground">{allMatches.length} total matches across all tournaments</p>
+    <PlayerPageShell wide>
+      <PlayerPageHeader
+        title="My Matches"
+        description={`${allMatches.length} matches across tournaments`}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {filterOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setFilter(option.value)}
+            className={cn(
+              "rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors",
+              filter === option.value
+                ? "bg-bg-panel-dark text-white"
+                : "bg-bg-panel-light text-text-secondary hover:text-text-primary"
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
 
-      <TooltipProvider>
-        <div className="flex flex-wrap gap-2">
-          {filterOptions.map((option) => (
-            <Tooltip key={option.value} delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={filter === option.value ? "default" : "outline"}
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => setFilter(option.value)}
-                >
-                  {option.value === "all" ? <Filter className="mr-1.5 size-4" /> : null}
-                  {option.label}
-                  {option.description ? <Info className="ml-1 size-3 opacity-60" /> : null}
-                </Button>
-              </TooltipTrigger>
-              {option.description && (
-                <TooltipContent side="bottom" className="text-xs">
-                  {option.description}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          ))}
+      <PlayerPanel className="px-0 py-0 sm:px-0">
+        <div className="border-b border-border-subtle px-6 py-4 sm:px-8">
+          <PlayerPanelTitle title="Match list" />
         </div>
-      </TooltipProvider>
 
-      <Card className="shadow-sm">
-        <CardContent className="px-0 sm:px-6">
-          {filteredMatches.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Competition</TableHead>
-                  <TableHead>Opponent</TableHead>
-                  <TableHead>Round</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMatches.map((match) => (
-                  <TableRow key={match.id}>
-                    <TableCell className="font-medium">{match.competition}</TableCell>
-                    <TableCell>{match.opponent}</TableCell>
-                    <TableCell>Round {match.round}</TableCell>
-                    <TableCell className="capitalize">{match.playerColor}</TableCell>
-                    <TableCell>{getStatusBadge(mapStatusForFilter(match.status))}</TableCell>
-                    <TableCell>{getResultBadge(match.result)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/player/matches/${match.id}`}>View</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        <div className="scrollbar-none max-h-[65vh] overflow-y-auto px-6 sm:px-8">
+          {filteredMatches.length === 0 ? (
+            <p className="py-10 text-center text-sm text-text-secondary">
+              {filter === "all" ? "No matches yet." : `No ${filter.replaceAll("_", " ")} matches.`}
+            </p>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-lg font-medium">No matches found</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {filter === "all" ? "You do not have any matches yet." : `No ${filter} matches right now.`}
-              </p>
-            </div>
+            filteredMatches.map((match) => (
+              <div
+                key={match.id}
+                className="flex flex-col gap-2 border-b border-border-subtle py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-text-primary">
+                    vs {match.opponent}
+                  </p>
+                  <p className="mt-0.5 text-xs text-text-secondary">
+                    {match.competition} · Round {match.round} ·{" "}
+                    <span className="capitalize">{match.playerColor}</span>
+                    {match.result ? ` · ${match.result}` : ""}
+                  </p>
+                  <p className={cn("mt-1 text-xs font-medium capitalize", statusClass(match.status))}>
+                    {statusLabel(match.status)}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-3">
+                  {match.gameLink ? (
+                    <a
+                      href={normalizeGameUrl(match.gameLink)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-text-primary underline underline-offset-2"
+                    >
+                      Game
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : (
+                    <span className="text-sm text-text-secondary">No game</span>
+                  )}
+                  <Link
+                    href={`/player/matches/${match.id}`}
+                    className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary"
+                  >
+                    View
+                  </Link>
+                </div>
+              </div>
+            ))
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </PlayerPanel>
+    </PlayerPageShell>
   )
 }

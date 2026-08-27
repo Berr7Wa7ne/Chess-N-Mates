@@ -3,6 +3,11 @@
 import { useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
+import {
+  PlayerPageHeader,
+  PlayerPageShell,
+  PlayerPanel,
+} from "@/components/layout/player-page-shell"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions, useCompetitionStandings } from "@/src/hooks/useCompetitions"
 import { useUserRegistrations } from "@/src/hooks/useParticipants"
@@ -49,7 +54,6 @@ export default function PlayerProfilePage() {
         return bTime - aTime
       })
 
-    // Prefer most recent completed, else most recent joined
     return (
       joined.find((c) => c.competition_status === "completed") ||
       joined.find((c) => c.competition_status === "active") ||
@@ -65,13 +69,12 @@ export default function PlayerProfilePage() {
 
   const lastStanding = useMemo(() => {
     if (!currentUser || !standingsQuery.data?.length) return null
-    return standingsQuery.data.find((row) => String(row.user_id) === String(currentUser.id)) ?? null
+    return (
+      standingsQuery.data.find((row) => String(row.user_id) === String(currentUser.id)) ?? null
+    )
   }, [currentUser, standingsQuery.data])
 
-  const communityElo =
-    lastStanding?.chess_elo ??
-    currentUser?.chess_elo ??
-    null
+  const communityElo = lastStanding?.chess_elo ?? currentUser?.chess_elo ?? null
 
   const name = currentUser?.display_name || "—"
   const username =
@@ -89,29 +92,18 @@ export default function PlayerProfilePage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 pb-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-text-primary">Profile</h1>
-        <p className="mt-1 text-sm text-text-secondary">Your account details</p>
-      </div>
+    <PlayerPageShell>
+      <PlayerPageHeader title="Profile" description="Your account details" />
 
-      {/* Card 1 — identity only */}
-      <section className="rounded-[20px] bg-bg-panel-light px-6 py-2 sm:px-8">
+      <PlayerPanel className="py-2">
         <DetailRow label="Name" value={name === "—" ? null : name} />
         <DetailRow label="Username" value={username === "—" ? null : username} />
         <DetailRow label="Phone number" value={phone === "—" ? null : phone} />
-        <DetailRow
-          label="Chess.com username"
-          value={chessCom === "—" ? null : chessCom}
-        />
-        <DetailRow
-          label="Lichess username"
-          value={lichess === "—" ? null : lichess}
-        />
-      </section>
+        <DetailRow label="Chess.com username" value={chessCom === "—" ? null : chessCom} />
+        <DetailRow label="Lichess username" value={lichess === "—" ? null : lichess} />
+      </PlayerPanel>
 
-      {/* Card 2 — community ELO = last tournament performance */}
-      <section className="rounded-[20px] bg-bg-panel-dark px-6 py-6 text-text-primary-inverse sm:px-8">
+      <PlayerPanel dark>
         <p className="text-[13px] font-medium text-white/50">Community ELO</p>
         <p className="mt-2 tabular-nums text-5xl font-extrabold tracking-tight text-accent-lime">
           {communityElo ?? "—"}
@@ -171,12 +163,10 @@ export default function PlayerProfilePage() {
               )}
             </div>
           ) : (
-            <p className="text-sm text-white/40">
-              No tournament performance on record yet.
-            </p>
+            <p className="text-sm text-white/40">No tournament performance on record yet.</p>
           )}
         </div>
-      </section>
+      </PlayerPanel>
 
       <button
         type="button"
@@ -186,6 +176,6 @@ export default function PlayerProfilePage() {
         <LogOut className="size-4" />
         Sign out
       </button>
-    </div>
+    </PlayerPageShell>
   )
 }

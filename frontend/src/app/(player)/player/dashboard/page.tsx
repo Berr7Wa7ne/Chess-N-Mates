@@ -15,16 +15,12 @@ import {
   type RatingStat,
   type TournamentChip,
 } from "@/components/dashboard"
-import {
-  competitions,
-  currentPlayerId,
-  getLeaderboardEntry,
-  getPlayerMatches,
-} from "@/lib/admin-data"
+import { competitions, currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useChessComRatings, resolveChessComUsername } from "@/src/hooks/useChessComRatings"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useJoinCompetition, useUserRegistrations } from "@/src/hooks/useParticipants"
+import { usePlayerCommunityStats } from "@/src/hooks/usePlayerCommunityStats"
 import { ApiError } from "@/src/types/api"
 
 const HERO_GRADIENTS = [
@@ -44,7 +40,6 @@ function ratingFill(value: number | null) {
   return Math.max(30, Math.min(95, ((value - 800) / 1600) * 65 + 30))
 }
 
-const currentPlayerStanding = getLeaderboardEntry(currentPlayerId)
 const playerMatches = getPlayerMatches(currentPlayerId)
 
 export default function PlayerDashboardPage() {
@@ -53,8 +48,11 @@ export default function PlayerDashboardPage() {
   const { data: registrationIds } = useUserRegistrations(currentUser?.id)
   const joinMutation = useJoinCompetition()
   const [bannerDismissed, setBannerDismissed] = useState(true)
+  const communityStats = usePlayerCommunityStats()
 
-  const chessUsername = resolveChessComUsername(currentUser)
+  const chessUsername = resolveChessComUsername(
+    communityStats.profileUser ?? currentUser
+  )
 
   const { data: chessRatings, isPending: ratingsPending, isError: ratingsError } =
     useChessComRatings(chessUsername)
@@ -161,7 +159,7 @@ export default function PlayerDashboardPage() {
   )
 
   const ratingStats: RatingStat[] = useMemo(() => {
-    const rapid = chessRatings?.rapid ?? currentUser?.chess_elo ?? null
+    const rapid = chessRatings?.rapid ?? communityStats.profileUser?.chess_elo ?? currentUser?.chess_elo ?? null
     const blitz = chessRatings?.blitz ?? null
     const bullet = chessRatings?.bullet ?? null
     const values = [rapid, blitz, bullet].filter((v): v is number => typeof v === "number")
@@ -193,34 +191,24 @@ export default function PlayerDashboardPage() {
         footnote: "Chess.com",
       },
     ]
-  }, [chessRatings, currentUser?.chess_elo])
+  }, [chessRatings, communityStats.profileUser?.chess_elo, currentUser?.chess_elo])
 
-  const wins = currentPlayerStanding?.wins ?? 0
-  const draws = currentPlayerStanding?.draws ?? 0
-  const losses = currentPlayerStanding?.losses ?? 0
-  const gamesPlayed = wins + draws + losses
-  const ratio =
-    losses === 0 ? wins.toFixed(2) : (wins / Math.max(losses, 1)).toFixed(2)
+  const { wins, draws, losses, games, ratio, communityElo, displayName, handle, isLoading } =
+    communityStats
 
   const playedSegments: GamesPlayedSegment[] = [
-    { id: "wins", label: "Wins", value: Math.max(wins, 1), color: "#141414" },
-    { id: "draws", label: "Draws", value: Math.max(draws, 1), color: "#3A3A3A" },
-    { id: "losses", label: "Losses", value: Math.max(losses, 1), color: "#9FE62E" },
+    { id: "wins", label: "Wins", value: Math.max(wins, 0), color: "#141414" },
+    { id: "draws", label: "Draws", value: Math.max(draws, 0), color: "#3A3A3A" },
+    { id: "losses", label: "Losses", value: Math.max(losses, 0), color: "#9FE62E" },
     {
       id: "pending",
-      label: "Pending",
-      value: Math.max(playerMatches.filter((m) => m.status === "pending").length, 1),
+      label: "Tournaments",
+      value: Math.max((registrationIds ?? []).length, 0),
       color: "#C6FF3D",
     },
   ]
 
-  const displayName = currentUser?.display_name || currentPlayerStanding?.username || "Player"
-  const handle =
-    currentUser?.chess_com_username ||
-    currentUser?.chess_username ||
-    currentUser?.phone_number ||
-    currentPlayerStanding?.username ||
-    "player"
+  const pendingDisplay = isLoading ? "…" : undefined
 
   return (
     <div className="flex flex-col gap-4">
@@ -244,10 +232,10 @@ export default function PlayerDashboardPage() {
               displayName,
               handle,
               online: true,
-              games: gamesPlayed || playerMatches.length,
-              elo: currentPlayerStanding?.elo ?? "—",
-              ratio,
-              wins,
+              games: pendingDisplay ?? games,
+              elo: pendingDisplay ?? communityElo ?? "—",
+              ratio: pendingDisplay ?? ratio,
+              wins: pendingDisplay ?? wins,
             }}
           />
         </div>
