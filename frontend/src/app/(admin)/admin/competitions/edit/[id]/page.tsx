@@ -28,7 +28,7 @@ export default function EditCompetitionPage() {
 
   if (competitionQuery.isLoading) {
     return (
-      <AdminPageShell wide className="max-w-3xl">
+      <AdminPageShell>
         <Skeleton className="h-40 w-full rounded-[20px]" />
         <Skeleton className="h-96 w-full rounded-[20px]" />
       </AdminPageShell>
@@ -53,7 +53,7 @@ export default function EditCompetitionPage() {
   }
 
   return (
-    <AdminPageShell wide className="max-w-3xl">
+    <AdminPageShell>
       <AdminPageHeader
         title="Edit competition"
         description={competitionQuery.data.name}
