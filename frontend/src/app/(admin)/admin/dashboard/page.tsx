@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
           title="At a glance"
           description="Live counts from your workspace"
         />
-        <div className="mt-2 grid grid-cols-3 gap-3">
+        <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
           {stats.map((stat) => (
             <div
               key={stat.label}

@@ -46,7 +46,7 @@ export function RoundNavigation({
     FILTER_OPTIONS.find((o) => o.value === activeFilter)?.label ?? 'All Matches'
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       {/* ── Round pill tabs ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
         {rounds.map((round) => (
@@ -54,7 +54,7 @@ export function RoundNavigation({
             key={round}
             onClick={() => onRoundChange(round)}
             className={cn(
-              'shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-all',
+              'min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all',
               round === currentRound
                 ? 'bg-foreground text-background shadow-sm'
                 : 'border border-border bg-background text-muted-foreground hover:bg-muted'
@@ -67,10 +67,10 @@ export function RoundNavigation({
 
       {/* ── Filter dropdown ── */}
       {onFilterChange && (
-        <div className="relative shrink-0" ref={dropdownRef}>
+        <div className="relative shrink-0 self-end sm:self-auto" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
           >
             {activeFilterLabel}
             <ChevronDown
@@ -87,7 +87,7 @@ export function RoundNavigation({
                     onFilterChange(opt.value)
                     setDropdownOpen(false)
                   }}
-                  className={`block w-full px-4 py-2 text-left text-xs font-medium transition-colors hover:bg-muted ${
+                  className={`block w-full px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted ${
                     activeFilter === opt.value
                       ? 'text-foreground bg-muted'
                       : 'text-muted-foreground'

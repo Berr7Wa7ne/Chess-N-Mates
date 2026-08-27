@@ -84,7 +84,7 @@ export function ChessRatingsPanel({
         )}
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
         {loading
           ? [0, 1, 2].map((i) => (
               <div

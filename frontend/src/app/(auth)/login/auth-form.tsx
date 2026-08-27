@@ -3,30 +3,24 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
-import { AuthShell } from '@/src/components/auth/auth-shell'
+  AuthField,
+  AuthInput,
+  AuthPrimaryButton,
+  AuthSegmented,
+  AuthShell,
+} from '@/src/components/auth/auth-shell'
 import { getDashboardPath } from '@/src/lib/auth-storage'
 import { normalizeNgPhone } from '@/src/lib/phone'
 import { useLoginUser } from '@/src/hooks/useLoginUser'
 import { useRegisterUser } from '@/src/hooks/useRegisterUser'
 import { ApiError } from '@/src/types/api'
 import type { ChessPlatform, UserRole } from '@/src/types/user'
+import { cn } from '@/lib/utils'
 
 type VerificationState = 'idle' | 'verifying' | 'verified' | 'invalid'
 type SignInAs = 'player' | 'admin'
-
-const CHESS_PLATFORMS: ChessPlatform[] = ['chess.com', 'lichess', 'over_the_board']
 
 export function AuthForm() {
   const router = useRouter()
@@ -217,23 +211,43 @@ export function AuthForm() {
 
   const isPending = loginMutation.isPending || registerMutation.isPending
 
+  const portalControl = (
+    <AuthField
+      label={mode === 'login' ? 'Enter as' : 'Register as'}
+      hint={
+        mode === 'login'
+          ? 'Admins can also enter as Member to use the player app.'
+          : undefined
+      }
+    >
+      <AuthSegmented
+        value={signInAs}
+        onChange={setSignInAs}
+        options={[
+          { value: 'player', label: 'Member' },
+          { value: 'admin', label: 'Admin' },
+        ]}
+      />
+    </AuthField>
+  )
+
   return (
     <AuthShell
       title={mode === 'login' ? 'Sign in' : 'Create account'}
       description={
         mode === 'login'
-          ? 'Choose admin or member, then enter phone and password'
-          : 'Register with a phone number and password'
+          ? 'Pick Member or Admin, then use your phone and password.'
+          : 'Join tournaments with your phone number and a password.'
       }
       footer={
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-text-secondary">
           {mode === 'login' ? (
             <>
               Don&apos;t have an account?{' '}
               <button
                 type="button"
                 onClick={() => switchMode('register')}
-                className="font-medium text-primary underline-offset-4 hover:underline"
+                className="font-semibold text-text-primary underline-offset-2 hover:underline"
               >
                 Sign up
               </button>
@@ -244,7 +258,7 @@ export function AuthForm() {
               <button
                 type="button"
                 onClick={() => switchMode('login')}
-                className="font-medium text-primary underline-offset-4 hover:underline"
+                className="font-semibold text-text-primary underline-offset-2 hover:underline"
               >
                 Sign in
               </button>
@@ -255,38 +269,22 @@ export function AuthForm() {
     >
       {mode === 'login' ? (
         <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Signing in as</Label>
-            <Select value={signInAs} onValueChange={(v) => setSignInAs(v as SignInAs)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="player">Member</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {portalControl}
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone number</Label>
-            <Input
+          <AuthField label="Phone number" hint="+234, 234, or your 10-digit number.">
+            <AuthInput
               id="phone"
               type="tel"
-              placeholder="+2348148429834 or 8148429834"
+              placeholder="8148429834"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
               required
             />
-            <p className="text-xs text-muted-foreground">
-              +234, 234, or your 10-digit number all work.
-            </p>
-          </div>
+          </AuthField>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
+          <AuthField label="Password">
+            <AuthInput
               id="password"
               type="password"
               value={password}
@@ -294,12 +292,11 @@ export function AuthForm() {
               autoComplete="current-password"
               required
             />
-          </div>
+          </AuthField>
 
           {signInAs === 'admin' && (
-            <div className="space-y-2">
-              <Label htmlFor="adminCode">Admin code</Label>
-              <Input
+            <AuthField label="Admin code">
+              <AuthInput
                 id="adminCode"
                 type="password"
                 value={adminCode}
@@ -307,61 +304,47 @@ export function AuthForm() {
                 autoComplete="off"
                 required
               />
-            </div>
+            </AuthField>
           )}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <AuthPrimaryButton type="submit" pending={isPending}>
             {loginMutation.isPending ? (
               <>
-                <Spinner className="mr-2" />
+                <Loader2 className="mr-2 size-4 animate-spin" />
                 Signing in…
               </>
             ) : (
-              'Login'
+              'Continue'
             )}
-          </Button>
+          </AuthPrimaryButton>
         </form>
       ) : (
         <form onSubmit={handleRegister} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Registering as</Label>
-            <Select value={signInAs} onValueChange={(v) => setSignInAs(v as SignInAs)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="player">Member</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {portalControl}
 
-          <div className="space-y-2">
-            <Label htmlFor="displayName">Display name</Label>
-            <Input
+          <AuthField label="Display name">
+            <AuthInput
               id="displayName"
-              placeholder="Alex Johnson"
+              placeholder="Your name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               required
             />
-          </div>
+          </AuthField>
 
-          <div className="space-y-2">
-            <Label htmlFor="registerPhone">Phone number</Label>
-            <Input
+          <AuthField label="Phone number">
+            <AuthInput
               id="registerPhone"
               type="tel"
-              placeholder="+2348148429834 or 8148429834"
+              placeholder="8148429834"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
             />
-          </div>
+          </AuthField>
 
-          <div className="space-y-2">
-            <Label htmlFor="registerPassword">Password</Label>
-            <Input
+          <AuthField label="Password">
+            <AuthInput
               id="registerPassword"
               type="password"
               value={password}
@@ -369,11 +352,10 @@ export function AuthForm() {
               autoComplete="new-password"
               required
             />
-          </div>
+          </AuthField>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input
+          <AuthField label="Confirm password">
+            <AuthInput
               id="confirmPassword"
               type="password"
               value={confirmPassword}
@@ -381,12 +363,11 @@ export function AuthForm() {
               autoComplete="new-password"
               required
             />
-          </div>
+          </AuthField>
 
           {signInAs === 'admin' && (
-            <div className="space-y-2">
-              <Label htmlFor="registerAdminCode">Admin code</Label>
-              <Input
+            <AuthField label="Admin code">
+              <AuthInput
                 id="registerAdminCode"
                 type="password"
                 value={adminCode}
@@ -394,90 +375,93 @@ export function AuthForm() {
                 autoComplete="off"
                 required
               />
-            </div>
+            </AuthField>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="chessPlatform">Chess Platform</Label>
-            <Select
-              value={chessPlatform}
-              onValueChange={(value) => setChessPlatform(value as ChessPlatform)}
-            >
-              <SelectTrigger id="chessPlatform" className="w-full">
-                <SelectValue placeholder="Select your chess platform" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="chess.com">Chess.com</SelectItem>
-                <SelectItem value="lichess">Lichess</SelectItem>
-                <SelectItem value="over_the_board">Over the Board</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <AuthField label="Chess platform">
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: 'chess.com', label: 'Chess.com' },
+                  { value: 'lichess', label: 'Lichess' },
+                  { value: 'over_the_board', label: 'OTB' },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setChessPlatform(option.value)}
+                  className={cn(
+                    'rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors',
+                    chessPlatform === option.value
+                      ? 'bg-bg-panel-dark text-white'
+                      : 'bg-bg-panel-light text-text-secondary hover:text-text-primary'
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </AuthField>
 
           {chessPlatform === 'chess.com' && (
-            <div className="space-y-2">
-              <Label htmlFor="chessComUsername">Chess.com Username</Label>
+            <AuthField label="Chess.com username">
               <div className="relative">
-                <Input
+                <AuthInput
                   id="chessComUsername"
-                  placeholder="Your Chess.com username"
+                  placeholder="Username"
                   value={chessComUsername}
                   onChange={(e) => {
                     setChessComUsername(e.target.value)
                     setVerificationState('idle')
                   }}
                   onBlur={verifyChessComUsername}
-                  className={
-                    verificationState === 'verified'
-                      ? 'pr-10 border-green-500'
-                      : verificationState === 'invalid'
-                        ? 'pr-10 border-red-500'
-                        : ''
-                  }
+                  className={cn(
+                    'pr-10',
+                    verificationState === 'verified' && 'border-emerald-500',
+                    verificationState === 'invalid' && 'border-red-500'
+                  )}
                 />
                 {verificationState === 'verified' && (
-                  <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-green-500" />
+                  <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-emerald-600" />
                 )}
                 {verificationState === 'invalid' && (
-                  <XCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-red-500" />
+                  <XCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-red-600" />
                 )}
                 {verificationState === 'verifying' && (
-                  <Spinner className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-text-secondary" />
                 )}
               </div>
-            </div>
+            </AuthField>
           )}
 
           {chessPlatform === 'lichess' && (
-            <div className="space-y-2">
-              <Label htmlFor="lichessUsername">Lichess Username</Label>
-              <Input
+            <AuthField label="Lichess username">
+              <AuthInput
                 id="lichessUsername"
-                placeholder="Your Lichess username"
+                placeholder="Username"
                 value={lichessUsername}
                 onChange={(e) => setLichessUsername(e.target.value)}
               />
-            </div>
+            </AuthField>
           )}
 
           {chessPlatform === 'over_the_board' && (
-            <div className="rounded-md bg-muted p-3 text-sm">
-              <p className="text-muted-foreground">
-                Over the board games are scored manually by the tournament admin
-              </p>
+            <div className="rounded-2xl bg-bg-panel-light px-4 py-3 text-sm text-text-secondary">
+              Over-the-board games are scored manually by the tournament admin.
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <AuthPrimaryButton type="submit" pending={isPending}>
             {registerMutation.isPending ? (
               <>
-                <Spinner className="mr-2" />
+                <Loader2 className="mr-2 size-4 animate-spin" />
                 Creating account…
               </>
             ) : (
-              'Sign up'
+              'Create account'
             )}
-          </Button>
+          </AuthPrimaryButton>
         </form>
       )}
     </AuthShell>

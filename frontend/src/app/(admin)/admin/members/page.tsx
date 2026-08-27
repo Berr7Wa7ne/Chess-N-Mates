@@ -195,7 +195,7 @@ export default function MembersPage() {
       >
         {selected && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 { label: "Status", value: statusLabel(selected.user_status) },
                 { label: "Role", value: selected.role },

@@ -1,0 +1,57 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Home, Medal, Swords, Trophy, User } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const navItems = [
+  { title: "Home", href: "/player/dashboard", icon: Home },
+  { title: "Tournament", href: "/player/tournament", icon: Trophy },
+  { title: "Matches", href: "/player/matches", icon: Swords },
+  { title: "Leaderboard", href: "/player/leaderboard", icon: Medal },
+  { title: "Profile", href: "/player/profile", icon: User },
+]
+
+export function PlayerBottomNav() {
+  const pathname = usePathname()
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-bg-panel-dark pb-[env(safe-area-inset-bottom)] md:hidden"
+      aria-label="Player navigation"
+    >
+      <div className="mx-auto flex max-w-[1440px] items-stretch justify-around px-1 pt-1">
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(`${item.href}/`)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-medium transition-colors",
+                isActive
+                  ? "text-accent-lime"
+                  : "text-white/45 active:text-white/80"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-xl",
+                  isActive && "bg-accent-lime text-text-primary"
+                )}
+              >
+                <item.icon
+                  className={cn("size-5", isActive ? "text-text-primary" : undefined)}
+                  strokeWidth={1.75}
+                />
+              </span>
+              <span className="truncate">{item.title}</span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}

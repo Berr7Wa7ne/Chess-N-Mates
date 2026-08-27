@@ -28,17 +28,17 @@ function initials(name: string) {
 /** Top bar of tournaments the player has played / joined — not a social friends list. */
 export function TournamentsBar({ tournaments }: { tournaments: TournamentChip[] }) {
   return (
-    <section className="rounded-[20px] bg-bg-panel-light px-6 py-4">
+    <section className="rounded-[20px] bg-bg-panel-light px-4 py-4 sm:px-6">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-text-primary">Your Tournaments</h2>
         <Link
           href="/player/tournament"
-          className="text-xs font-medium text-text-primary underline underline-offset-2"
+          className="min-h-11 inline-flex items-center text-xs font-medium text-text-primary underline underline-offset-2"
         >
           See All
         </Link>
       </div>
-      <div className="flex items-start gap-8 overflow-x-hidden">
+      <div className="-mx-1 flex items-start gap-6 overflow-x-auto px-1 pb-1 scrollbar-none">
         {tournaments.length === 0 ? (
           <Link
             href="/player/tournament"

@@ -403,7 +403,7 @@ export default function AdminCompetitionMatchesPage() {
             )}
 
             {/* Spacer so content isn't hidden behind sticky bottom bar */}
-            {canAdvance && <div className="h-24" />}
+            {canAdvance && <div className="h-28 md:h-24" />}
           </div>
 
           {/* ════════════ RIGHT COLUMN: Standings Sidebar ════════════ */}
@@ -418,7 +418,7 @@ export default function AdminCompetitionMatchesPage() {
 
       {/* ════════════ BOTTOM STICKY BAR ════════════ */}
       {canAdvance && !isCompleted && (effectiveRound === competitionCurrentRound) && (
-        <div className="sticky bottom-3 z-20 rounded-[20px] border border-border-subtle bg-bg-panel-light/95 px-5 py-4 shadow-lg backdrop-blur-sm">
+        <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 rounded-[20px] border border-border-subtle bg-bg-panel-light/95 px-4 py-4 shadow-lg backdrop-blur-sm md:bottom-3 md:px-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             {/* Left: status message */}
             {showAmberBar ? (
@@ -491,7 +491,7 @@ export default function AdminCompetitionMatchesPage() {
 
       {/* Completed state in bottom bar */}
       {isCompleted && (
-        <div className="sticky bottom-3 z-10 rounded-[20px] border border-border-subtle bg-bg-panel-light px-5 py-4 shadow-lg">
+        <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 rounded-[20px] border border-border-subtle bg-bg-panel-light px-4 py-4 shadow-lg md:bottom-3 md:px-5">
           <div className="flex items-center justify-center gap-2">
             <Crown className="size-5 text-amber-500" />
             <span className="text-sm font-medium text-foreground">Tournament complete</span>

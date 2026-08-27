@@ -95,8 +95,8 @@ export function HeroBanner({ slides }: { slides: HeroSlide[] }) {
               aria-label={`Go to slide ${i + 1}`}
               onClick={() => goTo(i)}
               className={cn(
-                "h-2 w-2 rounded-full transition-all duration-150",
-                i === index ? "h-6 bg-accent-lime" : "bg-white/40 hover:bg-white/70"
+                "min-h-4 min-w-4 rounded-full transition-all duration-150",
+                i === index ? "h-7 w-2.5 bg-accent-lime" : "h-2.5 w-2.5 bg-white/40 hover:bg-white/70"
               )}
             />
           ))}

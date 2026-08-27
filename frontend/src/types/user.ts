@@ -28,6 +28,8 @@ export interface AuthUser {
   phone_number: string
   display_name: string
   role: UserRole
+  /** Real account role from DB when session role differs (e.g. admin signed in as member). */
+  account_role?: UserRole
 }
 
 export interface RegisterUserPayload {

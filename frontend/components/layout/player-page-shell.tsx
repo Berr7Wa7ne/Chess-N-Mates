@@ -53,7 +53,7 @@ export function PlayerPanel({
   return (
     <section
       className={cn(
-        "rounded-[20px] px-6 py-5 sm:px-8",
+        "rounded-[20px] px-4 py-5 sm:px-8",
         dark ? "bg-bg-panel-dark text-text-primary-inverse" : "bg-bg-panel-light text-text-primary",
         className
       )}

@@ -45,7 +45,7 @@ export function StandingsModal({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-5xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="flex max-h-dvh flex-col gap-4 overflow-hidden sm:max-h-[85vh] sm:max-w-5xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Trophy className="size-5 text-amber-500" />
@@ -62,12 +62,14 @@ export function StandingsModal({
             No standings available yet.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl border">
+          <div className="min-h-0 flex-1 overflow-auto rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Player</TableHead>
+                  <TableHead className="sticky left-0 z-10 w-12 bg-background">#</TableHead>
+                  <TableHead className="sticky left-12 z-10 min-w-32 bg-background">
+                    Player
+                  </TableHead>
                   <TableHead className="text-center tabular-nums">P</TableHead>
                   <TableHead className="text-center tabular-nums">W</TableHead>
                   <TableHead className="text-center tabular-nums">D</TableHead>
@@ -96,10 +98,10 @@ export function StandingsModal({
                     key={row.user_id}
                     className={`${row.absences > 0 ? 'bg-red-50/50 dark:bg-red-950/10' : ''}`}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className="sticky left-0 z-10 bg-background font-medium">
                       {getRankDisplay(row, index)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="sticky left-12 z-10 bg-background">
                       <div className="font-medium">{row.display_name}</div>
                       {row.chess_elo && (
                         <div className="text-xs text-muted-foreground">ELO {row.chess_elo}</div>
@@ -137,7 +139,7 @@ export function StandingsModal({
         )}
 
         <div className="flex justify-end pt-2">
-          <Button variant="outline" onClick={onClose} className="gap-2">
+          <Button variant="outline" onClick={onClose} className="min-h-11 gap-2 px-4">
             <X className="size-4" />
             Close
           </Button>

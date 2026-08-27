@@ -133,7 +133,7 @@ function NeedsReviewPanel({
               type="button"
               size="sm"
               variant="outline"
-              className="h-6 px-2 text-[10px]"
+              className="min-h-9 px-3 text-xs"
               disabled={disabled}
               onClick={() => onApply(c)}
             >

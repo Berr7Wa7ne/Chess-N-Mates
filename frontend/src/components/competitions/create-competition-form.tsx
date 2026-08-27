@@ -513,7 +513,7 @@ export function CreateCompetitionForm({
 
         <div className="space-y-2">
           <Label>Format</Label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {TOURNAMENT_TYPES.map((type) => {
               const selected = tournamentType === type.value
               const suggested = formatAdvice.recommended === type.value
@@ -523,7 +523,7 @@ export function CreateCompetitionForm({
                   type="button"
                   onClick={() => setTournamentType(type.value)}
                   className={cn(
-                    "rounded-xl px-3 py-3 text-center text-sm font-semibold transition-all",
+                    "min-h-11 rounded-xl px-3 py-3 text-center text-sm font-semibold transition-all",
                     selected
                       ? "bg-accent-lime text-text-primary"
                       : "bg-bg-shell text-text-secondary hover:text-text-primary"
@@ -541,7 +541,7 @@ export function CreateCompetitionForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="maxParticipants">Players</Label>
             <Input

@@ -119,11 +119,11 @@ export function AdminContentModal({
       <DialogContent
         showCloseButton={false}
         className={cn(
-          "gap-0 overflow-hidden rounded-[24px] border-0 bg-bg-shell p-0 text-text-primary shadow-2xl",
+          "gap-0 overflow-hidden rounded-none border-0 bg-bg-shell p-0 text-text-primary shadow-2xl sm:rounded-[24px]",
           wide ? "sm:max-w-3xl" : "sm:max-w-xl"
         )}
       >
-        <DialogHeader className="flex flex-row items-start justify-between gap-4 border-b border-border-subtle px-6 py-5 sm:px-7">
+        <DialogHeader className="flex flex-row items-start justify-between gap-4 border-b border-border-subtle px-4 py-5 sm:px-7">
           <div className="min-w-0 space-y-1 text-left">
             <DialogTitle className="text-xl font-bold tracking-tight">
               {title}
@@ -138,12 +138,12 @@ export function AdminContentModal({
             type="button"
             aria-label="Close"
             onClick={() => onOpenChange(false)}
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
           >
             <X className="size-4" />
           </button>
         </DialogHeader>
-        <div className="player-main max-h-[min(70vh,640px)] overflow-y-auto px-6 py-5 sm:px-7">
+        <div className="player-main max-h-[min(calc(100dvh-5.5rem),70vh)] overflow-y-auto px-4 py-5 sm:max-h-[min(70vh,640px)] sm:px-7">
           {children}
         </div>
       </DialogContent>

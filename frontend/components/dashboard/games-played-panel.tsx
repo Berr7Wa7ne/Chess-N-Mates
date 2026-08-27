@@ -74,7 +74,7 @@ export function GamesPlayedPanel({ segments }: { segments: GamesPlayedSegment[] 
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex flex-col items-center gap-6 min-[400px]:flex-row">
         <div className="relative size-[140px] shrink-0 sm:size-[160px]">
           <svg viewBox="0 0 140 140" className="size-full -rotate-90">
             <circle

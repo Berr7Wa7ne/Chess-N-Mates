@@ -45,7 +45,7 @@ export function PlayerIconRail() {
   }
 
   return (
-    <aside className="flex w-[72px] shrink-0 flex-col items-center self-stretch rounded-l-[32px] bg-bg-panel-dark py-8">
+    <aside className="hidden w-[72px] shrink-0 flex-col items-center self-stretch rounded-l-[32px] bg-bg-panel-dark py-8 md:flex">
       <nav className="flex flex-1 flex-col items-center justify-between gap-2 py-2">
         <div className="flex flex-col items-center gap-5">
           {navItems.map((item) => {

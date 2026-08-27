@@ -222,14 +222,13 @@ exports.loginUser = async (req, res) => {
   }
 
   const accountRole = normalizeRole(data.role);
-  if (accountRole !== requestedRole) {
+
+  // Admins may sign in as members (player surface). Only true admins may pick admin.
+  if (requestedRole === 'admin' && accountRole !== 'admin') {
     return res.status(403).json({
       success: false,
       error: {
-        message:
-          requestedRole === 'admin'
-            ? 'This account is not an admin. Sign in as a member instead.'
-            : 'This account is an admin. Sign in as admin and enter the admin code.',
+        message: 'This account is not an admin. Sign in as a member instead.',
       },
     });
   }
@@ -252,7 +251,14 @@ exports.loginUser = async (req, res) => {
     data.phone_number = normalizedPhone;
   }
 
-  res.json({ success: true, data: publicUser(data) });
+  // Session role follows the portal they chose (admin can enter as member).
+  const sessionUser = {
+    ...publicUser(data),
+    role: requestedRole,
+    account_role: accountRole,
+  };
+
+  res.json({ success: true, data: sessionUser });
 };
 
 exports.registerChess = async (req, res) => {

@@ -267,7 +267,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>
@@ -277,7 +277,7 @@ export default function PlayerTournamentPage() {
                           type="button"
                           onClick={handleWithdraw}
                           disabled={withdrawMutation.isPending}
-                          className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold"
+                          className="min-h-11 rounded-xl border border-border-subtle px-4 py-2.5 text-sm font-semibold"
                         >
                           Withdraw
                         </button>
@@ -289,7 +289,7 @@ export default function PlayerTournamentPage() {
                             setSelectedCompetitionId(String(competition.id))
                             setCurrentRound(competition.current_round || null)
                           }}
-                          className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold"
+                          className="min-h-11 rounded-xl border border-border-subtle px-4 py-2.5 text-sm font-semibold"
                         >
                           View
                         </button>
@@ -348,7 +348,7 @@ export default function PlayerTournamentPage() {
                 return (
                   <button
                     type="button"
-                    className="h-7 rounded-lg border border-border-subtle px-2 text-[10px] font-semibold"
+                    className="min-h-11 rounded-xl border border-border-subtle px-4 text-sm font-semibold"
                     onClick={() => setResultDialogMatch(match)}
                   >
                     Submit Result
@@ -453,7 +453,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>

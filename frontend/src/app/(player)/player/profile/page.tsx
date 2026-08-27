@@ -68,7 +68,7 @@ function EditableDetailRow({
             aria-label={`Save ${label}`}
             disabled={saving}
             onClick={onSave}
-            className="flex size-8 items-center justify-center rounded-lg bg-accent-lime text-text-primary disabled:opacity-50"
+            className="flex size-11 items-center justify-center rounded-lg bg-accent-lime text-text-primary disabled:opacity-50"
           >
             <Check className="size-4" />
           </button>
@@ -77,7 +77,7 @@ function EditableDetailRow({
             aria-label={`Cancel ${label}`}
             disabled={saving}
             onClick={onCancel}
-            className="flex size-8 items-center justify-center rounded-lg border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-50"
+            className="flex size-11 items-center justify-center rounded-lg border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-50"
           >
             <X className="size-4" />
           </button>
@@ -97,7 +97,7 @@ function EditableDetailRow({
               type="button"
               aria-label={`Edit ${label}`}
               onClick={onStartEdit}
-              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
             >
               <Pencil className="size-3.5" />
             </button>

@@ -12,6 +12,8 @@ export {
 } from "./admin-page-shell"
 export { PlayerLayout } from "./player-layout"
 export { PlayerIconRail } from "./player-icon-rail"
+export { PlayerBottomNav } from "./player-bottom-nav"
+export { AdminBottomNav } from "./admin-bottom-nav"
 export { PlayerNavbar } from "./player-navbar"
 export {
   PlayerPageShell,

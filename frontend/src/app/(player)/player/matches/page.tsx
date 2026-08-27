@@ -104,7 +104,7 @@ export default function PlayerMatchesPage() {
             type="button"
             onClick={() => setFilter(option.value)}
             className={cn(
-              "rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors",
+              "min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors",
               filter === option.value
                 ? "bg-bg-panel-dark text-white"
                 : "bg-bg-panel-light text-text-secondary hover:text-text-primary"
@@ -174,7 +174,7 @@ export default function PlayerMatchesPage() {
                     )}
                     <Link
                       href={`/player/matches/${match.id}`}
-                      className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary"
+                      className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
                     >
                       View
                     </Link>
