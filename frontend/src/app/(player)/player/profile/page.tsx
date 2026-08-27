@@ -136,6 +136,10 @@ export default function PlayerProfilePage() {
   const [editingField, setEditingField] = useState<EditableField | null>(null)
   const [draft, setDraft] = useState("")
   const [saving, setSaving] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmNewPassword, setConfirmNewPassword] = useState("")
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const lastTournament = useMemo(() => {
     if (!competitions?.length || !registrationIds?.length) return null
@@ -236,6 +240,40 @@ export default function PlayerProfilePage() {
     router.push("/login")
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user?.id) return
+
+    if (!currentPassword || !newPassword) {
+      toast.error("Enter your current and new password")
+      return
+    }
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters")
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error("New passwords do not match")
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      await userService.changePassword(user.id, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+      toast.success("Password updated")
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmNewPassword("")
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to change password")
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
   return (
     <PlayerPageShell>
       <PlayerPageHeader
@@ -303,6 +341,46 @@ export default function PlayerProfilePage() {
             />
           </>
         )}
+      </PlayerPanel>
+
+      <PlayerPanel>
+        <p className="text-[15px] font-semibold text-text-primary">Change password</p>
+        <p className="mt-1 text-sm text-text-secondary">
+          Leave the default password behind — use something only you know.
+        </p>
+        <form onSubmit={handleChangePassword} className="mt-4 space-y-3">
+          <input
+            type="password"
+            placeholder="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm font-medium outline-none focus:border-text-primary/30"
+          />
+          <input
+            type="password"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm font-medium outline-none focus:border-text-primary/30"
+          />
+          <input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            autoComplete="new-password"
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm font-medium outline-none focus:border-text-primary/30"
+          />
+          <button
+            type="submit"
+            disabled={changingPassword}
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-bg-panel-dark text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {changingPassword ? "Updating…" : "Update password"}
+          </button>
+        </form>
       </PlayerPanel>
 
       <PlayerPanel dark>

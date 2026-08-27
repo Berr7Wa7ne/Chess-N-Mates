@@ -1,4 +1,12 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
+const { normalizeNgPhone, phoneLookupCandidates } = require('../utils/phone');
+const {
+  assertAdminCode,
+  getDefaultPassword,
+  hashDefaultPassword,
+  hashPassword,
+  verifyPassword,
+} = require('../utils/password');
 
 const VALID_ROLES = ['admin', 'player'];
 
@@ -7,21 +15,74 @@ function normalizeRole(role) {
   return String(role).toLowerCase();
 }
 
+function publicUser(row) {
+  if (!row) return row;
+  const { password_hash, ...safe } = row;
+  return safe;
+}
+
+async function findUserByPhone(phoneInput, select = '*') {
+  const candidates = phoneLookupCandidates(phoneInput);
+  if (!candidates.length) return { data: null, error: null };
+
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select(select)
+    .in('phone_number', candidates)
+    .limit(1)
+    .maybeSingle();
+
+  return { data, error };
+}
+
+async function ensurePasswordHash(user, plainPassword) {
+  if (user.password_hash) {
+    const ok = await verifyPassword(plainPassword, user.password_hash);
+    return { ok, updatedHash: null };
+  }
+
+  // Legacy accounts: accept default password once, then persist a hash.
+  if (String(plainPassword) !== getDefaultPassword()) {
+    return { ok: false, updatedHash: null };
+  }
+
+  const updatedHash = await hashDefaultPassword();
+  await supabaseAdmin
+    .from('users')
+    .update({ password_hash: updatedHash })
+    .eq('id', user.id);
+
+  return { ok: true, updatedHash };
+}
+
 exports.registerUser = async (req, res) => {
-  const { 
-    phone_number, 
-    whatsapp_id, 
-    display_name, 
+  const {
+    phone_number,
+    whatsapp_id,
+    display_name,
     role: rawRole,
     chess_platform,
     chess_com_username,
-    lichess_username 
+    lichess_username,
+    password,
+    admin_code,
   } = req.body;
 
   if (!phone_number) {
     return res.status(400).json({
       success: false,
       error: { message: 'phone_number is required' },
+    });
+  }
+
+  const normalizedPhone = normalizeNgPhone(phone_number);
+  if (!normalizedPhone) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message:
+          'Invalid phone number. Use +234…, 234…, or your 10-digit local number.',
+      },
     });
   }
 
@@ -33,11 +94,29 @@ exports.registerUser = async (req, res) => {
     });
   }
 
-  const { data: existingUser, error: lookupError } = await supabaseAdmin
-    .from('users')
-    .select('id')
-    .eq('phone_number', phone_number)
-    .maybeSingle();
+  if (role === 'admin' && !assertAdminCode(admin_code)) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Valid admin code is required to register as admin.' },
+    });
+  }
+
+  const plainPassword =
+    password && String(password).trim()
+      ? String(password).trim()
+      : getDefaultPassword();
+
+  if (plainPassword.length < 6) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Password must be at least 6 characters.' },
+    });
+  }
+
+  const { data: existingUser, error: lookupError } = await findUserByPhone(
+    normalizedPhone,
+    'id'
+  );
 
   if (lookupError) {
     return res.status(400).json({ success: false, error: { message: lookupError.message } });
@@ -50,7 +129,6 @@ exports.registerUser = async (req, res) => {
     });
   }
 
-  // Determine display_name based on chess platform
   let finalDisplayName = display_name;
   if (chess_platform === 'chess.com' && chess_com_username) {
     finalDisplayName = chess_com_username;
@@ -63,27 +141,33 @@ exports.registerUser = async (req, res) => {
     });
   }
 
+  const password_hash = await hashPassword(plainPassword);
+
   const { data, error } = await supabaseAdmin
     .from('users')
-    .insert([{
-      phone_number,
-      whatsapp_id: whatsapp_id || null,
-      display_name: finalDisplayName,
-      role,
-      email: `${phone_number}@temp.com`,
-      chess_platform: chess_platform || null,
-      chess_com_username: chess_platform === 'chess.com' ? chess_com_username : null,
-      lichess_username: chess_platform === 'lichess' ? lichess_username : null,
-    }])
+    .insert([
+      {
+        phone_number: normalizedPhone,
+        whatsapp_id: whatsapp_id || null,
+        display_name: finalDisplayName,
+        role,
+        email: `${normalizedPhone}@temp.com`,
+        chess_platform: chess_platform || null,
+        chess_com_username: chess_platform === 'chess.com' ? chess_com_username : null,
+        lichess_username: chess_platform === 'lichess' ? lichess_username : null,
+        password_hash,
+        user_status: 'active',
+      },
+    ])
     .select()
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.status(201).json({ success: true, data });
+  res.status(201).json({ success: true, data: publicUser(data) });
 };
 
 exports.loginUser = async (req, res) => {
-  const { phone_number } = req.body;
+  const { phone_number, password, role: rawRole, admin_code } = req.body;
 
   if (!phone_number) {
     return res.status(400).json({
@@ -92,13 +176,32 @@ exports.loginUser = async (req, res) => {
     });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('users')
-    .select(
-      'id, phone_number, display_name, role, chess_platform, chess_username, chess_com_username, lichess_username, chess_elo, whatsapp_phone, avatar_url'
-    )
-    .eq('phone_number', phone_number.trim())
-    .maybeSingle();
+  if (!password) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'password is required' },
+    });
+  }
+
+  const requestedRole = normalizeRole(rawRole || 'player');
+  if (!VALID_ROLES.includes(requestedRole)) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'Invalid role. Choose admin or member.' },
+    });
+  }
+
+  if (requestedRole === 'admin' && !assertAdminCode(admin_code)) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Valid admin code is required to sign in as admin.' },
+    });
+  }
+
+  const { data, error } = await findUserByPhone(
+    phone_number,
+    'id, phone_number, display_name, role, chess_platform, chess_username, chess_com_username, lichess_username, chess_elo, whatsapp_phone, avatar_url, password_hash, user_status'
+  );
 
   if (error) {
     return res.status(400).json({ success: false, error: { message: error.message } });
@@ -111,7 +214,45 @@ exports.loginUser = async (req, res) => {
     });
   }
 
-  res.json({ success: true, data });
+  if (data.user_status === 'banned') {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'This account has been banned.' },
+    });
+  }
+
+  const accountRole = normalizeRole(data.role);
+  if (accountRole !== requestedRole) {
+    return res.status(403).json({
+      success: false,
+      error: {
+        message:
+          requestedRole === 'admin'
+            ? 'This account is not an admin. Sign in as a member instead.'
+            : 'This account is an admin. Sign in as admin and enter the admin code.',
+      },
+    });
+  }
+
+  const { ok } = await ensurePasswordHash(data, password);
+  if (!ok) {
+    return res.status(401).json({
+      success: false,
+      error: { message: 'Incorrect password' },
+    });
+  }
+
+  // Persist normalized phone if legacy format was stored
+  const normalizedPhone = normalizeNgPhone(phone_number);
+  if (normalizedPhone && data.phone_number !== normalizedPhone) {
+    await supabaseAdmin
+      .from('users')
+      .update({ phone_number: normalizedPhone })
+      .eq('id', data.id);
+    data.phone_number = normalizedPhone;
+  }
+
+  res.json({ success: true, data: publicUser(data) });
 };
 
 exports.registerChess = async (req, res) => {
@@ -119,7 +260,10 @@ exports.registerChess = async (req, res) => {
   const { chess_username, chess_platform } = req.body;
 
   if (!chess_username || !chess_platform) {
-    return res.status(400).json({ success: false, error: { message: 'chess_username and chess_platform are required' } });
+    return res.status(400).json({
+      success: false,
+      error: { message: 'chess_username and chess_platform are required' },
+    });
   }
 
   const updates = {
@@ -128,7 +272,6 @@ exports.registerChess = async (req, res) => {
     chess_elo: 1200,
   };
 
-  // Also update chess_com_username and display_name for chess.com users
   if (chess_platform === 'chess.com') {
     updates.chess_com_username = chess_username;
     updates.display_name = chess_username;
@@ -145,7 +288,7 @@ exports.registerChess = async (req, res) => {
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+  res.json({ success: true, data: publicUser(data) });
 };
 
 exports.listUsers = async (req, res) => {
@@ -177,7 +320,7 @@ exports.getUser = async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', id).single();
   if (error) return res.status(404).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+  res.json({ success: true, data: publicUser(data) });
 };
 
 exports.updateUser = async (req, res) => {
@@ -203,7 +346,6 @@ exports.updateUser = async (req, res) => {
     });
   }
 
-  // Same CNM account (id) stays linked to tournament history — only update handles.
   const updates = {};
 
   if (display_name !== undefined) {
@@ -233,7 +375,6 @@ exports.updateUser = async (req, res) => {
     updates.lichess_username = nextLichess;
   }
 
-  // Keep primary chess_username aligned with the account's tournament platform.
   const platform = existing.chess_platform;
   if (platform === 'chess.com' && chess_com_username !== undefined && nextChessCom) {
     nextChessUsername = nextChessCom;
@@ -247,7 +388,6 @@ exports.updateUser = async (req, res) => {
     nextChessUsername = nextLichess;
   }
 
-  // Editing community Username keeps the linked platform handle in sync.
   if (chess_username !== undefined && nextChessUsername) {
     if (platform === 'chess.com' || updates.chess_platform === 'chess.com') {
       updates.chess_com_username = nextChessUsername;
@@ -266,7 +406,7 @@ exports.updateUser = async (req, res) => {
   }
 
   if (Object.keys(updates).length === 0) {
-    return res.json({ success: true, data: existing });
+    return res.json({ success: true, data: publicUser(existing) });
   }
 
   const { data, error } = await supabaseAdmin
@@ -277,5 +417,102 @@ exports.updateUser = async (req, res) => {
     .single();
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+  res.json({ success: true, data: publicUser(data) });
+};
+
+/** Member changes their own password (requires current password). */
+exports.changePassword = async (req, res) => {
+  const { id } = req.params;
+  const { current_password, new_password } = req.body;
+
+  if (!current_password || !new_password) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'current_password and new_password are required' },
+    });
+  }
+
+  if (String(new_password).trim().length < 6) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'New password must be at least 6 characters.' },
+    });
+  }
+
+  const { data: user, error } = await supabaseAdmin
+    .from('users')
+    .select('id, password_hash')
+    .eq('id', id)
+    .single();
+
+  if (error || !user) {
+    return res.status(404).json({ success: false, error: { message: 'User not found' } });
+  }
+
+  const { ok } = await ensurePasswordHash(
+    { id: user.id, password_hash: user.password_hash },
+    current_password
+  );
+
+  if (!ok) {
+    return res.status(401).json({
+      success: false,
+      error: { message: 'Current password is incorrect' },
+    });
+  }
+
+  const password_hash = await hashPassword(String(new_password).trim());
+  const { error: updateError } = await supabaseAdmin
+    .from('users')
+    .update({ password_hash })
+    .eq('id', id);
+
+  if (updateError) {
+    return res.status(400).json({ success: false, error: { message: updateError.message } });
+  }
+
+  res.json({ success: true, data: { id, message: 'Password updated' } });
+};
+
+/** Admin resets a member password to the platform default. */
+exports.resetPassword = async (req, res) => {
+  const { id } = req.params;
+  const { admin_code } = req.body || {};
+
+  // Soft gate: admin panel callers should send the admin code (same as login).
+  if (!assertAdminCode(admin_code)) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Valid admin code is required to reset passwords.' },
+    });
+  }
+
+  const { data: user, error } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('id', id)
+    .single();
+
+  if (error || !user) {
+    return res.status(404).json({ success: false, error: { message: 'User not found' } });
+  }
+
+  const password_hash = await hashDefaultPassword();
+  const { error: updateError } = await supabaseAdmin
+    .from('users')
+    .update({ password_hash })
+    .eq('id', id);
+
+  if (updateError) {
+    return res.status(400).json({ success: false, error: { message: updateError.message } });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id,
+      message: 'Password reset to the default password',
+      default_password: getDefaultPassword(),
+    },
+  });
 };

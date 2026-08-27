@@ -26,7 +26,12 @@ interface AuthContextValue {
   role: UserRole | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (phone: string) => Promise<AuthUser>
+  login: (payload: {
+    phone: string
+    password: string
+    role: UserRole
+    admin_code?: string
+  }) => Promise<AuthUser>
   logout: () => void
   setUser: (user: User | AuthUser) => void
   getDashboardPath: () => string
@@ -47,20 +52,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = useCallback(async (phone: string) => {
-    const response = await userService.login({ phone_number: phone.trim() })
-    const authUser = response.data
+  const login = useCallback(
+    async ({
+      phone,
+      password,
+      role,
+      admin_code,
+    }: {
+      phone: string
+      password: string
+      role: UserRole
+      admin_code?: string
+    }) => {
+      const response = await userService.login({
+        phone_number: phone.trim(),
+        password,
+        role,
+        admin_code: admin_code?.trim() || undefined,
+      })
+      const authUser = response.data
 
-    if (authUser && typeof authUser.id === 'number') {
-      authUser.id = String(authUser.id)
-    }
+      if (authUser && typeof authUser.id === 'number') {
+        authUser.id = String(authUser.id)
+      }
 
-    setStoredUser(authUser)
-    setAuthCookies(authUser.role)
-    setUserState(authUser as User)
+      setStoredUser(authUser)
+      setAuthCookies(authUser.role)
+      setUserState(authUser as User)
 
-    return authUser
-  }, [])
+      return authUser
+    },
+    []
+  )
 
   const logout = useCallback(() => {
     clearStoredUser()

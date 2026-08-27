@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,13 +17,14 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { AuthShell } from '@/src/components/auth/auth-shell'
 import { getDashboardPath } from '@/src/lib/auth-storage'
+import { normalizeNgPhone } from '@/src/lib/phone'
 import { useLoginUser } from '@/src/hooks/useLoginUser'
 import { useRegisterUser } from '@/src/hooks/useRegisterUser'
 import { ApiError } from '@/src/types/api'
-import { cn } from '@/lib/utils'
 import type { ChessPlatform, UserRole } from '@/src/types/user'
 
 type VerificationState = 'idle' | 'verifying' | 'verified' | 'invalid'
+type SignInAs = 'player' | 'admin'
 
 const CHESS_PLATFORMS: ChessPlatform[] = ['chess.com', 'lichess', 'over_the_board']
 
@@ -35,8 +36,11 @@ export function AuthForm() {
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [role, setRole] = useState<UserRole>('player')
+  const [signInAs, setSignInAs] = useState<SignInAs>('player')
+  const [adminCode, setAdminCode] = useState('')
   const [chessPlatform, setChessPlatform] = useState<ChessPlatform>('chess.com')
   const [chessComUsername, setChessComUsername] = useState('')
   const [lichessUsername, setLichessUsername] = useState('')
@@ -79,9 +83,28 @@ export function AuthForm() {
       toast.error('Please enter your phone number')
       return
     }
+    if (!password) {
+      toast.error('Please enter your password')
+      return
+    }
+    if (signInAs === 'admin' && !adminCode.trim()) {
+      toast.error('Admin code is required to sign in as admin')
+      return
+    }
+
+    const normalized = normalizeNgPhone(phone)
+    if (!normalized) {
+      toast.error('Enter a valid Nigerian number (+234, 234, or 10 digits)')
+      return
+    }
 
     try {
-      const user = await loginMutation.mutateAsync({ phone: phone.trim() })
+      const user = await loginMutation.mutateAsync({
+        phone: normalized,
+        password,
+        role: signInAs as UserRole,
+        admin_code: signInAs === 'admin' ? adminCode.trim() : undefined,
+      })
       toast.success(`Welcome back, ${user.display_name}!`)
       router.push(getDashboardPath(user.role))
     } catch (error) {
@@ -102,9 +125,30 @@ export function AuthForm() {
     const name = displayName.trim()
     const trimmedChessComUsername = chessComUsername.trim()
     const trimmedLichessUsername = lichessUsername.trim()
+    const role: UserRole = signInAs
 
     if (!name || !phoneNumber) {
       toast.error('Display name and phone number are required')
+      return
+    }
+
+    const normalized = normalizeNgPhone(phoneNumber)
+    if (!normalized) {
+      toast.error('Enter a valid Nigerian number (+234, 234, or 10 digits)')
+      return
+    }
+
+    if (!password || password.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+
+    if (role === 'admin' && !adminCode.trim()) {
+      toast.error('Admin code is required to register as admin')
       return
     }
 
@@ -138,9 +182,11 @@ export function AuthForm() {
     try {
       await registerMutation.mutateAsync({
         display_name: finalDisplayName,
-        phone_number: phoneNumber,
+        phone_number: normalized,
         whatsapp_id: null,
         role,
+        password,
+        admin_code: role === 'admin' ? adminCode.trim() : undefined,
         chess_platform: chessPlatform,
         chess_com_username: chessPlatform === 'chess.com' ? trimmedChessComUsername : null,
         lichess_username: chessPlatform === 'lichess' ? trimmedLichessUsername : null,
@@ -149,7 +195,10 @@ export function AuthForm() {
       toast.success('Account created! Please sign in.')
       setMode('login')
       setDisplayName('')
-      setRole('player')
+      setPassword('')
+      setConfirmPassword('')
+      setAdminCode('')
+      setSignInAs('player')
       setChessPlatform('chess.com')
       setChessComUsername('')
       setLichessUsername('')
@@ -173,8 +222,8 @@ export function AuthForm() {
       title={mode === 'login' ? 'Sign in' : 'Create account'}
       description={
         mode === 'login'
-          ? 'Enter your phone number to access your dashboard'
-          : 'Register to join chess tournaments'
+          ? 'Choose admin or member, then enter phone and password'
+          : 'Register with a phone number and password'
       }
       footer={
         <p className="text-center text-sm text-muted-foreground">
@@ -207,17 +256,59 @@ export function AuthForm() {
       {mode === 'login' ? (
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
+            <Label>Signing in as</Label>
+            <Select value={signInAs} onValueChange={(v) => setSignInAs(v as SignInAs)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="player">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="phone">Phone number</Label>
             <Input
               id="phone"
               type="tel"
-              placeholder="2348051219099"
+              placeholder="+2348148429834 or 8148429834"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
               required
             />
+            <p className="text-xs text-muted-foreground">
+              +234, 234, or your 10-digit number all work.
+            </p>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+
+          {signInAs === 'admin' && (
+            <div className="space-y-2">
+              <Label htmlFor="adminCode">Admin code</Label>
+              <Input
+                id="adminCode"
+                type="password"
+                value={adminCode}
+                onChange={(e) => setAdminCode(e.target.value)}
+                autoComplete="off"
+                required
+              />
+            </div>
+          )}
 
           <Button type="submit" className="w-full" disabled={isPending}>
             {loginMutation.isPending ? (
@@ -232,6 +323,19 @@ export function AuthForm() {
         </form>
       ) : (
         <form onSubmit={handleRegister} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Registering as</Label>
+            <Select value={signInAs} onValueChange={(v) => setSignInAs(v as SignInAs)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="player">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="displayName">Display name</Label>
             <Input
@@ -248,7 +352,7 @@ export function AuthForm() {
             <Input
               id="registerPhone"
               type="tel"
-              placeholder="2348051219099"
+              placeholder="+2348148429834 or 8148429834"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
@@ -256,24 +360,49 @@ export function AuthForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
-              <SelectTrigger id="role" className="w-full">
-                <SelectValue placeholder="Select your role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="player">Player</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Choose whether you are joining as a player or managing tournaments as an admin.
-            </p>
+            <Label htmlFor="registerPassword">Password</Label>
+            <Input
+              id="registerPassword"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </div>
+
+          {signInAs === 'admin' && (
+            <div className="space-y-2">
+              <Label htmlFor="registerAdminCode">Admin code</Label>
+              <Input
+                id="registerAdminCode"
+                type="password"
+                value={adminCode}
+                onChange={(e) => setAdminCode(e.target.value)}
+                autoComplete="off"
+                required
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
             <Label htmlFor="chessPlatform">Chess Platform</Label>
-            <Select value={chessPlatform} onValueChange={(value) => setChessPlatform(value as ChessPlatform)}>
+            <Select
+              value={chessPlatform}
+              onValueChange={(value) => setChessPlatform(value as ChessPlatform)}
+            >
               <SelectTrigger id="chessPlatform" className="w-full">
                 <SelectValue placeholder="Select your chess platform" />
               </SelectTrigger>
@@ -283,9 +412,6 @@ export function AuthForm() {
                 <SelectItem value="over_the_board">Over the Board</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              Choose the platform where you play chess.
-            </p>
           </div>
 
           {chessPlatform === 'chess.com' && (
@@ -319,18 +445,6 @@ export function AuthForm() {
                   <Spinner className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
                 )}
               </div>
-              {verificationState === 'verified' && (
-                <p className="text-xs text-green-600 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Chess.com account verified
-                </p>
-              )}
-              {verificationState === 'invalid' && (
-                <p className="text-xs text-red-600 flex items-center gap-1">
-                  <XCircle className="h-3 w-3" />
-                  Chess.com account not found
-                </p>
-              )}
             </div>
           )}
 
@@ -343,9 +457,6 @@ export function AuthForm() {
                 value={lichessUsername}
                 onChange={(e) => setLichessUsername(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Enter your Lichess username. No verification required.
-              </p>
             </div>
           )}
 

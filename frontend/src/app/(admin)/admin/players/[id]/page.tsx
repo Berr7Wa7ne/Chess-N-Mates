@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
+import { toast } from "sonner"
 import {
   AdminPageHeader,
   AdminPageShell,
@@ -17,6 +18,8 @@ import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
 import { useUserRegistrations } from "@/src/hooks/useParticipants"
 import { useUser } from "@/src/hooks/useUsers"
+import { userService } from "@/src/services/user.service"
+import { ApiError } from "@/src/types/api"
 
 function formatRelativeTime(iso?: string): string {
   if (!iso) return "—"
@@ -40,6 +43,9 @@ export default function PlayerDetailPage() {
   const { data: player, isLoading, isError } = useUser(id)
   const { data: registrationIds } = useUserRegistrations(id)
   const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
+  const [resetting, setResetting] = useState(false)
+  const [adminCode, setAdminCode] = useState("")
+  const [showReset, setShowReset] = useState(false)
 
   const rankingCompetitionIds = useMemo(
     () =>
@@ -97,6 +103,29 @@ export default function PlayerDetailPage() {
   const elo = player.chess_elo ?? 0
   const status = player.user_status || "active"
 
+  async function handleResetPassword() {
+    if (!adminCode.trim()) {
+      toast.error("Enter the admin code to reset the password")
+      return
+    }
+    setResetting(true)
+    try {
+      const response = await userService.resetPassword(id, {
+        admin_code: adminCode.trim(),
+      })
+      toast.success(
+        response.data?.message ||
+          `Password reset. Default: ${response.data?.default_password || "the platform default"}`
+      )
+      setShowReset(false)
+      setAdminCode("")
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to reset password")
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
     <AdminPageShell>
       <Link
@@ -148,6 +177,52 @@ export default function PlayerDetailPage() {
                   {formatRelativeTime(player.last_activity_at || player.updated_at)}
                 </p>
               </div>
+            </div>
+            <div className="border-t border-border-subtle pt-4">
+              <p className="text-sm font-semibold text-text-primary">Password</p>
+              <p className="mt-1 text-xs text-text-secondary">
+                Reset this member to the platform default password.
+              </p>
+              {!showReset ? (
+                <button
+                  type="button"
+                  onClick={() => setShowReset(true)}
+                  className="mt-3 inline-flex h-10 items-center justify-center rounded-xl border border-border-subtle px-4 text-sm font-semibold text-text-primary"
+                >
+                  Reset to default password
+                </button>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <input
+                    type="password"
+                    placeholder="Admin code"
+                    value={adminCode}
+                    onChange={(e) => setAdminCode(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm outline-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={resetting}
+                      onClick={handleResetPassword}
+                      className="inline-flex h-10 flex-1 items-center justify-center rounded-xl bg-bg-panel-dark text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {resetting ? "Resetting…" : "Confirm reset"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={resetting}
+                      onClick={() => {
+                        setShowReset(false)
+                        setAdminCode("")
+                      }}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-border-subtle px-4 text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </AdminPanel>

@@ -6,11 +6,13 @@ import {
   Activity,
   AlertTriangle,
   Eye,
+  KeyRound,
   Plus,
   Trophy,
   Users,
   Zap,
 } from "lucide-react"
+import { toast } from "sonner"
 import {
   AdminContentModal,
   AdminIconAction,
@@ -20,11 +22,15 @@ import {
   AdminPanel,
   AdminPanelTitle,
 } from "@/components/layout"
+import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useDisputes } from "@/src/hooks/useDisputes"
 import { useUsers } from "@/src/hooks/useUsers"
+import { userService } from "@/src/services/user.service"
+import { ApiError } from "@/src/types/api"
 
 export default function AdminDashboardPage() {
+  const { currentUser } = useAuth()
   const { data: competitions } = useCompetitions()
   const { data: members = [] } = useUsers()
   const disputesQuery = useDisputes()
@@ -32,6 +38,11 @@ export default function AdminDashboardPage() {
 
   const [activityOpen, setActivityOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const activeCompetitions = useMemo(
     () => (competitions ?? []).filter((c) => c.competition_status === "active"),
@@ -63,6 +74,40 @@ export default function AdminDashboardPage() {
       hint: "Awaiting review",
     },
   ]
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!currentUser?.id) return
+    if (!currentPassword || !newPassword) {
+      toast.error("Enter current and new password")
+      return
+    }
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match")
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      await userService.changePassword(currentUser.id, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+      toast.success("Password updated")
+      setPasswordOpen(false)
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to change password")
+    } finally {
+      setChangingPassword(false)
+    }
+  }
 
   return (
     <AdminPageShell>
@@ -158,6 +203,11 @@ export default function AdminDashboardPage() {
           <AdminIconAction icon={Users} label="Members" href="/admin/members" />
           <AdminIconAction icon={AlertTriangle} label="Disputes" href="/admin/disputes" />
           <AdminIconAction icon={Eye} label="Leaderboard" href="/admin/leaderboard" />
+          <AdminIconAction
+            icon={KeyRound}
+            label="Change password"
+            onClick={() => setPasswordOpen(true)}
+          />
         </AdminIconRow>
       </AdminPanel>
 
@@ -220,6 +270,43 @@ export default function AdminDashboardPage() {
             </Link>
           ))}
         </div>
+      </AdminContentModal>
+      <AdminContentModal
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+        title="Change password"
+        description="Update your admin account password"
+      >
+        <form onSubmit={handleChangePassword} className="space-y-3">
+          <input
+            type="password"
+            placeholder="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm outline-none"
+          />
+          <input
+            type="password"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm outline-none"
+          />
+          <input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border-subtle bg-bg-shell px-3 text-sm outline-none"
+          />
+          <button
+            type="submit"
+            disabled={changingPassword}
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-bg-panel-dark text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {changingPassword ? "Updating…" : "Update password"}
+          </button>
+        </form>
       </AdminContentModal>
     </AdminPageShell>
   )

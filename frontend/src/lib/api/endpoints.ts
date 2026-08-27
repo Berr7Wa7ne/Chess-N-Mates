@@ -4,6 +4,8 @@ export const API_ENDPOINTS = {
     REGISTER: '/users/register',
     LIST: '/users',
     REGISTER_CHESS: (id: string) => `/users/${id}/register-chess`,
+    CHANGE_PASSWORD: (id: string) => `/users/${id}/change-password`,
+    RESET_PASSWORD: (id: string) => `/users/${id}/reset-password`,
     GET: (id: string) => `/users/${id}`,
     UPDATE: (id: string) => `/users/${id}`,
     ACTIVITY_LOG: '/users/activity/log',

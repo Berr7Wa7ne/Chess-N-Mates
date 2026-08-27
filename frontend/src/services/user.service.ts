@@ -4,9 +4,11 @@ import type { BackendApiResponse } from '@/src/types/api'
 import type {
   ActivityLogEntry,
   AuthUser,
+  ChangePasswordPayload,
   LoginPayload,
   RegisterChessPayload,
   RegisterUserPayload,
+  ResetPasswordPayload,
   UpdateUserPayload,
   User,
 } from '@/src/types/user'
@@ -42,6 +44,20 @@ export const userService = {
 
   updateUser(id: string, payload: UpdateUserPayload) {
     return httpClient.put<User>(API_ENDPOINTS.USERS.UPDATE(id), payload)
+  },
+
+  changePassword(id: string, payload: ChangePasswordPayload) {
+    return httpClient.post<{ id: string; message: string }>(
+      API_ENDPOINTS.USERS.CHANGE_PASSWORD(id),
+      payload
+    )
+  },
+
+  resetPassword(id: string, payload: ResetPasswordPayload) {
+    return httpClient.post<{ id: string; message: string; default_password: string }>(
+      API_ENDPOINTS.USERS.RESET_PASSWORD(id),
+      payload
+    )
   },
 
   getActivityLog() {

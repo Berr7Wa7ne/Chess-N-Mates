@@ -38,10 +38,24 @@ export interface RegisterUserPayload {
   chess_platform?: ChessPlatform | null
   chess_com_username?: string | null
   lichess_username?: string | null
+  password?: string
+  admin_code?: string
 }
 
 export interface LoginPayload {
   phone_number: string
+  password: string
+  role?: UserRole
+  admin_code?: string
+}
+
+export interface ChangePasswordPayload {
+  current_password: string
+  new_password: string
+}
+
+export interface ResetPasswordPayload {
+  admin_code: string
 }
 
 export interface RegisterChessPayload {
