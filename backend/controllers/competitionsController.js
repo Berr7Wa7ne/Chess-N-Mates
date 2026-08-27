@@ -40,6 +40,8 @@ const ALLOWED_UPDATE_FIELDS = [
   'rules',
   'round_robin_legs',
   'auto_compute_enabled',
+  'image_url',
+  'is_featured',
 ];
 
 exports.createCompetition = async (req, res) => {
@@ -66,6 +68,8 @@ exports.createCompetition = async (req, res) => {
     rules,
     round_robin_legs,
     auto_compute_enabled,
+    image_url,
+    is_featured,
   } = req.body;
 
 function isValidUUID(str) {
@@ -132,6 +136,8 @@ if (!created_by || !isValidUUID(created_by)) {
       rules: rules ?? [],
       round_robin_legs: round_robin_legs ?? 1,
       auto_compute_enabled: auto_compute_enabled !== false,
+      image_url: image_url?.trim() || null,
+      is_featured: Boolean(is_featured),
       competition_status: 'draft',
       current_round: 0,
     }])

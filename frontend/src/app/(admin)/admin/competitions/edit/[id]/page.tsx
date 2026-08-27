@@ -2,8 +2,12 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+} from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CreateCompetitionForm } from '@/src/components/competitions/create-competition-form'
 import { useCompetition } from '@/src/hooks/useCompetitions'
@@ -15,38 +19,46 @@ export default function EditCompetitionPage() {
   const competitionQuery = useCompetition(id, !!id)
 
   if (!id) {
-    return <p className="text-destructive">Invalid competition ID</p>
+    return (
+      <AdminPageShell>
+        <p className="text-red-600">Invalid competition ID</p>
+      </AdminPageShell>
+    )
   }
 
   if (competitionQuery.isLoading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 pb-10">
-        <Skeleton className="h-40 w-full rounded-2xl" />
-        <Skeleton className="h-96 w-full rounded-2xl" />
-      </div>
+      <AdminPageShell wide className="max-w-3xl">
+        <Skeleton className="h-40 w-full rounded-[20px]" />
+        <Skeleton className="h-96 w-full rounded-[20px]" />
+      </AdminPageShell>
     )
   }
 
   if (competitionQuery.isError || !competitionQuery.data) {
     return (
-      <Card className="rounded-2xl border-destructive/50">
-        <CardContent className="pt-6">
-          <p className="text-destructive">
+      <AdminPageShell>
+        <AdminPanel>
+          <p className="text-red-600">
             {competitionQuery.error instanceof ApiError
               ? competitionQuery.error.message
               : 'Competition not found'}
           </p>
-          <Button variant="outline" className="mt-4" asChild>
+          <Button variant="outline" className="mt-4 rounded-xl" asChild>
             <Link href="/admin/competitions">Back to list</Link>
           </Button>
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      </AdminPageShell>
     )
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <AdminPageShell wide className="max-w-3xl">
+      <AdminPageHeader
+        title="Edit competition"
+        description={competitionQuery.data.name}
+      />
       <CreateCompetitionForm mode="edit" competition={competitionQuery.data} />
-    </div>
+    </AdminPageShell>
   )
 }

@@ -1,9 +1,17 @@
-import { CreateCompetitionForm } from '@/src/components/competitions/create-competition-form'
+import { CreateCompetitionForm } from "@/src/components/competitions/create-competition-form"
+import {
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/layout"
 
 export default function NewCompetitionPage() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <AdminPageShell wide className="max-w-3xl">
+      <AdminPageHeader
+        title="New competition"
+        description="Configure the tournament, then save"
+      />
       <CreateCompetitionForm />
-    </div>
+    </AdminPageShell>
   )
 }

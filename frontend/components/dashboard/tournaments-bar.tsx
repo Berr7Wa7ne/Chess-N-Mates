@@ -10,6 +10,7 @@ export type TournamentChip = {
   status?: string
   accent?: string
   href?: string
+  imageUrl?: string | null
 }
 
 const PASTELS = ["#F5D0C5", "#D4E5F7", "#E2F0D4", "#F3E0C8", "#E8D5F2", "#D5F0EA"]
@@ -55,10 +56,17 @@ export function TournamentsBar({ tournaments }: { tournaments: TournamentChip[] 
               <>
                 <div className="relative">
                   <div
-                    className="flex size-12 items-center justify-center rounded-full text-xs font-semibold text-text-primary"
-                    style={{ backgroundColor: t.accent ?? PASTELS[index % PASTELS.length] }}
+                    className="flex size-12 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-text-primary"
+                    style={{
+                      backgroundColor: t.imageUrl
+                        ? undefined
+                        : t.accent ?? PASTELS[index % PASTELS.length],
+                      backgroundImage: t.imageUrl ? `url(${t.imageUrl})` : undefined,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
                   >
-                    {initials(t.name)}
+                    {!t.imageUrl ? initials(t.name) : null}
                   </div>
                   <span
                     className={cn(

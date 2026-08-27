@@ -55,20 +55,44 @@ export default function PlayerTournamentPage() {
     return `#${mine.rank_display || mine.rank}`
   }
 
-  const currentCompetition = useMemo(() => {
-    if (!competitions?.length) return null
-    return (
-      competitions.find((competition) => competition.competition_status === "active") ??
-      competitions.find((competition) => competition.competition_status === "open_registration") ??
-      competitions[0]
+  const liveCompetitions = useMemo(() => {
+    if (!competitions?.length) return []
+    return competitions.filter((c) =>
+      ["active", "open_registration"].includes(c.competition_status)
     )
   }, [competitions])
 
+  const [selectedCompetitionId, setSelectedCompetitionId] = useState<string | null>(null)
+
+  // Prefer a live event the user is in; otherwise first live tournament
   useEffect(() => {
-    if (currentRound === null && currentCompetition?.current_round) {
-      setCurrentRound(currentCompetition.current_round)
+    if (!liveCompetitions.length) {
+      setSelectedCompetitionId(null)
+      return
     }
-  }, [currentCompetition?.current_round, currentRound])
+    const stillValid =
+      selectedCompetitionId &&
+      liveCompetitions.some((c) => String(c.id) === String(selectedCompetitionId))
+    if (stillValid) return
+
+    const registeredLive =
+      liveCompetitions.find((c) => userRegisteredSet.has(c.id) && c.competition_status === "active") ||
+      liveCompetitions.find((c) => userRegisteredSet.has(c.id)) ||
+      liveCompetitions.find((c) => c.competition_status === "active") ||
+      liveCompetitions[0]
+
+    setSelectedCompetitionId(registeredLive ? String(registeredLive.id) : null)
+  }, [liveCompetitions, selectedCompetitionId, userRegisteredSet])
+
+  const currentCompetition = useMemo(
+    () =>
+      liveCompetitions.find((c) => String(c.id) === String(selectedCompetitionId)) ?? null,
+    [liveCompetitions, selectedCompetitionId]
+  )
+
+  useEffect(() => {
+    setCurrentRound(currentCompetition?.current_round ?? null)
+  }, [currentCompetition?.id, currentCompetition?.current_round])
 
   const matchesQuery = useCompetitionMatches(currentCompetition?.id ?? "")
   const standingsQuery = useCompetitionStandings(
@@ -177,56 +201,121 @@ export default function PlayerTournamentPage() {
     <PlayerPageShell wide>
       <PlayerPageHeader
         title="Tournament"
-        description="Ongoing event, fixtures, standings, and history"
+        description="Multiple events can run at once — pick one for fixtures and standings"
       />
 
-      <PlayerPanel>
-        <PlayerPanelTitle title="Ongoing tournament" />
+      <PlayerPanel className="px-0 py-0 sm:px-0">
+        <div className="border-b border-border-subtle px-6 py-4 sm:px-8">
+          <PlayerPanelTitle
+            title="Live tournaments"
+            description={`${liveCompetitions.length} running or open now`}
+          />
+        </div>
         {competitionsLoading ? (
-          <Skeleton className="h-16 w-full rounded-xl" />
-        ) : currentCompetition ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold text-text-primary">
-                  {currentCompetition.name}
-                </h3>
-                <p className="mt-1 text-sm text-text-secondary">
-                  {formatTournamentType(currentCompetition.tournament_type)} · Round{" "}
-                  {currentCompetition.current_round || currentCompetition.rounds}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {!standingsQuery.isLoading && !isRegistered && (
-                  <button
-                    type="button"
-                    onClick={handleJoin}
-                    disabled={joinMutation.isPending}
-                    className="rounded-xl bg-accent-lime px-4 py-2 text-sm font-bold text-text-primary disabled:opacity-60"
-                  >
-                    Join
-                  </button>
-                )}
-                {canWithdraw && (
-                  <button
-                    type="button"
-                    onClick={handleWithdraw}
-                    disabled={withdrawMutation.isPending}
-                    className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-semibold text-text-primary"
-                  >
-                    Withdraw
-                  </button>
-                )}
-              </div>
-            </div>
-            <p className="text-sm text-text-secondary">
-              {currentCompetition.description || "No description provided."}
-            </p>
+          <div className="px-6 py-4 sm:px-8">
+            <Skeleton className="h-16 w-full rounded-xl" />
           </div>
+        ) : liveCompetitions.length === 0 ? (
+          <p className="px-6 py-8 text-sm text-text-secondary sm:px-8">
+            No live tournaments right now.
+          </p>
         ) : (
-          <p className="text-sm text-text-secondary">No ongoing tournament.</p>
+          <ul>
+            {liveCompetitions.map((competition) => {
+              const selected = String(competition.id) === String(selectedCompetitionId)
+              const alreadyJoined = userRegisteredSet.has(competition.id)
+              const canJoin =
+                competition.competition_status === "open_registration" && !alreadyJoined
+              return (
+                <li key={competition.id}>
+                  <div
+                    className={cn(
+                      "flex flex-col gap-3 border-b border-border-subtle px-6 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-8",
+                      selected && "bg-accent-lime/15"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCompetitionId(String(competition.id))
+                        setCurrentRound(competition.current_round || null)
+                      }}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="truncate text-[15px] font-semibold text-text-primary">
+                        {competition.name}
+                        {competition.is_featured ? (
+                          <span className="ml-2 text-[11px] font-bold text-amber-700">
+                            Featured
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-[13px] text-text-secondary">
+                        {formatTournamentType(competition.tournament_type)} ·{" "}
+                        {competition.competition_status.replaceAll("_", " ")}
+                        {competition.competition_status === "active"
+                          ? ` · Round ${competition.current_round}/${competition.rounds}`
+                          : ""}
+                        {alreadyJoined ? " · Entered" : ""}
+                      </p>
+                    </button>
+                    <div className="flex shrink-0 gap-2">
+                      {canJoin && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleJoinCompetition(competition.id, competition.name)
+                          }
+                          disabled={joinMutation.isPending}
+                          className="rounded-xl bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary disabled:opacity-60"
+                        >
+                          Join
+                        </button>
+                      )}
+                      {selected && canWithdraw && (
+                        <button
+                          type="button"
+                          onClick={handleWithdraw}
+                          disabled={withdrawMutation.isPending}
+                          className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold"
+                        >
+                          Withdraw
+                        </button>
+                      )}
+                      {!selected && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCompetitionId(String(competition.id))
+                            setCurrentRound(competition.current_round || null)
+                          }}
+                          className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold"
+                        >
+                          View
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </PlayerPanel>
+
+      {currentCompetition && !userRegisteredSet.has(currentCompetition.id) &&
+        currentCompetition.competition_status === "open_registration" &&
+        !standingsQuery.isLoading &&
+        !isRegistered && (
+          <button
+            type="button"
+            onClick={handleJoin}
+            disabled={joinMutation.isPending}
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+          >
+            Join {currentCompetition.name}
+          </button>
+        )}
 
       {currentCompetition && matches.length > 0 && (
         <div className="flex flex-col gap-5">

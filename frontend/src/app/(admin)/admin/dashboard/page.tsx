@@ -32,8 +32,8 @@ export default function AdminDashboardPage() {
   const [activityOpen, setActivityOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
 
-  const activeCompetition = useMemo(
-    () => competitions?.find((c) => c.competition_status === "active") ?? null,
+  const activeCompetitions = useMemo(
+    () => (competitions ?? []).filter((c) => c.competition_status === "active"),
     [competitions]
   )
 
@@ -104,8 +104,12 @@ export default function AdminDashboardPage() {
 
       <AdminPanel>
         <AdminPanelTitle
-          title="Ongoing tournament"
-          description="Jump into the active competition"
+          title="Live tournaments"
+          description={
+            activeCompetitions.length
+              ? `${activeCompetitions.length} running concurrently`
+              : "No active competitions"
+          }
           action={
             <AdminIconAction
               icon={Trophy}
@@ -114,24 +118,31 @@ export default function AdminDashboardPage() {
             />
           }
         />
-        {activeCompetition ? (
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="truncate text-[17px] font-bold">{activeCompetition.name}</p>
-              <p className="mt-1 text-sm text-text-secondary">
-                Round {activeCompetition.current_round} of {activeCompetition.rounds} ·{" "}
-                {activeCompetition.participant_count ?? 0} players
-              </p>
-            </div>
-            <Link
-              href={`/admin/competitions/${activeCompetition.id}`}
-              className="shrink-0 rounded-xl bg-bg-panel-dark px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              Manage
-            </Link>
-          </div>
+        {activeCompetitions.length ? (
+          <ul className="space-y-2">
+            {activeCompetitions.map((competition) => (
+              <li key={competition.id}>
+                <Link
+                  href={`/admin/competitions/${competition.id}`}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-bg-panel-light px-4 py-3 transition-colors hover:bg-black/[0.03]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold">{competition.name}</p>
+                    <p className="mt-0.5 text-[12px] text-text-secondary">
+                      Round {competition.current_round} of {competition.rounds} ·{" "}
+                      {competition.participant_count ?? 0} players
+                      {competition.is_featured ? " · Featured" : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold text-text-secondary">
+                    Manage
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         ) : (
-          <p className="text-sm text-text-secondary">No active tournament right now.</p>
+          <p className="text-sm text-text-secondary">No active tournaments right now.</p>
         )}
       </AdminPanel>
 

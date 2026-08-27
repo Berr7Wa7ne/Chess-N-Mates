@@ -1,0 +1,22 @@
+---
+description: Multiple concurrent tournaments are a core product invariant
+alwaysApply: true
+---
+
+# Multi-tournament concurrency
+
+Chess-N-Mates runs **many tournaments at the same time**. Automation (Chess.com auto-compute, standings, fixtures, player dashboard) exists so admins and players are not stuck in a single-event workflow.
+
+## Rules
+
+- Never assume there is only one `active` or “ongoing” competition.
+- Prefer lists / filters over `.find(status === "active")` for UI and logic.
+- Featured tournaments (`is_featured`) may also be **multiple** — hero/carousels should support several, not one slot.
+- Player surfaces (dashboard bars, tournament page, matches) should work when a user is registered in **several** concurrent events.
+- Backend jobs (e.g. daily compute) must iterate **all** eligible active competitions.
+
+## Anti-patterns
+
+- Labels like “the ongoing tournament” tied to a single record
+- Global `getCurrentCompetition()` style helpers that return one row
+- Hiding other live tournaments behind a single featured pick

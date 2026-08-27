@@ -249,6 +249,8 @@ export function CreateCompetitionForm({
   const [autoComputeEnabled, setAutoComputeEnabled] = useState(
     competition?.auto_compute_enabled !== false
   )
+  const [imageUrl, setImageUrl] = useState(competition?.image_url ?? '')
+  const [isFeatured, setIsFeatured] = useState(Boolean(competition?.is_featured))
 
   // ── Match Configuration (combined) ──
   const currentMatchOptions = MATCH_CONFIG_OPTIONS[tournamentType]
@@ -325,6 +327,8 @@ export function CreateCompetitionForm({
     setPrize(competition.prize ?? '')
     setPlatform(competition.platform ?? 'chess.com')
     setAutoComputeEnabled(competition.auto_compute_enabled !== false)
+    setImageUrl(competition.image_url ?? '')
+    setIsFeatured(Boolean(competition.is_featured))
     const ml = (competition.match_length as MatchLength)
     const valid = MATCH_CONFIG_OPTIONS[competition.tournament_type].some((opt) => opt.value === ml)
     setMatchLength(valid ? ml : MATCH_CONFIG_OPTIONS[competition.tournament_type][0].value)
@@ -421,6 +425,8 @@ export function CreateCompetitionForm({
       // For round robin, set legs based on match length
       round_robin_legs: tournamentType === 'round_robin' && matchLength === 'double_game' ? 2 : 1,
       auto_compute_enabled: platform === 'chess.com' ? autoComputeEnabled : false,
+      image_url: imageUrl.trim() || null,
+      is_featured: isFeatured,
       rules: rules.length > 0 ? rules : undefined,
       ...schedulePayload,
     }
@@ -534,6 +540,44 @@ export function CreateCompetitionForm({
                   required
                   className="h-11"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="imageUrl">Tournament image URL</Label>
+                <Input
+                  id="imageUrl"
+                  type="url"
+                  placeholder="https://… or /hero/chess-1.jpg"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown on the player dashboard hero when this tournament is featured.
+                </p>
+                {imageUrl.trim() ? (
+                  <div
+                    className="mt-2 h-28 overflow-hidden rounded-xl bg-muted bg-cover bg-center"
+                    style={{ backgroundImage: `url(${imageUrl.trim()})` }}
+                  />
+                ) : null}
+              </div>
+
+              <div className="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+                <Checkbox
+                  id="isFeatured"
+                  checked={isFeatured}
+                  onCheckedChange={(checked) => setIsFeatured(checked === true)}
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="isFeatured" className="cursor-pointer text-sm font-medium">
+                    Feature on player dashboard
+                  </Label>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Multiple tournaments can be featured at once — they appear together in the
+                    hero carousel while events run concurrently.
+                  </p>
+                </div>
               </div>
 
               {/* Tournament Format */}

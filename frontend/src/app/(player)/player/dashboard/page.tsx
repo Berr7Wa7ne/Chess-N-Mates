@@ -15,13 +15,14 @@ import {
   type RatingStat,
   type TournamentChip,
 } from "@/components/dashboard"
-import { competitions, currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useChessComRatings, resolveChessComUsername } from "@/src/hooks/useChessComRatings"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useJoinCompetition, useUserRegistrations } from "@/src/hooks/useParticipants"
 import { usePlayerCommunityStats } from "@/src/hooks/usePlayerCommunityStats"
+import { usePlayerRecentMatches } from "@/src/hooks/usePlayerRecentMatches"
 import { ApiError } from "@/src/types/api"
+import type { Competition } from "@/src/types/competition"
 
 const HERO_GRADIENTS = [
   "linear-gradient(135deg, #1a1a1a 0%, #2d3a1f 45%, #141414 100%)",
@@ -29,7 +30,7 @@ const HERO_GRADIENTS = [
   "linear-gradient(135deg, #121212 0%, #243018 50%, #0d0d0d 100%)",
 ]
 
-const HERO_IMAGES = [
+const HERO_FALLBACK_IMAGES = [
   "/hero/chess-1.jpg",
   "/hero/chess-2.jpg",
   "/hero/chess-3.jpg",
@@ -40,7 +41,18 @@ function ratingFill(value: number | null) {
   return Math.max(30, Math.min(95, ((value - 800) / 1600) * 65 + 30))
 }
 
-const playerMatches = getPlayerMatches(currentPlayerId)
+function pickHeroCompetitions(list: Competition[]) {
+  const featured = list.filter(
+    (c) =>
+      c.is_featured &&
+      ["open_registration", "active", "completed"].includes(c.competition_status)
+  )
+  if (featured.length) return featured.slice(0, 6)
+
+  return list
+    .filter((c) => ["open_registration", "active"].includes(c.competition_status))
+    .slice(0, 6)
+}
 
 export default function PlayerDashboardPage() {
   const { currentUser } = useAuth()
@@ -57,9 +69,32 @@ export default function PlayerDashboardPage() {
   const { data: chessRatings, isPending: ratingsPending, isError: ratingsError } =
     useChessComRatings(chessUsername)
 
+  const joinedCompetitionIds = useMemo(
+    () => (registrationIds ?? []).map(String),
+    [registrationIds]
+  )
+
+  const competitionsById = useMemo(() => {
+    const map: Record<string, Competition | undefined> = {}
+    for (const c of apiCompetitions ?? []) map[String(c.id)] = c
+    return map
+  }, [apiCompetitions])
+
+  const { games: liveGames } = usePlayerRecentMatches(
+    currentUser?.id,
+    joinedCompetitionIds,
+    competitionsById
+  )
+
   const bannerCompetition = useMemo(() => {
     if (!apiCompetitions?.length) return null
-    return apiCompetitions.find((c) => c.competition_status === "open_registration") ?? null
+    return (
+      apiCompetitions.find(
+        (c) => c.is_featured && c.competition_status === "open_registration"
+      ) ??
+      apiCompetitions.find((c) => c.competition_status === "open_registration") ??
+      null
+    )
   }, [apiCompetitions])
 
   useEffect(() => {
@@ -70,7 +105,8 @@ export default function PlayerDashboardPage() {
 
   useEffect(() => {
     if (bannerCompetition) {
-      const seen = sessionStorage.getItem(`player_tournament_banner_${bannerCompetition.id}`) === "1"
+      const seen =
+        sessionStorage.getItem(`player_tournament_banner_${bannerCompetition.id}`) === "1"
       setBannerDismissed(seen)
     }
   }, [bannerCompetition])
@@ -91,75 +127,58 @@ export default function PlayerDashboardPage() {
   }
 
   const playedTournaments: TournamentChip[] = useMemo(() => {
-    const idSet = new Set((registrationIds ?? []).map(String))
+    const idSet = new Set(joinedCompetitionIds)
+    if (!apiCompetitions?.length || !idSet.size) return []
 
-    if (apiCompetitions?.length && idSet.size) {
-      return apiCompetitions
-        .filter((c) => idSet.has(String(c.id)))
-        .slice(0, 8)
-        .map((c) => ({
-          id: c.id,
-          name: c.name,
-          status: c.competition_status,
-          href: "/player/tournament",
-        }))
-    }
-
-    // Fallback while API registrations are empty / loading
-    return competitions.slice(0, 6).map((c) => ({
-      id: c.id,
-      name: c.name,
-      status: c.status,
-      href: "/player/tournament",
-    }))
-  }, [apiCompetitions, registrationIds])
+    return apiCompetitions
+      .filter((c) => idSet.has(String(c.id)))
+      .slice(0, 8)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        status: c.competition_status,
+        href: "/player/tournament",
+        imageUrl: c.image_url,
+      }))
+  }, [apiCompetitions, joinedCompetitionIds])
 
   const heroSlides: HeroSlide[] = useMemo(() => {
-    const fromApi =
-      apiCompetitions
-        ?.filter((c) => ["open_registration", "active"].includes(c.competition_status))
-        .slice(0, 3)
-        .map((c, i) => ({
-          id: c.id,
-          title: c.name,
-          description:
-            c.description ||
-            `${c.tournament_type.replaceAll("_", " ")} · featured tournament — join the board and climb the standings.`,
-          ctaLabel:
-            c.competition_status === "open_registration" && !bannerDismissed
-              ? "Join Now"
-              : "View Tournament",
-          ctaHref: "/player/tournament",
-          gradient: HERO_GRADIENTS[i % HERO_GRADIENTS.length],
-          imageUrl: HERO_IMAGES[i % HERO_IMAGES.length],
-        })) ?? []
-
-    if (fromApi.length) return fromApi
-
-    return competitions.slice(0, 3).map((c, i) => ({
+    const pool = pickHeroCompetitions(apiCompetitions ?? [])
+    return pool.map((c, i) => ({
       id: c.id,
       title: c.name,
-      description: c.description,
-      ctaLabel: c.status === "active" ? "Enter Arena" : "View Details",
+      description:
+        c.description ||
+        `${c.tournament_type.replaceAll("_", " ")} · ${
+          c.is_featured ? "featured tournament" : "tournament"
+        } — join the board and climb the standings.`,
+      ctaLabel:
+        c.competition_status === "open_registration" && !bannerDismissed
+          ? "Join Now"
+          : "View Tournament",
       ctaHref: "/player/tournament",
       gradient: HERO_GRADIENTS[i % HERO_GRADIENTS.length],
-      imageUrl: HERO_IMAGES[i % HERO_IMAGES.length],
+      imageUrl: c.image_url || HERO_FALLBACK_IMAGES[i % HERO_FALLBACK_IMAGES.length],
     }))
   }, [apiCompetitions, bannerDismissed])
 
   const collection: CollectionGame[] = useMemo(
     () =>
-      playerMatches.slice(0, 5).map((match) => ({
-        id: match.id,
-        title: match.competition,
-        subtitle: `vs ${match.opponent} · Round ${match.round}`,
-        href: `/player/matches/${match.id}`,
+      liveGames.map((game) => ({
+        id: game.id,
+        title: game.title,
+        subtitle: game.subtitle,
+        href: game.href,
       })),
-    []
+    [liveGames]
   )
 
   const ratingStats: RatingStat[] = useMemo(() => {
-    const rapid = chessRatings?.rapid ?? communityStats.profileUser?.chess_elo ?? currentUser?.chess_elo ?? null
+    const rapid =
+      chessRatings?.rapid ??
+      communityStats.profileUser?.chess_elo ??
+      currentUser?.chess_elo ??
+      null
     const blitz = chessRatings?.blitz ?? null
     const bullet = chessRatings?.bullet ?? null
     const values = [rapid, blitz, bullet].filter((v): v is number => typeof v === "number")
@@ -203,7 +222,7 @@ export default function PlayerDashboardPage() {
     {
       id: "pending",
       label: "Tournaments",
-      value: Math.max((registrationIds ?? []).length, 0),
+      value: Math.max(joinedCompetitionIds.length, 0),
       color: "#C6FF3D",
     },
   ]

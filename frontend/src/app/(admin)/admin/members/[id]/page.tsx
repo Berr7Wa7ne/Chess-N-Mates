@@ -1,8 +1,13 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { PageHeader, PlayerIdentity } from "@/components/shared"
+import { ArrowLeft } from "lucide-react"
+import {
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+} from "@/components/layout"
 import { members } from "@/lib/admin-data"
+import { cn } from "@/lib/utils"
 
 function formatRelativeTime(date: Date): string {
   const now = new Date()
@@ -12,9 +17,9 @@ function formatRelativeTime(date: Date): string {
   const diffDays = Math.floor(diffHours / 24)
 
   if (diffMinutes < 1) return "Just now"
-  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
-  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  return `${diffDays}d ago`
 }
 
 export default async function MemberDetailPage({
@@ -27,56 +32,49 @@ export default async function MemberDetailPage({
 
   if (!member) notFound()
 
+  const rows = [
+    { label: "Name", value: member.name },
+    { label: "Phone", value: member.phoneNumber },
+    {
+      label: "Chess username",
+      value: member.chessUsername
+        ? `${member.chessUsername.username} · ${member.chessUsername.elo}`
+        : "—",
+    },
+    { label: "Status", value: member.status },
+    { label: "Registered", value: member.registered ? "Yes" : "No" },
+    { label: "Last active", value: formatRelativeTime(member.lastActiveAt) },
+  ]
+
   return (
-    <div className="space-y-6">
-      <PageHeader title={member.name} subtitle="Member details and registration status." />
-
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-lg shadow-sm">
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-            <CardDescription>Core identity and player linkage for this member.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Phone Number</p>
-              <p className="mt-1 font-medium">{member.phoneNumber}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Status</p>
-              <div className="mt-2">
-                <Badge variant={member.status === "removed" ? "destructive" : "secondary"}>{member.status}</Badge>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Registered</p>
-              <p className="mt-1 font-medium">{member.registered ? "Yes" : "No"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Last Active</p>
-              <p className="mt-1 font-medium">{formatRelativeTime(member.lastActiveAt)}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-lg shadow-sm">
-          <CardHeader>
-            <CardTitle>Chess Identity</CardTitle>
-            <CardDescription>Linked player information appears here when available.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {member.chessUsername ? (
-              <PlayerIdentity
-                playerId={String(member.chessUsername.id)}
-                username={member.chessUsername.username}
-                elo={member.chessUsername.elo}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No chess profile linked yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <AdminPageShell>
+      <Link
+        href="/admin/members"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
+      >
+        <ArrowLeft className="size-4" />
+        Members
+      </Link>
+      <AdminPageHeader title={member.name} description="Member details" />
+      <AdminPanel className="py-2">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-baseline justify-between gap-6 border-b border-border-subtle py-4 last:border-b-0"
+          >
+            <span className="shrink-0 text-[13px] font-medium text-text-secondary">
+              {row.label}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 text-right text-[15px] font-semibold capitalize text-text-primary"
+              )}
+            >
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </AdminPanel>
+    </AdminPageShell>
   )
 }

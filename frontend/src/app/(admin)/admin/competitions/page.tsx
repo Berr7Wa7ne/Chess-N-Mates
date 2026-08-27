@@ -72,7 +72,7 @@ export default function AdminCompetitionsPage() {
   const openRegistrationMutation = useOpenRegistration()
   const deleteMutation = useDeleteCompetition()
 
-  const activeCompetition = filteredCompetitions.find(
+  const activeCompetitions = filteredCompetitions.filter(
     (c) => c.competition_status === "active"
   )
 
@@ -147,26 +147,39 @@ export default function AdminCompetitionsPage() {
         </AdminIconRow>
       </div>
 
-      {activeCompetition && (
+      {activeCompetitions.length > 0 && (
         <AdminPanel dark>
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-white/45">Live now</p>
-              <p className="mt-1 truncate text-lg font-bold text-white">
-                {activeCompetition.name}
-              </p>
-              <p className="mt-1 text-sm text-white/55">
-                Round {activeCompetition.current_round}/{activeCompetition.rounds} ·{" "}
-                {activeCompetition.participant_count ?? 0} players
-              </p>
-            </div>
-            <Link
-              href={`/admin/competitions/${activeCompetition.id}`}
-              className="shrink-0 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
-            >
-              Manage
-            </Link>
-          </div>
+          <p className="text-[12px] font-medium text-white/45">
+            Live now · {activeCompetitions.length} concurrent
+          </p>
+          <ul className="mt-3 space-y-2">
+            {activeCompetitions.map((competition) => (
+              <li key={competition.id}>
+                <Link
+                  href={`/admin/competitions/${competition.id}`}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-bg-stat-tile px-4 py-3 transition-colors hover:border-accent-lime/40"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-white">
+                      {competition.name}
+                      {competition.is_featured ? (
+                        <span className="ml-2 text-[11px] font-bold text-accent-lime">
+                          Featured
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-white/50">
+                      Round {competition.current_round}/{competition.rounds} ·{" "}
+                      {competition.participant_count ?? 0} players
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-lg bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary">
+                    Manage
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </AdminPanel>
       )}
 
@@ -215,6 +228,11 @@ export default function AdminCompetitionsPage() {
               >
                 <p className="truncate text-[15px] font-semibold text-text-primary">
                   {competition.name}
+                  {competition.is_featured ? (
+                    <span className="ml-2 align-middle text-[11px] font-bold text-amber-600">
+                      Featured
+                    </span>
+                  ) : null}
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <TournamentTypeBadge type={competition.tournament_type} />
