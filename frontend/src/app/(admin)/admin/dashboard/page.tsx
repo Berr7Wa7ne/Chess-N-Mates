@@ -1,185 +1,210 @@
+"use client"
+
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Eye, Plus, Trophy, Users, Zap } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { competitions, disputes, getCurrentCompetition, leaderboard, members } from "@/lib/admin-data"
-
-const currentCompetition = getCurrentCompetition()
-
-const summaryCards = [
-  {
-    title: "Total Members",
-    value: members.length.toString(),
-    description: `${members.filter((member) => member.status === "active").length} active members`,
-    icon: Users,
-  },
-  {
-    title: "Community Leaderboard",
-    value: leaderboard.length.toString(),
-    description: "Ranked by group ELO",
-    icon: Trophy,
-  },
-  {
-    title: "Competitions",
-    value: competitions.length.toString(),
-    description: `${competitions.filter((competition) => competition.status === "completed").length} completed`,
-    icon: Trophy,
-  },
-  {
-    title: "Open Disputes",
-    value: disputes.filter((dispute) => dispute.status === "open").length.toString(),
-    description: "Awaiting admin review",
-    icon: AlertTriangle,
-  },
-]
-
-const recentActivity = [
-  {
-    id: 1,
-    action: "Member joined",
-    description: "Alex Johnson joined the community and completed onboarding.",
-    time: "2 minutes ago",
-    type: "member",
-  },
-  {
-    id: 2,
-    action: "Competition updated",
-    description: "Round 4 fixtures were generated for Spring Swiss Championship 2026.",
-    time: "15 minutes ago",
-    type: "competition",
-  },
-  {
-    id: 3,
-    action: "Result recorded",
-    description: "CastleKing vs EnPassant was submitted and is waiting for confirmation.",
-    time: "40 minutes ago",
-    type: "result",
-  },
-  {
-    id: 4,
-    action: "Dispute filed",
-    description: "KnightRider flagged a disconnect issue during result submission.",
-    time: "1 hour ago",
-    type: "dispute",
-  },
-]
-
-function getActivityBadge(type: string) {
-  switch (type) {
-    case "member":
-      return <Badge variant="outline">Member</Badge>
-    case "result":
-      return <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">Result</Badge>
-    case "dispute":
-      return <Badge className="border-red-500/20 bg-red-500/10 text-red-600">Dispute</Badge>
-    case "competition":
-      return <Badge className="border-blue-500/20 bg-blue-500/10 text-blue-600">Competition</Badge>
-    default:
-      return <Badge variant="outline">Activity</Badge>
-  }
-}
+import {
+  Activity,
+  AlertTriangle,
+  Eye,
+  Plus,
+  Trophy,
+  Users,
+  Zap,
+} from "lucide-react"
+import {
+  AdminContentModal,
+  AdminIconAction,
+  AdminIconRow,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+  AdminPanelTitle,
+} from "@/components/layout"
+import { useCompetitions } from "@/src/hooks/useCompetitions"
+import { useDisputes } from "@/src/hooks/useDisputes"
+import { members } from "@/lib/admin-data"
 
 export default function AdminDashboardPage() {
+  const { data: competitions } = useCompetitions()
+  const disputesQuery = useDisputes()
+  const disputes = Array.isArray(disputesQuery.data) ? disputesQuery.data : []
+
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
+
+  const activeCompetition = useMemo(
+    () => competitions?.find((c) => c.competition_status === "active") ?? null,
+    [competitions]
+  )
+
+  const openDisputes = disputes.filter((d) =>
+    ["open", "under_review"].includes(d.dispute_status)
+  ).length
+
+  const stats = [
+    {
+      label: "Members",
+      value: members.length,
+      hint: `${members.filter((m) => m.status === "active").length} active`,
+    },
+    {
+      label: "Competitions",
+      value: competitions?.length ?? "—",
+      hint: `${competitions?.filter((c) => c.competition_status === "completed").length ?? 0} done`,
+    },
+    {
+      label: "Open disputes",
+      value: openDisputes,
+      hint: "Awaiting review",
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of the chess community and tournament activity.</p>
+    <AdminPageShell>
+      <div className="flex items-start justify-between gap-4">
+        <AdminPageHeader
+          title="Dashboard"
+          description="Community pulse — open details from the icons"
+        />
+        <AdminIconRow>
+          <AdminIconAction
+            icon={Activity}
+            label="Recent activity"
+            onClick={() => setActivityOpen(true)}
+          />
+          <AdminIconAction
+            icon={Zap}
+            label="Quick actions"
+            onClick={() => setActionsOpen(true)}
+            accent
+          />
+        </AdminIconRow>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-              <card.icon className="size-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
-              <p className="text-xs text-muted-foreground">{card.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest updates from your community.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start justify-between gap-4 rounded-lg border p-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{activity.action}</span>
-                      {getActivityBadge(activity.type)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{activity.description}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{activity.time}</span>
-                </div>
-              ))}
+      <AdminPanel dark>
+        <AdminPanelTitle
+          title="At a glance"
+          description="Live counts from your workspace"
+        />
+        <div className="mt-2 grid grid-cols-3 gap-3">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center"
+            >
+              <p className="tabular-nums text-3xl font-extrabold tracking-tight text-accent-lime">
+                {stat.value}
+              </p>
+              <p className="mt-1 text-[12px] font-medium text-white/55">{stat.label}</p>
+              <p className="mt-0.5 text-[11px] text-white/35">{stat.hint}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Focus the admin team on the core community workflow.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button className="w-full justify-start gap-2" asChild>
-                <Link href="/admin/competitions">
-                  <Plus className="size-4" />
-                  Create Competition
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                <Link href="/admin/competitions">
-                  <Zap className="size-4" />
-                  Manage Competitions
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                <Link href="/admin/members">
-                  <Eye className="size-4" />
-                  View Members
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Ongoing Tournament</CardTitle>
-              <CardDescription>The competitions screen now owns fixtures and results.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {currentCompetition ? (
-                <>
-                  <div>
-                    <p className="font-medium">{currentCompetition.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {currentCompetition.type} • Round {currentCompetition.currentRound} of {currentCompetition.rounds}
-                    </p>
-                  </div>
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href={`/admin/competitions/${currentCompetition.id}`}>Open competition</Link>
-                  </Button>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">No ongoing tournament.</p>
-              )}
-            </CardContent>
-          </Card>
+          ))}
         </div>
-      </div>
-    </div>
+      </AdminPanel>
+
+      <AdminPanel>
+        <AdminPanelTitle
+          title="Ongoing tournament"
+          description="Jump into the active competition"
+          action={
+            <AdminIconAction
+              icon={Trophy}
+              label="All competitions"
+              href="/admin/competitions"
+            />
+          }
+        />
+        {activeCompetition ? (
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="truncate text-[17px] font-bold">{activeCompetition.name}</p>
+              <p className="mt-1 text-sm text-text-secondary">
+                Round {activeCompetition.current_round} of {activeCompetition.rounds} ·{" "}
+                {activeCompetition.participant_count ?? 0} players
+              </p>
+            </div>
+            <Link
+              href={`/admin/competitions/${activeCompetition.id}`}
+              className="shrink-0 rounded-xl bg-bg-panel-dark px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Manage
+            </Link>
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">No active tournament right now.</p>
+        )}
+      </AdminPanel>
+
+      <AdminPanel>
+        <AdminPanelTitle title="Shortcuts" />
+        <AdminIconRow>
+          <AdminIconAction icon={Plus} label="New competition" href="/admin/competitions/new" accent />
+          <AdminIconAction icon={Users} label="Members" href="/admin/members" />
+          <AdminIconAction icon={AlertTriangle} label="Disputes" href="/admin/disputes" />
+          <AdminIconAction icon={Eye} label="Leaderboard" href="/admin/leaderboard" />
+        </AdminIconRow>
+      </AdminPanel>
+
+      <AdminContentModal
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        title="Recent activity"
+        description="Latest community updates"
+      >
+        <ul className="space-y-4">
+          {[
+            {
+              id: 1,
+              title: "Open disputes",
+              body: `${openDisputes} awaiting admin review`,
+            },
+            {
+              id: 2,
+              title: "Competitions",
+              body: `${competitions?.length ?? 0} total on the platform`,
+            },
+            {
+              id: 3,
+              title: "Members",
+              body: `${members.length} community members tracked`,
+            },
+          ].map((item) => (
+            <li
+              key={item.id}
+              className="rounded-2xl border border-border-subtle bg-bg-panel-light px-4 py-3"
+            >
+              <p className="font-semibold text-text-primary">{item.title}</p>
+              <p className="mt-1 text-sm text-text-secondary">{item.body}</p>
+            </li>
+          ))}
+        </ul>
+      </AdminContentModal>
+
+      <AdminContentModal
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        title="Quick actions"
+        description="Core admin workflow"
+      >
+        <div className="flex flex-col gap-2">
+          {[
+            { href: "/admin/competitions/new", label: "Create competition", icon: Plus },
+            { href: "/admin/competitions", label: "Manage competitions", icon: Trophy },
+            { href: "/admin/members", label: "View members", icon: Users },
+            { href: "/admin/disputes", label: "Review disputes", icon: AlertTriangle },
+          ].map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              onClick={() => setActionsOpen(false)}
+              className="flex items-center gap-3 rounded-2xl bg-bg-panel-light px-4 py-3.5 text-sm font-semibold text-text-primary transition-colors hover:bg-black/[0.04]"
+            >
+              <action.icon className="size-4 text-text-secondary" />
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      </AdminContentModal>
+    </AdminPageShell>
   )
 }
