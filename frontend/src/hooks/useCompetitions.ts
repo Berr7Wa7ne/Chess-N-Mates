@@ -68,6 +68,20 @@ export function useAdvanceRound() {
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.matches(id) })
+    },
+  })
+}
+
+export function useComputeResults() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => competitionService.computeResults(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.matches(id) })
     },
   })
 }

@@ -24,6 +24,7 @@ export interface Competition {
   format_match_rules?: string
   rules?: string[]
   round_robin_legs?: number
+  auto_compute_enabled?: boolean
 
   tournament_type: TournamentType
   competition_status: CompetitionStatus
@@ -66,6 +67,7 @@ export interface CreateCompetitionPayload {
   format_match_rules?: string
   rules?: string[]
   round_robin_legs?: number
+  auto_compute_enabled?: boolean
 }
 
 export interface UpdateCompetitionPayload {
@@ -90,6 +92,27 @@ export interface UpdateCompetitionPayload {
   format_match_rules?: string
   rules?: string[]
   round_robin_legs?: number
+  auto_compute_enabled?: boolean
+}
+
+export interface ComputeResultsReport {
+  competition_id?: string
+  competition_name?: string
+  scored: number
+  needs_review: number
+  absent: number
+  skipped: number
+  advanced: boolean
+  advance_action?: string | null
+  errors: Array<{ message?: string; match_id?: string; competition_id?: string }>
+  match_results?: Array<{
+    match_id: string
+    status: string
+    reason?: string
+    result_winner?: string
+    chess_game_link?: string
+    candidates?: Array<{ url: string; result_winner: string; end_time?: number }>
+  }>
 }
 
 export interface CompetitionListParams {

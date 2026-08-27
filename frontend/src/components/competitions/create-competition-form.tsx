@@ -26,6 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -245,6 +246,9 @@ export function CreateCompetitionForm({
   const [entryFee, setEntryFee] = useState(competition?.entry_fee ?? '')
   const [prize, setPrize] = useState(competition?.prize ?? '')
   const [platform, setPlatform] = useState(competition?.platform ?? 'chess.com')
+  const [autoComputeEnabled, setAutoComputeEnabled] = useState(
+    competition?.auto_compute_enabled !== false
+  )
 
   // ── Match Configuration (combined) ──
   const currentMatchOptions = MATCH_CONFIG_OPTIONS[tournamentType]
@@ -320,6 +324,7 @@ export function CreateCompetitionForm({
     setEntryFee(competition.entry_fee ?? '')
     setPrize(competition.prize ?? '')
     setPlatform(competition.platform ?? 'chess.com')
+    setAutoComputeEnabled(competition.auto_compute_enabled !== false)
     const ml = (competition.match_length as MatchLength)
     const valid = MATCH_CONFIG_OPTIONS[competition.tournament_type].some((opt) => opt.value === ml)
     setMatchLength(valid ? ml : MATCH_CONFIG_OPTIONS[competition.tournament_type][0].value)
@@ -415,6 +420,7 @@ export function CreateCompetitionForm({
       format_match_rules: deriveFormatMatchRules(tournamentType, matchLength),
       // For round robin, set legs based on match length
       round_robin_legs: tournamentType === 'round_robin' && matchLength === 'double_game' ? 2 : 1,
+      auto_compute_enabled: platform === 'chess.com' ? autoComputeEnabled : false,
       rules: rules.length > 0 ? rules : undefined,
       ...schedulePayload,
     }
@@ -686,6 +692,24 @@ export function CreateCompetitionForm({
                   </SelectContent>
                 </Select>
               </div>
+
+              {platform === 'chess.com' && (
+                <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+                  <Checkbox
+                    id="autoCompute"
+                    checked={autoComputeEnabled}
+                    onCheckedChange={(checked) => setAutoComputeEnabled(checked === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="autoCompute" className="text-sm font-medium cursor-pointer">
+                      Auto-compute from Chess.com
+                    </Label>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Daily job (or admin Compute) fetches games between paired players and scores matches automatically. Admins can always override.
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

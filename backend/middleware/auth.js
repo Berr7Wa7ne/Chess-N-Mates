@@ -1,5 +1,6 @@
-// middleware/auth.js — API key authentication for bot routes
+// middleware/auth.js — API key authentication for bot / jobs routes
 const BOT_API_KEY = process.env.BOT_API_KEY;
+const JOBS_API_KEY = process.env.JOBS_API_KEY;
 
 /**
  * Middleware that validates a Bearer token on incoming requests.
@@ -39,4 +40,29 @@ function validateBotApiKey(req, res, next) {
   next();
 }
 
-module.exports = { validateBotApiKey };
+/**
+ * Jobs key: x-jobs-key header OR Authorization: Bearer <JOBS_API_KEY>
+ * Falls back to BOT_API_KEY if JOBS_API_KEY unset. Dev: no key → allow.
+ */
+function validateJobsApiKey(req, res, next) {
+  const expected = JOBS_API_KEY || BOT_API_KEY;
+  if (!expected) return next();
+
+  const headerKey = req.headers['x-jobs-key'];
+  if (headerKey && headerKey === expected) return next();
+
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const parts = authHeader.split(' ');
+    if (parts.length === 2 && parts[0] === 'Bearer' && parts[1] === expected) {
+      return next();
+    }
+  }
+
+  return res.status(401).json({
+    success: false,
+    error: { message: 'Unauthorized. Provide x-jobs-key or Authorization: Bearer <JOBS_API_KEY>' },
+  });
+}
+
+module.exports = { validateBotApiKey, validateJobsApiKey };

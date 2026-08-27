@@ -318,4 +318,194 @@ async function verifyGameAndDetermineWinner(gameUrl, playerA, playerB, competiti
   return { matched: true, result_winner, verified: true, gameId: game.gameId }
 }
 
-module.exports = { verifyPlayer, fetchGameResult, verifyGameAndDetermineWinner, validateTimeControl, validateGameDate, parseTimeControl }
+const USER_AGENT = { 'User-Agent': 'ChessMates Tournament App' }
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Fetch recent monthly archive games for a player.
+ * @param {string} username
+ * @param {{ cache?: Map, months?: number, delayMs?: number }} [options]
+ */
+async function fetchRecentMonthlyGames(username, options = {}) {
+  const cache = options.cache || null
+  const months = options.months ?? 2
+  const delayMs = options.delayMs ?? 150
+  const key = (username || '').toLowerCase()
+  if (!key) return []
+
+  if (cache && cache.has(key)) return cache.get(key)
+
+  try {
+    const archRes = await fetch(`${CHESS_COM_BASE}/player/${key}/games/archives`, {
+      headers: USER_AGENT,
+    })
+    if (!archRes.ok) {
+      if (cache) cache.set(key, [])
+      return []
+    }
+    const { archives } = await archRes.json()
+    if (!archives || !archives.length) {
+      if (cache) cache.set(key, [])
+      return []
+    }
+
+    const recent = archives.slice(-Math.max(1, months))
+    const allGames = []
+    for (const archiveUrl of recent) {
+      if (delayMs > 0) await sleep(delayMs)
+      const res = await fetch(archiveUrl, { headers: USER_AGENT })
+      if (!res.ok) continue
+      const data = await res.json()
+      allGames.push(...(data.games || []))
+    }
+
+    if (cache) cache.set(key, allGames)
+    return allGames
+  } catch {
+    if (cache) cache.set(key, [])
+    return []
+  }
+}
+
+/**
+ * Map a Chess.com game PGN result to match result_winner (a/b/draw)
+ * relative to playerA / playerB usernames.
+ */
+function mapGameToMatchWinner(game, playerAUsername, playerBUsername) {
+  const a = playerAUsername?.toLowerCase()
+  const b = playerBUsername?.toLowerCase()
+  const white = game.white?.username?.toLowerCase()
+  const black = game.black?.username?.toLowerCase()
+
+  if (!a || !b || !white || !black) return null
+  if (!((white === a && black === b) || (white === b && black === a))) return null
+
+  let raw = null
+  if (game.pgn) {
+    if (game.pgn.includes('1/2-1/2')) raw = 'draw'
+    else if (game.pgn.includes('1-0')) raw = 'white'
+    else if (game.pgn.includes('0-1')) raw = 'black'
+  }
+  // Fallback to result fields on white/black objects
+  if (!raw) {
+    const wr = game.white?.result
+    const br = game.black?.result
+    if (wr === 'win' || br === 'lose') raw = 'white'
+    else if (br === 'win' || wr === 'lose') raw = 'black'
+    else if (wr === 'agreed' || wr === 'repetition' || wr === 'stalemate' || wr === '50move' || wr === 'insufficient' || wr === 'timevsinsufficient') {
+      raw = 'draw'
+    }
+  }
+
+  if (!raw) return null
+  if (raw === 'draw') return 'draw'
+
+  const whiteIsA = white === a
+  if (raw === 'white') return whiteIsA ? 'a' : 'b'
+  return whiteIsA ? 'b' : 'a'
+}
+
+/**
+ * Find games between two players within a time window matching competition TC.
+ *
+ * @returns {Array<{ url: string, end_time: number, result_winner: string, time_class?: string, time_control?: string }>}
+ */
+async function findGamesBetweenPlayers(userA, userB, options = {}) {
+  const {
+    sinceMs = 0,
+    untilMs = Date.now(),
+    timeControl = null,
+    cache = null,
+    delayMs = 150,
+  } = options
+
+  const a = (userA || '').toLowerCase()
+  const b = (userB || '').toLowerCase()
+  if (!a || !b) return []
+
+  const gamesA = await fetchRecentMonthlyGames(a, { cache, delayMs })
+  // Prefer A's archive; if empty, fall back to B
+  const sourceGames =
+    gamesA.length > 0 ? gamesA : await fetchRecentMonthlyGames(b, { cache, delayMs })
+
+  const sinceSec = Math.floor(sinceMs / 1000)
+  const untilSec = Math.floor(untilMs / 1000)
+  const byUrl = new Map()
+
+  for (const game of sourceGames) {
+    const white = game.white?.username?.toLowerCase()
+    const black = game.black?.username?.toLowerCase()
+    const involvesBoth =
+      (white === a && black === b) || (white === b && black === a)
+    if (!involvesBoth) continue
+
+    const endTime = Number(game.end_time) || 0
+    if (endTime && (endTime < sinceSec || endTime > untilSec)) continue
+
+    if (timeControl) {
+      const tc = validateTimeControl(timeControl, game.time_class, game.time_control)
+      if (!tc.valid) continue
+    }
+
+    const result_winner = mapGameToMatchWinner(game, a, b)
+    if (!result_winner) continue
+
+    const url = game.url || null
+    if (!url) continue
+
+    const existing = byUrl.get(url)
+    if (!existing || endTime < existing.end_time) {
+      byUrl.set(url, {
+        url,
+        end_time: endTime,
+        result_winner,
+        time_class: game.time_class,
+        time_control: game.time_control,
+      })
+    }
+  }
+
+  return [...byUrl.values()].sort((x, y) => x.end_time - y.end_time)
+}
+
+/**
+ * Resolve candidates into a clear auto-score decision.
+ * - 0 → none
+ * - 1 → auto
+ * - many same result → earliest
+ * - conflicting results → needs_review
+ */
+function resolveGameCandidates(candidates) {
+  if (!candidates || candidates.length === 0) {
+    return { decision: 'none', game: null, candidates: [] }
+  }
+
+  const sorted = [...candidates].sort((a, b) => (a.end_time || 0) - (b.end_time || 0))
+
+  if (sorted.length === 1) {
+    return { decision: 'auto', game: sorted[0], candidates: sorted }
+  }
+
+  const results = new Set(sorted.map((c) => c.result_winner))
+  if (results.size === 1) {
+    return { decision: 'auto', game: sorted[0], candidates: sorted }
+  }
+
+  return { decision: 'needs_review', game: null, candidates: sorted }
+}
+
+module.exports = {
+  verifyPlayer,
+  fetchGameResult,
+  verifyGameAndDetermineWinner,
+  validateTimeControl,
+  validateGameDate,
+  parseTimeControl,
+  fetchRecentMonthlyGames,
+  findGamesBetweenPlayers,
+  mapGameToMatchWinner,
+  resolveGameCandidates,
+}

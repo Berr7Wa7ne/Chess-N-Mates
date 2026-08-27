@@ -1,5 +1,14 @@
 export type MatchStatus = 'pending' | 'ongoing' | 'result_submitted' | 'completed' | 'disputed' | 'cancelled'
 export type ResultWinner = 'a' | 'b' | 'draw'
+export type ResultSource = 'manual' | 'player_submit' | 'chess_com_auto' | 'absent_auto'
+
+export interface AutoCandidate {
+  url: string
+  result_winner: ResultWinner
+  end_time?: number
+  time_class?: string
+  time_control?: string
+}
 
 export interface MatchPlayer {
   id: string
@@ -25,6 +34,9 @@ export interface Match {
   result_submitted_at?: string | null
   chess_game_link?: string | null
   chess_game_id?: string | null
+  result_source?: ResultSource | null
+  needs_review?: boolean
+  auto_candidates?: AutoCandidate[] | null
   forced?: boolean
   force_reason?: string | null
   is_bye?: boolean
@@ -58,6 +70,7 @@ export interface ForceResultPayload {
   reason?: string
   is_absent?: boolean
   absence_side?: 'a' | 'b' | 'both'
+  chess_game_link?: string
 }
 
 export interface ExtendDeadlinePayload {

@@ -7,7 +7,9 @@ const competitionsRoutes = require('./routes/competitions');
 const matchesRoutes = require('./routes/matches');
 const disputesRoutes = require('./routes/disputes');
 const botRoutes = require('./routes/bot');
+const jobsRoutes = require('./routes/jobs');
 const { validateBotApiKey } = require('./middleware/auth');
+const { startDailyComputeCron } = require('./services/cronService');
 
 const app = express();
 
@@ -24,6 +26,9 @@ app.use('/api/v1/disputes', disputesRoutes);
 
 // Bot routes (require BOT_API_KEY auth)
 app.use('/api/v1/bot', validateBotApiKey, botRoutes);
+
+// Jobs (require JOBS_API_KEY / BOT_API_KEY)
+app.use('/api/v1/jobs', jobsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to the Chess Community API' });
@@ -47,6 +52,7 @@ const server = app.listen(PORT);
 server.on('listening', () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log('Press Ctrl+C to stop');
+  startDailyComputeCron();
 });
 
 server.on('error', (err) => {
