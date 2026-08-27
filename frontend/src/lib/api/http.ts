@@ -1,14 +1,35 @@
 import type { BackendApiErrorResponse, BackendApiResponse } from '@/src/types/api'
 import { ApiError } from '@/src/types/api'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? ''
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ||
+  (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : '')
 const API_PREFIX = '/api/v1'
 
 export type SearchParams = Record<string, string | number | undefined>
 
 function buildUrl(path: string, searchParams?: SearchParams) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const url = new URL(`${API_BASE}${API_PREFIX}${normalizedPath}`)
+  const absolute = `${API_BASE}${API_PREFIX}${normalizedPath}`
+
+  if (!API_BASE) {
+    throw new ApiError(
+      'NEXT_PUBLIC_API_URL is not set. Add it to frontend/.env.local (e.g. http://localhost:5000).',
+      0,
+      'CONFIG_ERROR'
+    )
+  }
+
+  let url: URL
+  try {
+    url = new URL(absolute)
+  } catch {
+    throw new ApiError(
+      `Invalid API URL: "${absolute}". Check NEXT_PUBLIC_API_URL.`,
+      0,
+      'CONFIG_ERROR'
+    )
+  }
 
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
