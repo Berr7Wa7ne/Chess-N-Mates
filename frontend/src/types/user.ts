@@ -52,6 +52,9 @@ export interface RegisterChessPayload {
 export interface UpdateUserPayload {
   display_name?: string
   avatar_url?: string | null
+  chess_username?: string | null
+  chess_com_username?: string | null
+  lichess_username?: string | null
 }
 
 export interface ActivityLogEntry {

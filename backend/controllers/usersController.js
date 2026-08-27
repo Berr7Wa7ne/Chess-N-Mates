@@ -94,7 +94,9 @@ exports.loginUser = async (req, res) => {
 
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, phone_number, display_name, role')
+    .select(
+      'id, phone_number, display_name, role, chess_platform, chess_username, chess_com_username, lichess_username, chess_elo, whatsapp_phone, avatar_url'
+    )
     .eq('phone_number', phone_number.trim())
     .maybeSingle();
 
@@ -155,10 +157,96 @@ exports.getUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
-  const { display_name, avatar_url } = req.body;
+  const {
+    display_name,
+    avatar_url,
+    chess_username,
+    chess_com_username,
+    lichess_username,
+  } = req.body;
+
+  const { data: existing, error: lookupError } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (lookupError || !existing) {
+    return res.status(404).json({
+      success: false,
+      error: { message: lookupError?.message || 'User not found' },
+    });
+  }
+
+  // Same CNM account (id) stays linked to tournament history — only update handles.
+  const updates = {};
+
+  if (display_name !== undefined) {
+    updates.display_name = display_name?.trim() || existing.display_name;
+  }
+  if (avatar_url !== undefined) {
+    updates.avatar_url = avatar_url;
+  }
+
+  let nextChessCom =
+    chess_com_username !== undefined
+      ? chess_com_username?.trim() || null
+      : existing.chess_com_username;
+  let nextLichess =
+    lichess_username !== undefined
+      ? lichess_username?.trim() || null
+      : existing.lichess_username;
+  let nextChessUsername =
+    chess_username !== undefined
+      ? chess_username?.trim() || null
+      : existing.chess_username;
+
+  if (chess_com_username !== undefined) {
+    updates.chess_com_username = nextChessCom;
+  }
+  if (lichess_username !== undefined) {
+    updates.lichess_username = nextLichess;
+  }
+
+  // Keep primary chess_username aligned with the account's tournament platform.
+  const platform = existing.chess_platform;
+  if (platform === 'chess.com' && chess_com_username !== undefined && nextChessCom) {
+    nextChessUsername = nextChessCom;
+  } else if (platform === 'lichess' && lichess_username !== undefined && nextLichess) {
+    nextChessUsername = nextLichess;
+  } else if (!platform && chess_com_username !== undefined && nextChessCom) {
+    updates.chess_platform = 'chess.com';
+    nextChessUsername = nextChessCom;
+  } else if (!platform && lichess_username !== undefined && nextLichess && !nextChessCom) {
+    updates.chess_platform = 'lichess';
+    nextChessUsername = nextLichess;
+  }
+
+  // Editing community Username keeps the linked platform handle in sync.
+  if (chess_username !== undefined && nextChessUsername) {
+    if (platform === 'chess.com' || updates.chess_platform === 'chess.com') {
+      updates.chess_com_username = nextChessUsername;
+      nextChessCom = nextChessUsername;
+    } else if (platform === 'lichess' || updates.chess_platform === 'lichess') {
+      updates.lichess_username = nextChessUsername;
+      nextLichess = nextChessUsername;
+    }
+  }
+
+  if (
+    chess_username !== undefined ||
+    nextChessUsername !== existing.chess_username
+  ) {
+    updates.chess_username = nextChessUsername;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.json({ success: true, data: existing });
+  }
+
   const { data, error } = await supabaseAdmin
     .from('users')
-    .update({ display_name, avatar_url })
+    .update(updates)
     .eq('id', id)
     .select()
     .single();

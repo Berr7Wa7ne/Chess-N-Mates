@@ -1,8 +1,10 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { LogOut } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { LogOut, Pencil, Check, X } from "lucide-react"
+import { toast } from "sonner"
 import {
   PlayerPageHeader,
   PlayerPageShell,
@@ -11,36 +13,129 @@ import {
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions, useCompetitionStandings } from "@/src/hooks/useCompetitions"
 import { useUserRegistrations } from "@/src/hooks/useParticipants"
+import { queryKeys } from "@/src/lib/query-keys"
+import { userService } from "@/src/services/user.service"
+import { ApiError } from "@/src/types/api"
 import { cn } from "@/lib/utils"
 
-function DetailRow({
+function EditableDetailRow({
   label,
   value,
+  editable = false,
+  draft,
+  onDraftChange,
+  editing,
+  onStartEdit,
+  onSave,
+  onCancel,
+  saving,
+  placeholder,
 }: {
   label: string
   value?: string | null
+  editable?: boolean
+  draft?: string
+  onDraftChange?: (value: string) => void
+  editing?: boolean
+  onStartEdit?: () => void
+  onSave?: () => void
+  onCancel?: () => void
+  saving?: boolean
+  placeholder?: string
 }) {
   const display = value?.trim() ? value : "—"
+
   return (
-    <div className="flex items-baseline justify-between gap-6 border-b border-border-subtle py-4 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border-subtle py-4 last:border-b-0">
       <span className="shrink-0 text-[13px] font-medium text-text-secondary">{label}</span>
-      <span
-        className={cn(
-          "min-w-0 text-right text-[15px] font-semibold text-text-primary",
-          !value?.trim() && "font-medium text-text-secondary"
-        )}
-      >
-        {display}
-      </span>
+
+      {editable && editing ? (
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <input
+            value={draft ?? ""}
+            onChange={(e) => onDraftChange?.(e.target.value)}
+            placeholder={placeholder}
+            disabled={saving}
+            autoFocus
+            className="h-9 w-full max-w-[220px] rounded-lg border border-border-subtle bg-bg-shell px-3 text-right text-[15px] font-semibold text-text-primary outline-none focus:border-text-primary/30"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSave?.()
+              if (e.key === "Escape") onCancel?.()
+            }}
+          />
+          <button
+            type="button"
+            aria-label={`Save ${label}`}
+            disabled={saving}
+            onClick={onSave}
+            className="flex size-8 items-center justify-center rounded-lg bg-accent-lime text-text-primary disabled:opacity-50"
+          >
+            <Check className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Cancel ${label}`}
+            disabled={saving}
+            onClick={onCancel}
+            className="flex size-8 items-center justify-center rounded-lg border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-50"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "min-w-0 truncate text-right text-[15px] font-semibold text-text-primary",
+              !value?.trim() && "font-medium text-text-secondary"
+            )}
+          >
+            {display}
+          </span>
+          {editable && (
+            <button
+              type="button"
+              aria-label={`Edit ${label}`}
+              onClick={onStartEdit}
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-black/[0.04] hover:text-text-primary"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
+type EditableField = "display_name" | "chess_username" | "chess_com_username" | "lichess_username"
+
 export default function PlayerProfilePage() {
   const router = useRouter()
-  const { currentUser, logout } = useAuth()
+  const queryClient = useQueryClient()
+  const { currentUser, logout, setUser } = useAuth()
   const { data: competitions } = useCompetitions()
   const { data: registrationIds } = useUserRegistrations(currentUser?.id)
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: queryKeys.users.detail(currentUser?.id ?? ""),
+    queryFn: async () => {
+      const response = await userService.getUser(currentUser!.id)
+      return response.data
+    },
+    enabled: Boolean(currentUser?.id),
+    staleTime: 30_000,
+  })
+
+  useEffect(() => {
+    if (profile) setUser(profile)
+  }, [profile, setUser])
+
+  const user = profile ?? currentUser
+
+  const [editingField, setEditingField] = useState<EditableField | null>(null)
+  const [draft, setDraft] = useState("")
+  const [saving, setSaving] = useState(false)
 
   const lastTournament = useMemo(() => {
     if (!competitions?.length || !registrationIds?.length) return null
@@ -68,23 +163,73 @@ export default function PlayerProfilePage() {
   )
 
   const lastStanding = useMemo(() => {
-    if (!currentUser || !standingsQuery.data?.length) return null
+    if (!user || !standingsQuery.data?.length) return null
+    const byId = standingsQuery.data.find((row) => String(row.user_id) === String(user.id))
+    if (byId) return byId
+    const handles = [
+      user.chess_com_username,
+      user.chess_username,
+      user.lichess_username,
+      user.display_name,
+    ]
+      .map((v) => v?.trim().toLowerCase())
+      .filter(Boolean)
     return (
-      standingsQuery.data.find((row) => String(row.user_id) === String(currentUser.id)) ?? null
+      standingsQuery.data.find((row) => {
+        const handle = row.chess_username?.trim().toLowerCase()
+        const name = row.display_name?.trim().toLowerCase()
+        return handles.some((h) => h === handle || h === name)
+      }) ?? null
     )
-  }, [currentUser, standingsQuery.data])
+  }, [user, standingsQuery.data])
 
-  const communityElo = lastStanding?.chess_elo ?? currentUser?.chess_elo ?? null
+  const communityElo = lastStanding?.chess_elo ?? user?.chess_elo ?? null
 
-  const name = currentUser?.display_name || "—"
-  const username =
-    currentUser?.chess_username ||
-    currentUser?.chess_com_username ||
-    currentUser?.lichess_username ||
-    "—"
-  const phone = currentUser?.phone_number || currentUser?.whatsapp_phone || "—"
-  const chessCom = currentUser?.chess_com_username || "—"
-  const lichess = currentUser?.lichess_username || "—"
+  const name = user?.display_name || ""
+  const username = user?.chess_username || ""
+  const phone = user?.phone_number || user?.whatsapp_phone || ""
+  const chessCom = user?.chess_com_username || ""
+  const lichess = user?.lichess_username || ""
+
+  function startEdit(field: EditableField, current: string) {
+    setEditingField(field)
+    setDraft(current)
+  }
+
+  function cancelEdit() {
+    setEditingField(null)
+    setDraft("")
+  }
+
+  async function saveField(field: EditableField) {
+    if (!user?.id) return
+    const trimmed = draft.trim()
+    setSaving(true)
+    try {
+      const payload =
+        field === "display_name"
+          ? { display_name: trimmed || user.display_name }
+          : field === "chess_username"
+            ? { chess_username: trimmed || null }
+            : field === "chess_com_username"
+              ? { chess_com_username: trimmed || null }
+              : { lichess_username: trimmed || null }
+
+      const response = await userService.updateUser(user.id, payload)
+      const updated = response.data
+      if (updated) {
+        setUser(updated)
+        queryClient.setQueryData(queryKeys.users.detail(user.id), updated)
+        queryClient.invalidateQueries({ queryKey: queryKeys.competitions.all })
+      }
+      toast.success("Profile updated")
+      cancelEdit()
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to update profile")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   function handleLogout() {
     logout()
@@ -93,14 +238,71 @@ export default function PlayerProfilePage() {
 
   return (
     <PlayerPageShell>
-      <PlayerPageHeader title="Profile" description="Your account details" />
+      <PlayerPageHeader
+        title="Profile"
+        description="Edit usernames anytime — your tournament record stays on this account"
+      />
 
       <PlayerPanel className="py-2">
-        <DetailRow label="Name" value={name === "—" ? null : name} />
-        <DetailRow label="Username" value={username === "—" ? null : username} />
-        <DetailRow label="Phone number" value={phone === "—" ? null : phone} />
-        <DetailRow label="Chess.com username" value={chessCom === "—" ? null : chessCom} />
-        <DetailRow label="Lichess username" value={lichess === "—" ? null : lichess} />
+        {profileLoading && !user ? (
+          <p className="py-6 text-sm text-text-secondary">Loading profile…</p>
+        ) : (
+          <>
+            <EditableDetailRow
+              label="Name"
+              value={name}
+              editable
+              editing={editingField === "display_name"}
+              draft={draft}
+              onDraftChange={setDraft}
+              onStartEdit={() => startEdit("display_name", name)}
+              onSave={() => saveField("display_name")}
+              onCancel={cancelEdit}
+              saving={saving}
+              placeholder="Display name"
+            />
+            <EditableDetailRow
+              label="Username"
+              value={username}
+              editable
+              editing={editingField === "chess_username"}
+              draft={draft}
+              onDraftChange={setDraft}
+              onStartEdit={() => startEdit("chess_username", username)}
+              onSave={() => saveField("chess_username")}
+              onCancel={cancelEdit}
+              saving={saving}
+              placeholder="Community username"
+            />
+            <EditableDetailRow label="Phone number" value={phone} />
+            <EditableDetailRow
+              label="Chess.com username"
+              value={chessCom}
+              editable
+              editing={editingField === "chess_com_username"}
+              draft={draft}
+              onDraftChange={setDraft}
+              onStartEdit={() => startEdit("chess_com_username", chessCom)}
+              onSave={() => saveField("chess_com_username")}
+              onCancel={cancelEdit}
+              saving={saving}
+              placeholder="Chess.com handle"
+            />
+            <EditableDetailRow
+              label="Lichess username"
+              value={lichess}
+              editable
+              editing={editingField === "lichess_username"}
+              draft={draft}
+              onDraftChange={setDraft}
+              onStartEdit={() => startEdit("lichess_username", lichess)}
+              onSave={() => saveField("lichess_username")}
+              onCancel={cancelEdit}
+              saving={saving}
+              placeholder="Lichess handle"
+            />
+          </>
+        )}
       </PlayerPanel>
 
       <PlayerPanel dark>
