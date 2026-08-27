@@ -169,4 +169,6 @@ export interface StandingEntry {
   sonneborn_berger?: number
   knockout_round_reached?: number
   participant_status?: string
+  /** Estimated % chance of winning this tournament (0–100). */
+  tournament_win_pct?: number
 }

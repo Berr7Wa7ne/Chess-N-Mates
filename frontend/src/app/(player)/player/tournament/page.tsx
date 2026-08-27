@@ -380,9 +380,16 @@ export default function PlayerTournamentPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-lg font-extrabold tabular-nums text-text-primary">
-                      {entry.points}
-                    </span>
+                    <div className="text-right">
+                      <span className="block text-lg font-extrabold tabular-nums text-text-primary">
+                        {entry.points}
+                      </span>
+                      {entry.tournament_win_pct != null && (
+                        <span className="text-[11px] font-semibold tabular-nums text-violet-700">
+                          {entry.tournament_win_pct}% to win
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 <button

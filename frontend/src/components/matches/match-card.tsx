@@ -2,6 +2,7 @@
 
 import { Clock, ExternalLink } from 'lucide-react'
 import type { Match, MatchStatus } from '@/src/types/match'
+import { MatchOddsBanter } from '@/src/components/matches/match-odds-banter'
 
 interface MatchCardProps {
   match: Match
@@ -166,6 +167,11 @@ export function MatchCard({ match, actions }: MatchCardProps) {
           <ChessPiece />
         </div>
       </div>
+
+      {/* Win likelihood banter (pending / ongoing) */}
+      {(match.match_status === 'pending' || match.match_status === 'ongoing') && match.odds && (
+        <MatchOddsBanter odds={match.odds} />
+      )}
 
       {/* Bottom row: winner badge / deadline / view game link */}
       <div className="flex items-center justify-between gap-2 min-h-[22px]">

@@ -54,6 +54,7 @@ export function StandingsModal({
           <DialogDescription>
             {competitionName}
             {isSwiss ? ' · Tiebreaks: Buchholz → Cut-1 → Sonneborn-Berger' : ''}
+            {' · Win% = estimated chance of winning this tournament (ratings + H2H + remaining fixtures)'}
           </DialogDescription>
         </DialogHeader>
 
@@ -90,6 +91,12 @@ export function StandingsModal({
                   )}
                   <TableHead className="text-center tabular-nums">Abs</TableHead>
                   <TableHead className="text-center tabular-nums">BYE</TableHead>
+                  <TableHead
+                    className="text-center tabular-nums font-semibold"
+                    title="Estimated chance of winning this tournament"
+                  >
+                    Win%
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,6 +137,9 @@ export function StandingsModal({
                     </TableCell>
                     <TableCell className="text-center tabular-nums text-muted-foreground">
                       {row.byes}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums font-semibold text-violet-700">
+                      {row.tournament_win_pct != null ? `${row.tournament_win_pct}%` : '—'}
                     </TableCell>
                   </TableRow>
                 ))}

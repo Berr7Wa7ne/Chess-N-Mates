@@ -20,6 +20,8 @@ export const API_ENDPOINTS = {
     START: (id: string) => `/competitions/${id}/start`,
     ADVANCE_ROUND: (id: string) => `/competitions/${id}/advance-round`,
     STANDINGS: (id: string) => `/competitions/${id}/standings`,
+    H2H: (id: string) => `/competitions/${id}/h2h`,
+    ODDS_HISTORY: (id: string) => `/competitions/${id}/odds-history`,
     FORMAT_ADVICE: '/competitions/format-advice',
     COMPUTE_RESULTS: (id: string) => `/competitions/${id}/compute-results`,
     MATCHES: (id: string) => `/competitions/${id}/matches`,

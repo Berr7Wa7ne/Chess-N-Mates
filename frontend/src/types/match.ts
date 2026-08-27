@@ -17,6 +17,29 @@ export interface MatchPlayer {
   chess_elo?: number
 }
 
+export interface MatchOddsH2H {
+  played: number
+  wins_a: number
+  draws: number
+  losses_a: number
+  points_a: number
+  points_b: number
+}
+
+export interface MatchOdds {
+  win_pct_a: number
+  draw_pct: number
+  win_pct_b: number
+  favorite: 'a' | 'b' | 'even'
+  banter: string
+  h2h: MatchOddsH2H
+  model?: {
+    elo_a: number
+    elo_b: number
+    sources: string[]
+  }
+}
+
 export interface Match {
   id: string
   competition_id: string
@@ -45,6 +68,8 @@ export interface Match {
   absence_side?: 'a' | 'b' | 'both' | null
   created_at?: string
   updated_at?: string
+  /** Live match win likelihood + banter (Elo + tournament H2H). */
+  odds?: MatchOdds | null
 }
 
 export interface MarkAbsentPayload {

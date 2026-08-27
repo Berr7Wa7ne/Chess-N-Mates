@@ -10,6 +10,7 @@ import { useAuth } from '@/src/hooks/useAuth'
 import { ApiError } from '@/src/types/api'
 import { ChangeResultModal } from '@/src/components/matches/change-result-modal'
 import { FileDisputeModal } from '@/src/components/matches/file-dispute-modal'
+import { MatchOddsBanter } from '@/src/components/matches/match-odds-banter'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -675,6 +676,8 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
             </div>
           </div>
         </div>
+
+        {match.odds && <MatchOddsBanter odds={match.odds} />}
 
         {/* Scoring buttons: Pick | Draw | Pick */}
         <div className="flex gap-2">

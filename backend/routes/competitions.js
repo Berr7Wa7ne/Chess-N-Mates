@@ -14,6 +14,8 @@ router.post('/:id/start', competitionsController.startCompetition);
 router.post('/:id/advance-round', competitionsController.advanceRound);
 router.post('/:id/compute-results', competitionsController.computeResults);
 router.get('/:id/standings', competitionsController.getStandings);
+router.get('/:id/h2h', competitionsController.getCompetitionH2H);
+router.get('/:id/odds-history', competitionsController.getOddsHistory);
 router.get('/:id/matches', matchesController.getCompetitionMatches);
 router.post('/:id/join', participantsController.joinCompetition);
 router.post('/:id/participants/:userId/withdraw', participantsController.withdrawParticipant);
