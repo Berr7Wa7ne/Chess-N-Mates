@@ -4,6 +4,7 @@ const usersController = require('../controllers/usersController');
 
 router.post('/register', usersController.registerUser);
 router.post('/login', usersController.loginUser);
+router.get('/', usersController.listUsers);
 router.post('/:id/register-chess', usersController.registerChess);
 router.get('/:id', usersController.getUser);
 router.put('/:id', usersController.updateUser);

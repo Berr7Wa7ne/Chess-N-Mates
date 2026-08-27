@@ -2,6 +2,7 @@ export const API_ENDPOINTS = {
   USERS: {
     LOGIN: '/users/login',
     REGISTER: '/users/register',
+    LIST: '/users',
     REGISTER_CHESS: (id: string) => `/users/${id}/register-chess`,
     GET: (id: string) => `/users/${id}`,
     UPDATE: (id: string) => `/users/${id}`,

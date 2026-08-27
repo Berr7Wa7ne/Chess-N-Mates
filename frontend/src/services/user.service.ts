@@ -11,6 +11,11 @@ import type {
   User,
 } from '@/src/types/user'
 
+export type ListUsersParams = {
+  role?: User['role']
+  status?: User['user_status']
+}
+
 export const userService = {
   login(payload: LoginPayload) {
     return httpClient.post<AuthUser>(API_ENDPOINTS.USERS.LOGIN, payload)
@@ -18,6 +23,10 @@ export const userService = {
 
   registerUser(payload: RegisterUserPayload) {
     return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER, payload)
+  },
+
+  listUsers(params?: ListUsersParams) {
+    return httpClient.get<User[]>(API_ENDPOINTS.USERS.LIST, { params })
   },
 
   registerChessAccount(id: string, payload: RegisterChessPayload) {

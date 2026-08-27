@@ -148,6 +148,31 @@ exports.registerChess = async (req, res) => {
   res.json({ success: true, data });
 };
 
+exports.listUsers = async (req, res) => {
+  const { role, status } = req.query;
+
+  let query = supabaseAdmin
+    .from('users')
+    .select(
+      'id, phone_number, display_name, role, avatar_url, chess_username, chess_platform, chess_com_username, lichess_username, chess_elo, user_status, last_activity_at, created_at, updated_at, whatsapp_phone'
+    )
+    .order('created_at', { ascending: false });
+
+  if (role) {
+    query = query.eq('role', String(role).toLowerCase());
+  }
+  if (status) {
+    query = query.eq('user_status', String(status).toLowerCase());
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return res.status(400).json({ success: false, error: { message: error.message } });
+  }
+
+  res.json({ success: true, data: data || [] });
+};
+
 exports.getUser = async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin.from('users').select('*').eq('id', id).single();
