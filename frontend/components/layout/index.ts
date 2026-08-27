@@ -1,4 +1,5 @@
 export { AdminLayout } from "./admin-layout"
 export { AdminSidebar } from "./admin-sidebar"
 export { PlayerLayout } from "./player-layout"
+export { PlayerIconRail } from "./player-icon-rail"
 export { PlayerNavbar } from "./player-navbar"

@@ -4,6 +4,19 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Game dashboard palette (available globally; player shell uses these heavily) */
+  --bg-page: #3a3a3a;
+  --bg-shell: #ededea;
+  --bg-panel-light: #f7f7f5;
+  --bg-panel-dark: #141414;
+  --bg-stat-tile: #1e1e1e;
+  --accent-lime: #c6ff3d;
+  --accent-lime-dim: #9fe62e;
+  --text-primary: #111111;
+  --text-primary-inverse: #ffffff;
+  --text-secondary: #7a7a78;
+  --border-subtle: #e2e2df;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -28,7 +41,7 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -75,8 +88,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-poppins), 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -101,10 +114,22 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-bg-page: var(--bg-page);
+  --color-bg-shell: var(--bg-shell);
+  --color-bg-panel-light: var(--bg-panel-light);
+  --color-bg-panel-dark: var(--bg-panel-dark);
+  --color-bg-stat-tile: var(--bg-stat-tile);
+  --color-accent-lime: var(--accent-lime);
+  --color-accent-lime-dim: var(--accent-lime-dim);
+  --color-text-primary: var(--text-primary);
+  --color-text-primary-inverse: var(--text-primary-inverse);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-subtle: var(--border-subtle);
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-shell: 32px;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -120,6 +145,38 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
   }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+/* Thin scrollbar on the player main pane so overflow is scrollable and discoverable */
+.player-main {
+  scrollbar-width: thin;
+  scrollbar-color: #c6c6c2 transparent;
+}
+.player-main::-webkit-scrollbar {
+  width: 8px;
+}
+.player-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+.player-main::-webkit-scrollbar-thumb {
+  background: #c6c6c2;
+  border-radius: 999px;
 }
