@@ -9,6 +9,7 @@ import {
   Crown,
   Download,
   Loader2,
+  RefreshCw,
   SkipForward,
   Trophy,
 } from 'lucide-react'
@@ -33,6 +34,7 @@ import {
   useCompetition,
   useCompetitionStandings,
   useAdvanceRound,
+  useComputeResults,
 } from '@/src/hooks/useCompetitions'
 import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
@@ -46,6 +48,7 @@ export default function AdminCompetitionMatchesPage() {
   const matchesQuery = useCompetitionMatches(id)
   const standingsQuery = useCompetitionStandings(id, !!id)
   const advanceMutation = useAdvanceRound()
+  const computeMutation = useComputeResults()
 
   const [currentRound, setCurrentRound] = useState<number | null>(null)
   const [advancePendingModalOpen, setAdvancePendingModalOpen] = useState(false)
@@ -108,6 +111,22 @@ export default function AdminCompetitionMatchesPage() {
   const showChampion = isCompleted && !championDismissed && !!winner
   if (showChampion && !championModalOpen) {
     setChampionModalOpen(true)
+  }
+
+  async function handleComputeResults() {
+    try {
+      const result = await computeMutation.mutateAsync(id)
+      const data = result.data
+      const parts = [
+        `${data.scored} scored`,
+        data.needs_review > 0 ? `${data.needs_review} need review` : null,
+        data.absent > 0 ? `${data.absent} absent` : null,
+        data.advanced ? 'round advanced' : null,
+      ].filter(Boolean)
+      toast.success(`Compute complete: ${parts.join(', ') || 'no changes'}`)
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to compute results')
+    }
   }
 
   async function handleAdvanceRoundWithPending() {
@@ -238,19 +257,37 @@ export default function AdminCompetitionMatchesPage() {
             {/* Matches heading with download button */}
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Matches</h2>
-              {roundMatches.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDownloadFixtures}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                >
-                  <Download className="size-4" />
-                  {competition.tournament_type === 'swiss'
-                    ? `Round ${effectiveRound} Fixtures`
-                    : 'All Fixtures'}
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {competition.platform === 'chess.com' && competition.competition_status === 'active' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleComputeResults}
+                    disabled={computeMutation.isPending}
+                    className="gap-2"
+                  >
+                    {computeMutation.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-4" />
+                    )}
+                    Compute results
+                  </Button>
+                )}
+                {roundMatches.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDownloadFixtures}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <Download className="size-4" />
+                    {competition.tournament_type === 'swiss'
+                      ? `Round ${effectiveRound} Fixtures`
+                      : 'All Fixtures'}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Round navigation (directly on page) */}

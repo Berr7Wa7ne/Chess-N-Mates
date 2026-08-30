@@ -1,7 +1,14 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
-const { generateFixtures } = require('../services/fixtureGenerator');
+const { generateFixtures, recommendTournamentFormat } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
 const { emitWebhook } = require('../services/webhookService');
+const {
+  fixturesToMatchRows,
+  applyByeParticipantUpdates,
+  eliminateKnockoutLosers,
+} = require('../services/tournamentLifecycle');
+const { advanceCompetitionRound } = require('../services/competitionAdvanceService');
+const { computeCompetition } = require('../services/dailyComputeService');
 const {
   attachParticipantCounts,
   fetchParticipantsWithUsers,
@@ -32,6 +39,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'format_match_rules',
   'rules',
   'round_robin_legs',
+  'auto_compute_enabled',
 ];
 
 exports.createCompetition = async (req, res) => {
@@ -57,6 +65,7 @@ exports.createCompetition = async (req, res) => {
     format_match_rules,
     rules,
     round_robin_legs,
+    auto_compute_enabled,
   } = req.body;
 
 function isValidUUID(str) {
@@ -122,6 +131,7 @@ if (!created_by || !isValidUUID(created_by)) {
       format_match_rules,
       rules: rules ?? [],
       round_robin_legs: round_robin_legs ?? 1,
+      auto_compute_enabled: auto_compute_enabled !== false,
       competition_status: 'draft',
       current_round: 0,
     }])
@@ -260,21 +270,7 @@ exports.startCompetition = async (req, res) => {
   );
 
   const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const matchRows = fixtures
-    .filter((f) => f.player_a_id && f.player_b_id)
-    .map((f) => ({
-      competition_id: id,
-      round_number: f.round_number || 1,
-      player_a_id: f.player_a_id,
-      player_b_id: f.player_b_id,
-      match_status: f.is_bye ? 'completed' : 'pending',
-      is_bye: f.is_bye || false,
-      // Double-game round robin: leg = 2 for reverse fixtures
-      leg: f.leg || 1,
-      // Round 1 deadline = 24 hours from competition start
-      deadline: f.is_bye ? null : deadlineDate,
-    }));
+  const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate);
 
   if (matchRows.length > 0) {
     const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -282,6 +278,12 @@ exports.startCompetition = async (req, res) => {
       return res.status(400).json({ success: false, error: { message: matchError.message } });
     }
   }
+
+  await applyByeParticipantUpdates(
+    supabaseAdmin,
+    id,
+    fixtures.filter((f) => f.is_bye)
+  );
 
   await supabaseAdmin
     .from('competition_participants')
@@ -323,159 +325,34 @@ exports.advanceRound = async (req, res) => {
   const { id } = req.params;
   const includePendingMatches = Boolean(req.body?.include_pending_matches);
 
-  const { data: competition, error: compError } = await supabaseAdmin
-    .from('competitions')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const result = await advanceCompetitionRound(id, { includePendingMatches });
 
-  if (compError) {
-    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
-  }
-
-  if (competition.competition_status !== 'active') {
-    return res.status(400).json({
+  if (!result.success) {
+    return res.status(result.status || 400).json({
       success: false,
-      error: { message: 'Competition is not active' },
+      error: { message: result.error || 'Failed to advance round' },
     });
   }
 
-  const currentRound = competition.current_round || 1;
+  res.json({ success: true, data: result.data });
+};
 
-  const { data: roundMatches } = await supabaseAdmin
-    .from('matches')
-    .select('*')
-    .eq('competition_id', id)
-    .eq('round_number', currentRound);
+exports.computeResults = async (req, res) => {
+  const { id } = req.params;
+  const ignoreAutoComputeFlag = Boolean(req.body?.force);
 
-  const unresolved = (roundMatches || []).filter((m) => m.match_status !== 'completed');
-
-  if (unresolved.length > 0 && !includePendingMatches) {
-    return res.status(400).json({
+  try {
+    const report = await computeCompetition(id, {
+      ignoreAutoComputeFlag: true, // admin button always runs
+      forceAbsentPastDeadline: req.body?.mark_absent_past_deadline !== false,
+    });
+    res.json({ success: true, data: report });
+  } catch (err) {
+    res.status(500).json({
       success: false,
-      error: {
-        message: `${unresolved.length} match(es) in round ${currentRound} are not completed`,
-      },
+      error: { message: err.message || 'Compute failed' },
     });
   }
-
-  const nextRound = currentRound + 1;
-  const maxRounds = competition.rounds || 1;
-
-  if (nextRound > maxRounds && competition.tournament_type !== 'knockout') {
-    await supabaseAdmin
-      .from('competitions')
-      .update({ competition_status: 'completed', end_date: timestamp() })
-      .eq('id', id);
-
-    return res.json({
-      success: true,
-      data: {
-        competition_id: id,
-        previous_round: currentRound,
-        current_round: currentRound,
-        fixtures_generated: 0,
-        unresolved_matches: unresolved.length,
-        timestamp: timestamp(),
-        action: 'completed',
-      },
-    });
-  }
-
-  const participants = await fetchParticipantsWithUsers(id);
-  const { data: allMatches } = await supabaseAdmin
-    .from('matches')
-    .select('*')
-    .eq('competition_id', id);
-
-  const completedMatches = (allMatches || []).filter((m) => m.match_status === 'completed');
-
-  if (competition.tournament_type === 'knockout') {
-    const roundWinners = completedMatches
-      .filter((m) => m.round_number === currentRound)
-      .map((m) => {
-        if (m.result_winner === 'a') return m.player_a_id;
-        if (m.result_winner === 'b') return m.player_b_id;
-        return m.player_a_id;
-      });
-
-    if (roundWinners.length <= 1) {
-      await supabaseAdmin
-        .from('competitions')
-        .update({ competition_status: 'completed', end_date: timestamp() })
-        .eq('id', id);
-
-      return res.json({
-        success: true,
-        data: {
-        competition_id: id,
-        previous_round: currentRound,
-        current_round: currentRound,
-        fixtures_generated: 0,
-        unresolved_matches: unresolved.length,
-        timestamp: timestamp(),
-        action: 'completed',
-      },
-      });
-    }
-  }
-
-  const fixtures = generateFixtures(
-    competition,
-    participants,
-    allMatches || [],
-    completedMatches,
-    nextRound
-  );
-
-  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const matchRows = fixtures
-    .filter((f) => f.player_a_id && f.player_b_id)
-    .map((f) => ({
-      competition_id: id,
-      round_number: f.round_number || nextRound,
-      player_a_id: f.player_a_id,
-      player_b_id: f.player_b_id,
-      match_status: 'pending',
-      leg: f.leg || 1,
-      // Round deadline = 24 hours from when admin clicks advance
-      deadline: deadlineDate,
-    }));
-
-  if (matchRows.length > 0) {
-    const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
-    if (matchError) {
-      return res.status(400).json({ success: false, error: { message: matchError.message } });
-    }
-  }
-
-  await supabaseAdmin
-    .from('competitions')
-    .update({ current_round: nextRound })
-    .eq('id', id);
-
-  // Emit webhook for round advanced
-  emitWebhook('round.advanced', {
-    competition_id: id,
-    name: competition.name,
-    previous_round: currentRound,
-    current_round: nextRound,
-    fixtures_generated: matchRows.length,
-    unresolved_matches: unresolved.length,
-  });
-
-  res.json({
-    success: true,
-    data: {
-      competition_id: id,
-      previous_round: currentRound,
-      current_round: nextRound,
-      fixtures_generated: matchRows.length,
-      unresolved_matches: unresolved.length,
-      timestamp: timestamp(),
-    },
-  });
 };
 
 exports.deleteCompetition = async (req, res) => {
@@ -561,7 +438,7 @@ exports.getStandings = async (req, res) => {
 
   const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
-    .select('id')
+    .select('id, tournament_type')
     .eq('id', id)
     .single();
 
@@ -580,12 +457,16 @@ exports.getStandings = async (req, res) => {
     return res.status(400).json({ success: false, error: { message: matchError.message } });
   }
 
-  // DEBUG: Log match data
-  console.log('[STANDINGS DEBUG] Matches for competition:', id);
-  console.log('[STANDINGS DEBUG] Match count:', matches?.length || 0);
-  console.log('[STANDINGS DEBUG] Sample matches:', JSON.stringify(matches?.slice(0, 4), null, 2));
-
-  const standings = computeStandings(participants, matches || []);
+  const standings = computeStandings(participants, matches || [], {
+    tournamentType: competition.tournament_type,
+  });
 
   res.json({ success: true, data: standings });
+};
+
+/** GET /competitions/format-advice?participants=12 */
+exports.getFormatAdvice = async (req, res) => {
+  const n = Number(req.query.participants ?? req.query.n ?? 0);
+  const advice = recommendTournamentFormat(n);
+  res.json({ success: true, data: advice });
 };

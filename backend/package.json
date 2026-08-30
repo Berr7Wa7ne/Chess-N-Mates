@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "migrate": "node scripts/run-migrations.js",
+    "migrate:chess-com": "node scripts/run-migrations.js add_chess_com_auto_compute.sql",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,6 +17,8 @@
     "@supabase/supabase-js": "^2.107.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.0"
   }
 }

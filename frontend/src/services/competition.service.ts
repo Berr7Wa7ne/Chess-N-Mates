@@ -9,6 +9,7 @@ import type {
   CreateCompetitionPayload,
   StandingEntry,
   StartCompetitionResult,
+  ComputeResultsReport,
   UpdateCompetitionPayload,
 } from '@/src/types/competition'
 
@@ -49,6 +50,13 @@ export const competitionService = {
 
   getStandings(id: string) {
     return httpClient.get<StandingEntry[]>(API_ENDPOINTS.COMPETITIONS.STANDINGS(id))
+  },
+
+  computeResults(id: string) {
+    return httpClient.post<ComputeResultsReport>(
+      API_ENDPOINTS.COMPETITIONS.COMPUTE_RESULTS(id),
+      {}
+    )
   },
 }
 

@@ -10,6 +10,11 @@ const {
 } = require('../utils/competitionHelpers');
 const { generateFixtures } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
+const {
+  fixturesToMatchRows,
+  applyByeParticipantUpdates,
+  eliminateKnockoutLosers,
+} = require('../services/tournamentLifecycle');
 
 // ============================================
 // SHARED HELPERS
@@ -952,19 +957,7 @@ exports.compBegin = async (req, res) => {
     const fixtures = generateFixtures(competition, eligible, existingMatches || [], [], 1);
 
     const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    const matchRows = fixtures
-      .filter((f) => f.player_a_id && f.player_b_id)
-      .map((f) => ({
-        competition_id: competition.id,
-        round_number: f.round_number || 1,
-        player_a_id: f.player_a_id,
-        player_b_id: f.player_b_id,
-        match_status: f.is_bye ? 'completed' : 'pending',
-        is_bye: f.is_bye || false,
-        leg: f.leg || 1,
-        deadline: f.is_bye ? null : deadlineDate,
-      }));
+    const matchRows = fixturesToMatchRows(competition.id, fixtures, 1, deadlineDate);
 
     if (matchRows.length > 0) {
       const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -972,6 +965,12 @@ exports.compBegin = async (req, res) => {
         return res.status(400).json({ success: false, error: { message: matchError.message } });
       }
     }
+
+    await applyByeParticipantUpdates(
+      supabaseAdmin,
+      competition.id,
+      fixtures.filter((f) => f.is_bye)
+    );
 
     // Update participants to active
     await supabaseAdmin
@@ -1095,13 +1094,22 @@ exports.compAdvance = async (req, res) => {
 
     // Handle knockout
     if (competition.tournament_type === 'knockout') {
+      await eliminateKnockoutLosers(
+        supabaseAdmin,
+        competition.id,
+        completedMatches,
+        currentRound
+      );
+
       const roundWinners = completedMatches
         .filter((m) => m.round_number === currentRound)
         .map((m) => {
+          if (m.is_bye) return m.player_a_id;
           if (m.result_winner === 'a') return m.player_a_id;
           if (m.result_winner === 'b') return m.player_b_id;
-          return m.player_a_id;
-        });
+          return null;
+        })
+        .filter(Boolean);
 
       if (roundWinners.length <= 1) {
         await supabaseAdmin
@@ -1124,18 +1132,7 @@ exports.compAdvance = async (req, res) => {
     const fixtures = generateFixtures(competition, participants, allMatches || [], completedMatches, nextRound);
 
     const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    const matchRows = fixtures
-      .filter((f) => f.player_a_id && f.player_b_id)
-      .map((f) => ({
-        competition_id: competition.id,
-        round_number: f.round_number || nextRound,
-        player_a_id: f.player_a_id,
-        player_b_id: f.player_b_id,
-        match_status: 'pending',
-        leg: f.leg || 1,
-        deadline: deadlineDate,
-      }));
+    const matchRows = fixturesToMatchRows(competition.id, fixtures, nextRound, deadlineDate);
 
     if (matchRows.length > 0) {
       const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -1143,6 +1140,12 @@ exports.compAdvance = async (req, res) => {
         return res.status(400).json({ success: false, error: { message: matchError.message } });
       }
     }
+
+    await applyByeParticipantUpdates(
+      supabaseAdmin,
+      competition.id,
+      fixtures.filter((f) => f.is_bye)
+    );
 
     await supabaseAdmin
       .from('competitions')
@@ -2561,7 +2564,9 @@ exports.getStandings = async (req, res) => {
       return res.status(400).json({ success: false, error: { message: matchError.message } });
     }
 
-    const standings = computeStandings(participants, matches || []);
+    const standings = computeStandings(participants, matches || [], {
+      tournamentType: competition.tournament_type,
+    });
 
     res.json({
       success: true,

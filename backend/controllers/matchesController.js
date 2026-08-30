@@ -199,6 +199,9 @@ exports.submitResult = async (req, res) => {
     result_submitted_by: user_id,
     result_submitted_at: timestamp(),
     chess_game_link: chess_game_link,
+    result_source: 'player_submit',
+    needs_review: false,
+    auto_candidates: null,
   };
 
   if (chess_game_id) updates.chess_game_id = chess_game_id;
@@ -353,7 +356,7 @@ exports.markAbsent = async (req, res) => {
 
 exports.forceResult = async (req, res) => {
   const { id } = req.params;
-  const { result_winner, reason, is_absent, absence_side } = req.body;
+  const { result_winner, reason, is_absent, absence_side, chess_game_link } = req.body;
 
   if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
     return res.status(400).json({
@@ -381,11 +384,18 @@ exports.forceResult = async (req, res) => {
     forced: true,
     force_reason: reason || null,
     forced_at: new Date().toISOString(),
+    result_source: 'manual',
+    needs_review: false,
+    auto_candidates: null,
   };
 
   if (is_absent && absence_side) {
     updates.is_absent = true;
     updates.absence_side = absence_side;
+  }
+
+  if (chess_game_link) {
+    updates.chess_game_link = chess_game_link;
   }
 
   const { data, error } = await supabaseAdmin
@@ -477,6 +487,9 @@ exports.adminScoreMatch = async (req, res) => {
     match_status: 'completed',
     forced: false,
     result_submitted_at: new Date().toISOString(),
+    result_source: 'manual',
+    needs_review: false,
+    auto_candidates: null,
   };
 
   if (is_absent && absence_side) {
@@ -828,3 +841,6 @@ async function reverseParticipantScores(competitionId, match) {
     }
   }
 }
+
+exports.updateParticipantScores = updateParticipantScores;
+exports.reverseParticipantScores = reverseParticipantScores;

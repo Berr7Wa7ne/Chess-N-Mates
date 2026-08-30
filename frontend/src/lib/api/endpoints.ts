@@ -17,7 +17,13 @@ export const API_ENDPOINTS = {
     START: (id: string) => `/competitions/${id}/start`,
     ADVANCE_ROUND: (id: string) => `/competitions/${id}/advance-round`,
     STANDINGS: (id: string) => `/competitions/${id}/standings`,
+    FORMAT_ADVICE: '/competitions/format-advice',
+    COMPUTE_RESULTS: (id: string) => `/competitions/${id}/compute-results`,
     MATCHES: (id: string) => `/competitions/${id}/matches`,
+  },
+
+  JOBS: {
+    DAILY_COMPUTE: '/jobs/daily-compute',
   },
 
   PARTICIPANTS: {

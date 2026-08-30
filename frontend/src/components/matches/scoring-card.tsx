@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, Crown, Loader2 } from 'lucide-react'
+import { AlertTriangle, Crown, ExternalLink, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Match, ResultWinner } from '@/src/types/match'
+import type { Match, ResultWinner, AutoCandidate } from '@/src/types/match'
 import { useAdminScore, useConfirmResult, useForceResult, useMarkAbsent } from '@/src/hooks/useMatches'
 import { useAuth } from '@/src/hooks/useAuth'
 import { ApiError } from '@/src/types/api'
@@ -50,6 +50,100 @@ function getResultLabel(winner: ResultWinner, match: Match): string {
   if (winner === 'a') return `${match.player_a?.display_name || 'Player A'} wins`
   if (winner === 'b') return `${match.player_b?.display_name || 'Player B'} wins`
   return 'Draw'
+}
+
+function ResultSourceBadge({ match }: { match: Match }) {
+  if (match.needs_review) {
+    return (
+      <Badge variant="outline" className="text-[10px] border-amber-300 bg-amber-50 text-amber-800">
+        Needs review
+      </Badge>
+    )
+  }
+  if (match.result_source === 'chess_com_auto') {
+    return (
+      <Badge variant="outline" className="text-[10px] border-blue-200 bg-blue-50 text-blue-700">
+        Auto
+      </Badge>
+    )
+  }
+  if (match.result_source === 'absent_auto') {
+    return (
+      <Badge variant="outline" className="text-[10px] border-orange-200 bg-orange-50 text-orange-700">
+        Auto absent
+      </Badge>
+    )
+  }
+  if (match.result_source === 'player_submit') {
+    return (
+      <Badge variant="outline" className="text-[10px] border-purple-200 bg-purple-50 text-purple-700">
+        Player
+      </Badge>
+    )
+  }
+  return null
+}
+
+function GameLinkPreview({ url }: { url?: string | null }) {
+  if (!url) return null
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <ExternalLink className="size-3" />
+      View game on Chess.com
+    </a>
+  )
+}
+
+function NeedsReviewPanel({
+  candidates,
+  onApply,
+  disabled,
+}: {
+  candidates: AutoCandidate[]
+  onApply: (candidate: AutoCandidate) => void
+  disabled?: boolean
+}) {
+  if (!candidates?.length) return null
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 space-y-2">
+      <p className="text-[11px] font-semibold text-amber-900">
+        Multiple Chess.com games found — pick the correct result:
+      </p>
+      <ul className="space-y-1.5">
+        {candidates.map((c) => (
+          <li key={c.url} className="flex flex-wrap items-center gap-2 text-[11px]">
+            <a
+              href={c.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline truncate max-w-[200px]"
+            >
+              {c.url.replace(/^https?:\/\//, '')}
+            </a>
+            <span className="text-muted-foreground">
+              → {c.result_winner === 'draw' ? 'Draw' : `${c.result_winner.toUpperCase()} wins`}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-[10px]"
+              disabled={disabled}
+              onClick={() => onApply(c)}
+            >
+              Use this
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 // ── Status badge config ───────────────────────────────────────────
@@ -101,6 +195,29 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
 
   const playerAName = match.player_a?.display_name || `Player #${match.player_a_id?.slice(0, 6)}`
   const playerBName = match.player_b?.display_name || `Player #${match.player_b_id?.slice(0, 6)}`
+
+  const handleApplyCandidate = useCallback(
+    async (candidate: AutoCandidate) => {
+      if (isReadOnly) return
+      setLoadingButton(candidate.result_winner)
+      try {
+        await forceMutation.mutateAsync({
+          id: match.id,
+          payload: {
+            result_winner: candidate.result_winner,
+            chess_game_link: candidate.url,
+            reason: 'Applied from Chess.com auto-candidates',
+          },
+        })
+        toast.success('Result applied from Chess.com candidate')
+      } catch (error) {
+        toast.error(error instanceof ApiError ? error.message : 'Failed to apply candidate')
+      } finally {
+        setLoadingButton(null)
+      }
+    },
+    [forceMutation, isReadOnly, match.id]
+  )
 
   const handleScore = useCallback(
     async (winner: ResultWinner) => {
@@ -407,15 +524,20 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Round {match.round_number}
             </span>
-            <span
-              className={cn(
-                'rounded-full px-2.5 py-0.5 text-[11px] font-medium',
-                STATUS_STYLES[match.match_status] || STATUS_STYLES.pending
-              )}
-            >
-              {isResultSubmitted ? 'Result Submitted' : 'Completed'}
-            </span>
+            <div className="flex items-center gap-2">
+              <ResultSourceBadge match={match} />
+              <span
+                className={cn(
+                  'rounded-full px-2.5 py-0.5 text-[11px] font-medium',
+                  STATUS_STYLES[match.match_status] || STATUS_STYLES.pending
+                )}
+              >
+                {isResultSubmitted ? 'Result Submitted' : 'Completed'}
+              </span>
+            </div>
           </div>
+
+          <GameLinkPreview url={match.chess_game_link} />
 
           {isResultSubmitted && (
             <p className="text-xs text-muted-foreground">
@@ -514,15 +636,26 @@ export function ScoringCard({ match, competitionId, disabled }: ScoringCardProps
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Round {match.round_number}
           </span>
-          <span
-            className={cn(
-              'rounded-full px-2.5 py-0.5 text-[11px] font-medium',
-              STATUS_STYLES[match.match_status] || STATUS_STYLES.pending
-            )}
-          >
-            {match.match_status === 'pending' ? 'Pending' : 'Ongoing'}
-          </span>
+          <div className="flex items-center gap-2">
+            <ResultSourceBadge match={match} />
+            <span
+              className={cn(
+                'rounded-full px-2.5 py-0.5 text-[11px] font-medium',
+                STATUS_STYLES[match.match_status] || STATUS_STYLES.pending
+              )}
+            >
+              {match.needs_review ? 'Needs review' : match.match_status === 'pending' ? 'Pending' : 'Ongoing'}
+            </span>
+          </div>
         </div>
+
+        {match.needs_review && match.auto_candidates && (
+          <NeedsReviewPanel
+            candidates={match.auto_candidates}
+            onApply={handleApplyCandidate}
+            disabled={isReadOnly || forceMutation.isPending}
+          />
+        )}
 
         {/* Players row with absence radios above each name */}
         <div className="flex items-center justify-between gap-2">

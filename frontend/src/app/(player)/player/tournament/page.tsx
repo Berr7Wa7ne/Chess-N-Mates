@@ -378,6 +378,7 @@ export default function PlayerTournamentPage() {
           onClose={() => setStandingsOpen(false)}
           standings={standings}
           competitionName={currentCompetition.name}
+          tournamentType={currentCompetition.tournament_type}
         />
       )}
 

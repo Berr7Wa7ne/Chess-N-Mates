@@ -154,10 +154,30 @@ export default function AdminCompetitionDetailPage() {
       toast.error('No standings to download')
       return
     }
+    const isSwiss = competition?.tournament_type === 'swiss'
+    const headers = isSwiss
+      ? ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'BH', 'BH-C1', 'SB', 'Abs', 'BYE']
+      : ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'Abs', 'BYE']
     const csv = [
-      ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'Abs', 'BYE'].join(','),
+      headers.join(','),
       ...standings.map((s) =>
-        [s.rank, s.display_name, s.played, s.wins, s.draws, s.losses, s.points, s.absences, s.byes].join(',')
+        (isSwiss
+          ? [
+              s.rank,
+              s.display_name,
+              s.played,
+              s.wins,
+              s.draws,
+              s.losses,
+              s.points,
+              s.buchholz ?? '',
+              s.buchholz_cut1 ?? '',
+              s.sonneborn_berger ?? '',
+              s.absences,
+              s.byes,
+            ]
+          : [s.rank, s.display_name, s.played, s.wins, s.draws, s.losses, s.points, s.absences, s.byes]
+        ).join(',')
       ),
     ].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -413,6 +433,7 @@ export default function AdminCompetitionDetailPage() {
         onClose={() => setStandingsOpen(false)}
         standings={standings}
         competitionName={competition.name}
+        tournamentType={competition.tournament_type}
       />
     </div>
   )
