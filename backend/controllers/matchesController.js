@@ -2,6 +2,7 @@ const { supabase, supabaseAdmin } = require('../config/supabase');
 const { timestamp } = require('../utils/competitionHelpers');
 const { verifyGameAndDetermineWinner } = require('../services/chessComService');
 const { emitWebhook } = require('../services/webhookService');
+const { enrichMatchesWithOdds, computeMatchOdds } = require('../services/oddsService');
 
 exports.getCompetitionMatches = async (req, res) => {
   const competitionId = req.params.competition_id || req.params.id;
@@ -27,7 +28,22 @@ exports.getCompetitionMatches = async (req, res) => {
   const { data, error } = await query;
 
   if (error) return res.status(400).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data: data || [] });
+
+  let h2hPool = data || [];
+  if (round || status || player_id) {
+    const { data: allMatches } = await supabaseAdmin
+      .from('matches')
+      .select(`
+        *,
+        player_a:player_a_id(id, display_name, chess_username, chess_elo),
+        player_b:player_b_id(id, display_name, chess_username, chess_elo)
+      `)
+      .eq('competition_id', competitionId);
+    h2hPool = allMatches || data || [];
+  }
+
+  const enriched = enrichMatchesWithOdds(data || [], h2hPool);
+  res.json({ success: true, data: enriched });
 };
 
 exports.getMatch = async (req, res) => {
@@ -43,8 +59,19 @@ exports.getMatch = async (req, res) => {
     .eq('id', id)
     .single();
 
-  if (error) return res.status(404).json({ success: false, error: { message: error.message } });
-  res.json({ success: true, data });
+  if (error) return res.status(404).json({ success: false, error: { message: 'Match not found' } });
+
+  const { data: siblingMatches } = await supabaseAdmin
+    .from('matches')
+    .select(`
+      *,
+      player_a:player_a_id(id, display_name, chess_username, chess_elo),
+      player_b:player_b_id(id, display_name, chess_username, chess_elo)
+    `)
+    .eq('competition_id', data.competition_id);
+
+  const odds = computeMatchOdds(data, siblingMatches || [data]);
+  res.json({ success: true, data: odds ? { ...data, odds } : data });
 };
 
 exports.submitResult = async (req, res) => {

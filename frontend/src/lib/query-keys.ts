@@ -1,5 +1,7 @@
 export const queryKeys = {
   users: {
+    all: ['users'] as const,
+    list: (params?: object) => ['users', 'list', params] as const,
     detail: (id: string) => ['users', id] as const,
     activityLog: ['users', 'activity-log'] as const,
   },

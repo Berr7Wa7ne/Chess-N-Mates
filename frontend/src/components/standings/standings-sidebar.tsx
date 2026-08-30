@@ -114,10 +114,20 @@ export function StandingsSidebar({
                       </p>
                     </div>
                   </div>
-                  {/* Points */}
-                  <span className="text-sm font-bold text-emerald-600 tabular-nums shrink-0 ml-2">
-                    {row.points}
-                  </span>
+                  {/* Points + tournament win odds */}
+                  <div className="ml-2 shrink-0 text-right">
+                    <span className="block text-sm font-bold text-emerald-600 tabular-nums">
+                      {row.points}
+                    </span>
+                    {row.tournament_win_pct != null && (
+                      <span
+                        className="block text-[10px] font-semibold text-violet-700 tabular-nums"
+                        title="Tournament win odds"
+                      >
+                        {row.tournament_win_pct}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -28,6 +28,8 @@ export interface AuthUser {
   phone_number: string
   display_name: string
   role: UserRole
+  /** Real account role from DB when session role differs (e.g. admin signed in as member). */
+  account_role?: UserRole
 }
 
 export interface RegisterUserPayload {
@@ -38,10 +40,24 @@ export interface RegisterUserPayload {
   chess_platform?: ChessPlatform | null
   chess_com_username?: string | null
   lichess_username?: string | null
+  password?: string
+  admin_code?: string
 }
 
 export interface LoginPayload {
   phone_number: string
+  password: string
+  role?: UserRole
+  admin_code?: string
+}
+
+export interface ChangePasswordPayload {
+  current_password: string
+  new_password: string
+}
+
+export interface ResetPasswordPayload {
+  admin_code: string
 }
 
 export interface RegisterChessPayload {
@@ -52,6 +68,9 @@ export interface RegisterChessPayload {
 export interface UpdateUserPayload {
   display_name?: string
   avatar_url?: string | null
+  chess_username?: string | null
+  chess_com_username?: string | null
+  lichess_username?: string | null
 }
 
 export interface ActivityLogEntry {

@@ -1,80 +1,110 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlayerIdentity } from "@/components/shared"
-import { leaderboard } from "@/lib/admin-data"
-
-function getRankBadge(rank: number) {
-  switch (rank) {
-    case 1:
-      return <Badge className="border-amber-400/30 bg-amber-400/20 font-semibold text-amber-700">1st</Badge>
-    case 2:
-      return <Badge className="border-slate-300/40 bg-slate-300/30 font-semibold text-slate-700">2nd</Badge>
-    case 3:
-      return <Badge className="border-orange-400/30 bg-orange-400/20 font-semibold text-orange-700">3rd</Badge>
-    default:
-      return <Badge variant="outline">#{rank}</Badge>
-  }
-}
+import { useMemo, useState } from "react"
+import { Info, Medal } from "lucide-react"
+import {
+  AdminContentModal,
+  AdminIconAction,
+  AdminIconRow,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+} from "@/components/layout"
+import { useCommunityLeaderboard } from "@/src/hooks/useCommunityLeaderboard"
+import { useCompetitions } from "@/src/hooks/useCompetitions"
+import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
+import { cn } from "@/lib/utils"
 
 export default function LeaderboardPage() {
+  const [infoOpen, setInfoOpen] = useState(false)
+  const { data: competitions, isLoading: competitionsLoading } = useCompetitions()
+
+  const rankingCompetitionIds = useMemo(
+    () =>
+      (competitions ?? [])
+        .filter((c) => ["active", "completed"].includes(c.competition_status))
+        .map((c) => c.id),
+    [competitions]
+  )
+
+  const { byCompetitionId, isLoading: standingsLoading } =
+    useCompetitionsStandings(rankingCompetitionIds)
+
+  const { entries, isLoading } = useCommunityLeaderboard(
+    byCompetitionId,
+    competitionsLoading || standingsLoading
+  )
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Leaderboard</h1>
-        <p className="text-muted-foreground">Community standings based on group ELO ratings only.</p>
+    <AdminPageShell>
+      <div className="flex items-start justify-between gap-4">
+        <AdminPageHeader
+          title="Leaderboard"
+          description="Community rankings from tournament results"
+        />
+        <AdminIconRow>
+          <AdminIconAction icon={Info} label="About rankings" onClick={() => setInfoOpen(true)} />
+        </AdminIconRow>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Community ELO Rankings</CardTitle>
-          <CardDescription>
-            This leaderboard is intentionally separate from tournament standings and always reflects overall group rankings.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-20">Rank</TableHead>
-                <TableHead>Player</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">ELO</TableHead>
-                <TableHead className="text-right">W-D-L</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaderboard.map((entry) => (
-                <TableRow
-                  key={entry.id}
-                  className={`cursor-pointer transition-colors hover:bg-muted/50 ${entry.isActive ? "" : "opacity-70"}`}
-                  onClick={() => {
-                    window.location.href = `/admin/players/${entry.id}`
-                  }}
-                >
-                  <TableCell>{getRankBadge(entry.rank)}</TableCell>
-                  <TableCell>
-                    <PlayerIdentity playerId={String(entry.id)} username={entry.username} elo={entry.elo} />
-                  </TableCell>
-                  <TableCell>
-                    {entry.isActive ? (
-                      <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">Active</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">{entry.elo}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    {entry.wins}-{entry.draws}-{entry.losses}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+      <AdminPanel className="px-0 py-0 sm:px-0">
+        <div className="grid grid-cols-[3rem_1fr_4.5rem] gap-3 border-b border-border-subtle px-6 py-3 text-[12px] font-medium text-text-secondary sm:px-8">
+          <span>Rank</span>
+          <span>Player</span>
+          <span className="text-right">Rating</span>
+        </div>
+
+        {isLoading ? (
+          <p className="px-6 py-10 text-center text-sm text-text-secondary sm:px-8">
+            Loading rankings…
+          </p>
+        ) : entries.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-6 py-12 sm:px-8">
+            <Medal className="size-8 text-text-secondary/30" />
+            <p className="text-sm text-text-secondary">No tournament results yet</p>
+          </div>
+        ) : (
+          entries.map((entry) => (
+            <div
+              key={entry.userId}
+              className="grid grid-cols-[3rem_1fr_4.5rem] items-center gap-3 border-b border-border-subtle px-6 py-3.5 last:border-b-0 sm:px-8"
+            >
+              <span
+                className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  entry.rank <= 3 ? "text-text-primary" : "text-text-secondary"
+                )}
+              >
+                {entry.rank}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-text-primary">
+                  {entry.displayName}
+                </p>
+                <p className="truncate text-[12px] text-text-secondary">
+                  {entry.matchWins}W · {entry.firstPlaces}×1st
+                </p>
+              </div>
+              <span className="text-right text-sm font-semibold tabular-nums text-text-primary">
+                {entry.chessComRating ?? "—"}
+              </span>
+            </div>
+          ))
+        )}
+      </AdminPanel>
+
+      <AdminContentModal
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
+        title="How rankings work"
+      >
+        <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-text-secondary">
+          <li>Tournament 1st places</li>
+          <li>Then 2nd places, then 3rd</li>
+          <li>Then match wins across tournaments</li>
+          <li>Then Chess.com rating</li>
+        </ol>
+      </AdminContentModal>
+    </AdminPageShell>
   )
 }

@@ -6,22 +6,28 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
-  Calendar,
   CheckCircle2,
   Clock,
   Download,
+  FileText,
   Globe,
   Loader2,
   MapPin,
+  Medal,
+  Pencil,
   Play,
   Swords,
-  Trophy,
-  Users,
 } from 'lucide-react'
-import { PageHeader } from '@/components/shared'
-import { Badge } from '@/components/ui/badge'
+import {
+  AdminContentModal,
+  AdminIconAction,
+  AdminIconRow,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+  AdminPanelTitle,
+} from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   CompetitionStatusBadge,
@@ -108,6 +114,7 @@ export default function AdminCompetitionDetailPage() {
   const startMutation = useStartCompetition()
 
   const [standingsOpen, setStandingsOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const competition = competitionQuery.data
 
@@ -196,238 +203,205 @@ export default function AdminCompetitionDetailPage() {
 
   if (competitionQuery.isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-64" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-      </div>
+      <AdminPageShell>
+        <Skeleton className="h-10 w-48 rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-[20px]" />
+        <Skeleton className="h-24 w-full rounded-[20px]" />
+      </AdminPageShell>
     )
   }
 
   if (competitionQuery.isError || !competition) {
     return (
-      <Card className="rounded-2xl border-destructive/50">
-        <CardContent className="pt-6">
-          <p className="text-destructive">
+      <AdminPageShell>
+        <AdminPanel>
+          <p className="text-red-600">
             {competitionQuery.error instanceof ApiError
               ? competitionQuery.error.message
               : 'Competition not found'}
           </p>
-          <Button variant="outline" className="mt-4" asChild>
+          <Button variant="outline" className="mt-4 rounded-xl" asChild>
             <Link href="/admin/competitions">Back to list</Link>
           </Button>
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      </AdminPageShell>
     )
   }
 
   const canStart = competition.competition_status === 'open_registration'
-
   const standings = standingsQuery.data || []
 
   return (
-    <div className="space-y-6">
-      {/* ── Navigation ── */}
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link href="/admin/competitions">
-            <ArrowLeft className="mr-2 size-4" />
-            All competitions
-          </Link>
-        </Button>
-      </div>
-
-      <PageHeader
-        title={competition.name}
-        subtitle={`${competition.time_control ? `${competition.time_control} · ` : ''}${competition.tournament_type.replace('_', ' ')} · ${competition.competition_status.replace(/_/g, ' ')}`}
+    <AdminPageShell>
+      <Link
+        href="/admin/competitions"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
       >
-        <Button variant="outline" className="rounded-2xl" asChild>
-          <Link href={`/admin/competitions/edit/${competition.id}`}>Edit</Link>
-        </Button>
-        {canStart && (
-          <Button
-            className="rounded-2xl bg-emerald-600 hover:bg-emerald-700"
-            onClick={handleStart}
-            disabled={startMutation.isPending}
-          >
-            {startMutation.isPending ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Play className="mr-2 size-4" />
-            )}
-            Start Tournament
-          </Button>
-        )}
-      </PageHeader>
+        <ArrowLeft className="size-4" />
+        All competitions
+      </Link>
 
-      {/* ── Stats Cards ── */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <div className="rounded-xl bg-primary/10 p-2.5">
-              <Trophy className="size-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Status</p>
-              <CompetitionStatusBadge status={competition.competition_status} />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <div className="rounded-xl bg-blue-500/10 p-2.5">
-              <Users className="size-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Players</p>
-              <p className="text-lg font-semibold">
-                {competition.participant_count ?? 0} / {competition.max_participants}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <div className="rounded-xl bg-amber-500/10 p-2.5">
-              <Badge variant="outline" className="border-0 bg-transparent p-0 text-base font-semibold">
-                R{competition.current_round}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Round</p>
-              <p className="text-lg font-semibold">
-                {competition.current_round} / {competition.rounds}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl shadow-sm">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <div className="rounded-xl bg-emerald-500/10 p-2.5">
-              <Calendar className="size-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Starts</p>
-              <p className="text-sm font-medium">{formatDate(competition.start_date)}</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-start justify-between gap-4">
+        <AdminPageHeader
+          title={competition.name}
+          description={`${competition.time_control ? `${competition.time_control} · ` : ''}${competition.tournament_type.replace('_', ' ')}`}
+        />
+        <AdminIconRow>
+          <AdminIconAction
+            icon={FileText}
+            label="Overview & rules"
+            onClick={() => setDetailsOpen(true)}
+          />
+          <AdminIconAction
+            icon={Medal}
+            label="Standings"
+            onClick={() => setStandingsOpen(true)}
+          />
+          <AdminIconAction
+            icon={Download}
+            label="Download fixtures"
+            onClick={handleDownloadFixtures}
+          />
+          <AdminIconAction
+            icon={Pencil}
+            label="Edit"
+            href={`/admin/competitions/edit/${competition.id}`}
+          />
+          <AdminIconAction
+            icon={Swords}
+            label="Open matches"
+            href={`/admin/competitions/${competition.id}/matches`}
+            accent
+          />
+        </AdminIconRow>
       </div>
 
-      <div>
-        {/* ════════════ LEFT COLUMN: Overview + Download Buttons ════════════ */}
-        <div className="space-y-6">
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle>Overview</CardTitle>
-              <CardDescription>Tournament configuration and details.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Format</span>
-                <TournamentTypeBadge type={competition.tournament_type} />
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Clock className="size-3.5" /> Time Control
-                </span>
-                <span className="font-medium">{competition.time_control || 'Not set'}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Globe className="size-3.5" /> Timezone
-                </span>
-                <span className="font-medium">{competition.timezone || 'Not set'}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Entry Fee</span>
-                <span className="font-medium">{competition.entry_fee || 'Free'}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Prize</span>
-                <span className="font-medium">{competition.prize || '—'}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Platform</span>
-                <PlatformDisplay platform={competition.platform} />
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <Swords className="size-3.5" /> Match Length
-                </span>
-                <span className="font-medium capitalize">
-                  {competition.match_length?.replace(/_/g, ' ') || 'Single Match'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">Format Rules</span>
-                <span className="font-medium">{getFormatRuleLabel(competition.format_match_rules)}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground">ELO Range</span>
-                <span className="font-medium">
-                  {competition.min_elo ?? 800} – {competition.max_elo ?? 3000}
-                </span>
-              </div>
-              {/* Registration — stacked layout fix */}
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground text-sm">Registration</span>
-                <span className="font-medium text-xs leading-relaxed">
-                  {formatDate(competition.registration_open_at)}
-                  <span className="mx-1 text-muted-foreground">→</span>
-                  {formatDate(competition.registration_close_at)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pb-3">
-                <span className="text-muted-foreground">Created</span>
-                <span>{formatDate(competition.created_at)}</span>
-              </div>
-
-              {/* Rules Section */}
-              <div className="border-t pt-4">
-                <p className="mb-2 text-sm font-medium flex items-center gap-1.5">
-                  <CheckCircle2 className="size-4 text-orange-500" />
-                  Competition Rules
-                </p>
-                <RulesList rules={competition.rules} />
-              </div>
-
-              {/* Button to open matches */}
-              <div className='flex justify-center'>
-              <Button asChild className="rounded-xl gap-2">
-                <Link href={`/admin/competitions/${competition.id}/matches`}>
-                  <Swords className="size-4" />
-                  Open Matches
-                </Link>
-              </Button>
-              </div>
-            </CardContent>
-          </Card>
+      <AdminPanel dark>
+        <AdminPanelTitle title="Snapshot" description="Key tournament numbers" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
+            <CompetitionStatusBadge status={competition.competition_status} />
+            <p className="mt-2 text-[11px] text-white/40">Status</p>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
+            <p className="tabular-nums text-2xl font-extrabold text-accent-lime">
+              {competition.participant_count ?? 0}
+              <span className="text-base text-white/40">/{competition.max_participants}</span>
+            </p>
+            <p className="mt-1 text-[11px] text-white/40">Players</p>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
+            <p className="tabular-nums text-2xl font-extrabold text-white">
+              {competition.current_round}/{competition.rounds}
+            </p>
+            <p className="mt-1 text-[11px] text-white/40">Round</p>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
+            <p className="text-sm font-semibold text-white">{formatDate(competition.start_date)}</p>
+            <p className="mt-1 text-[11px] text-white/40">Starts</p>
+          </div>
         </div>
+      </AdminPanel>
 
-        {/* ════════════ RIGHT COLUMN: Matches & Scoring link card ════════════ */}
-        {/* <div className="space-y-6">
-          <Card className="rounded-2xl shadow-sm">
-            <CardContent className="flex flex-col items-center gap-4 py-12">
-              <Swords className="size-10 text-muted-foreground/40" />
-              <div className="text-center">
-                <p className="font-semibold">Matches & Scoring</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  View fixtures, score matches, and track live standings
-                </p>
-              </div>
-              <Button asChild className="rounded-xl gap-2">
-                <Link href={`/admin/competitions/${competition.id}/matches`}>
-                  <Swords className="size-4" />
-                  Open Matches
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div> */}
-      </div>
+      {canStart && (
+        <button
+          type="button"
+          onClick={handleStart}
+          disabled={startMutation.isPending}
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+        >
+          {startMutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Play className="size-4" />
+          )}
+          Start tournament
+        </button>
+      )}
 
-      {/* ── Standings Modal ── */}
+      <AdminContentModal
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        title="Overview"
+        description="Tournament configuration and rules"
+        wide
+      >
+        <div className="space-y-4 text-sm">
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Format</span>
+            <TournamentTypeBadge type={competition.tournament_type} />
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="flex items-center gap-1.5 text-text-secondary">
+              <Clock className="size-3.5" /> Time control
+            </span>
+            <span className="font-medium">{competition.time_control || 'Not set'}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="flex items-center gap-1.5 text-text-secondary">
+              <Globe className="size-3.5" /> Timezone
+            </span>
+            <span className="font-medium">{competition.timezone || 'Not set'}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Entry fee</span>
+            <span className="font-medium">{competition.entry_fee || 'Free'}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Prize</span>
+            <span className="font-medium">{competition.prize || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Platform</span>
+            <PlatformDisplay platform={competition.platform} />
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="flex items-center gap-1.5 text-text-secondary">
+              <Swords className="size-3.5" /> Match length
+            </span>
+            <span className="font-medium capitalize">
+              {competition.match_length?.replace(/_/g, ' ') || 'Single Match'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Format rules</span>
+            <span className="font-medium">{getFormatRuleLabel(competition.format_match_rules)}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">ELO range</span>
+            <span className="font-medium">
+              {competition.min_elo ?? 800} – {competition.max_elo ?? 3000}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+            <span className="text-text-secondary">Registration</span>
+            <span className="text-right text-xs font-medium leading-relaxed">
+              {formatDate(competition.registration_open_at)}
+              <span className="mx-1 text-text-secondary">→</span>
+              {formatDate(competition.registration_close_at)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between pb-1">
+            <span className="text-text-secondary">Created</span>
+            <span>{formatDate(competition.created_at)}</span>
+          </div>
+          <div className="border-t border-border-subtle pt-4">
+            <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+              <CheckCircle2 className="size-4 text-orange-500" />
+              Competition rules
+            </p>
+            <RulesList rules={competition.rules} />
+          </div>
+          <button
+            type="button"
+            className="mt-2 h-10 w-full rounded-xl bg-bg-panel-light text-sm font-semibold"
+            onClick={handleDownloadStandings}
+          >
+            Download standings CSV
+          </button>
+        </div>
+      </AdminContentModal>
+
       <StandingsModal
         open={standingsOpen}
         onClose={() => setStandingsOpen(false)}
@@ -435,6 +409,6 @@ export default function AdminCompetitionDetailPage() {
         competitionName={competition.name}
         tournamentType={competition.tournament_type}
       />
-    </div>
+    </AdminPageShell>
   )
 }

@@ -1,6 +1,13 @@
 const { supabase, supabaseAdmin } = require('../config/supabase');
 const { generateFixtures, recommendTournamentFormat } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
+const {
+  attachTournamentOdds,
+  buildCompetitionH2HMatrix,
+  enrichMatchesWithOdds,
+  buildOddsSnapshotPayload,
+  computeHeadToHead,
+} = require('../services/oddsService');
 const { emitWebhook } = require('../services/webhookService');
 const {
   fixturesToMatchRows,
@@ -15,6 +22,38 @@ const {
   getParticipantCount,
   timestamp,
 } = require('../utils/competitionHelpers');
+
+/** Persist odds snapshot at most once per 15 minutes per competition (fire-and-forget). */
+async function maybePersistOddsSnapshot(competition, participants, matches, standingsWithOdds) {
+  try {
+    const { data: latest } = await supabaseAdmin
+      .from('competition_odds_snapshots')
+      .select('id, snapshot_at')
+      .eq('competition_id', competition.id)
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latest?.snapshot_at) {
+      const ageMs = Date.now() - new Date(latest.snapshot_at).getTime();
+      if (ageMs < 15 * 60 * 1000) return;
+    }
+
+    const withMatchOdds = enrichMatchesWithOdds(matches || [], matches || []);
+    const payload = buildOddsSnapshotPayload(standingsWithOdds, withMatchOdds, competition);
+    payload.h2h_matrix = buildCompetitionH2HMatrix(participants, matches || []);
+
+    await supabaseAdmin.from('competition_odds_snapshots').insert({
+      competition_id: competition.id,
+      round_number: competition.current_round ?? null,
+      standings_odds: payload.standings_odds,
+      match_odds: payload.match_odds,
+      h2h_matrix: payload.h2h_matrix,
+    });
+  } catch (err) {
+    console.warn('[odds] snapshot skipped:', err.message);
+  }
+}
 
 const ALLOWED_UPDATE_FIELDS = [
   'name',
@@ -40,6 +79,8 @@ const ALLOWED_UPDATE_FIELDS = [
   'rules',
   'round_robin_legs',
   'auto_compute_enabled',
+  'image_url',
+  'is_featured',
 ];
 
 exports.createCompetition = async (req, res) => {
@@ -66,6 +107,8 @@ exports.createCompetition = async (req, res) => {
     rules,
     round_robin_legs,
     auto_compute_enabled,
+    image_url,
+    is_featured,
   } = req.body;
 
 function isValidUUID(str) {
@@ -132,6 +175,8 @@ if (!created_by || !isValidUUID(created_by)) {
       rules: rules ?? [],
       round_robin_legs: round_robin_legs ?? 1,
       auto_compute_enabled: auto_compute_enabled !== false,
+      image_url: image_url?.trim() || null,
+      is_featured: Boolean(is_featured),
       competition_status: 'draft',
       current_round: 0,
     }])
@@ -438,7 +483,7 @@ exports.getStandings = async (req, res) => {
 
   const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
-    .select('id, tournament_type')
+    .select('id, tournament_type, rounds, current_round, competition_status')
     .eq('id', id)
     .single();
 
@@ -461,7 +506,83 @@ exports.getStandings = async (req, res) => {
     tournamentType: competition.tournament_type,
   });
 
-  res.json({ success: true, data: standings });
+  const withOdds = attachTournamentOdds(standings, participants, matches || [], competition);
+
+  // Track over time without blocking the response
+  maybePersistOddsSnapshot(competition, participants, matches || [], withOdds).catch(() => {});
+
+  res.json({ success: true, data: withOdds });
+};
+
+/** GET /competitions/:id/h2h — pairwise H2H for this tournament (optional player_a / player_b) */
+exports.getCompetitionH2H = async (req, res) => {
+  const { id } = req.params;
+  const { player_a, player_b } = req.query;
+
+  const { data: competition, error: compError } = await supabaseAdmin
+    .from('competitions')
+    .select('id')
+    .eq('id', id)
+    .single();
+
+  if (compError) {
+    return res.status(404).json({ success: false, error: { message: 'Competition not found' } });
+  }
+
+  const participants = await fetchParticipantsWithUsers(id);
+  const { data: matches, error: matchError } = await supabaseAdmin
+    .from('matches')
+    .select('*')
+    .eq('competition_id', id);
+
+  if (matchError) {
+    return res.status(400).json({ success: false, error: { message: matchError.message } });
+  }
+
+  if (player_a && player_b) {
+    const h2h = computeHeadToHead(player_a, player_b, matches || []);
+    const nameOf = (uid) => {
+      const p = participants.find((x) => x.user_id === uid);
+      const u = p?.users || {};
+      return u.display_name || u.chess_com_username || u.chess_username || uid;
+    };
+    return res.json({
+      success: true,
+      data: {
+        competition_id: competition.id,
+        ...h2h,
+        player_a_name: nameOf(player_a),
+        player_b_name: nameOf(player_b),
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      competition_id: competition.id,
+      pairs: buildCompetitionH2HMatrix(participants, matches || []),
+    },
+  });
+};
+
+/** GET /competitions/:id/odds-history — stored snapshots of win % / match odds / H2H */
+exports.getOddsHistory = async (req, res) => {
+  const { id } = req.params;
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+
+  const { data, error } = await supabaseAdmin
+    .from('competition_odds_snapshots')
+    .select('*')
+    .eq('competition_id', id)
+    .order('snapshot_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return res.status(400).json({ success: false, error: { message: error.message } });
+  }
+
+  res.json({ success: true, data: data || [] });
 };
 
 /** GET /competitions/format-advice?participants=12 */

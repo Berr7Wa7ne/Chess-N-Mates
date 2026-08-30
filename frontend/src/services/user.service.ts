@@ -4,12 +4,19 @@ import type { BackendApiResponse } from '@/src/types/api'
 import type {
   ActivityLogEntry,
   AuthUser,
+  ChangePasswordPayload,
   LoginPayload,
   RegisterChessPayload,
   RegisterUserPayload,
+  ResetPasswordPayload,
   UpdateUserPayload,
   User,
 } from '@/src/types/user'
+
+export type ListUsersParams = {
+  role?: User['role']
+  status?: User['user_status']
+}
 
 export const userService = {
   login(payload: LoginPayload) {
@@ -18,6 +25,13 @@ export const userService = {
 
   registerUser(payload: RegisterUserPayload) {
     return httpClient.post<User>(API_ENDPOINTS.USERS.REGISTER, payload)
+  },
+
+  listUsers(params?: ListUsersParams) {
+    return httpClient.get<User[]>(
+      API_ENDPOINTS.USERS.LIST,
+      params as Record<string, string | number | undefined> | undefined
+    )
   },
 
   registerChessAccount(id: string, payload: RegisterChessPayload) {
@@ -30,6 +44,20 @@ export const userService = {
 
   updateUser(id: string, payload: UpdateUserPayload) {
     return httpClient.put<User>(API_ENDPOINTS.USERS.UPDATE(id), payload)
+  },
+
+  changePassword(id: string, payload: ChangePasswordPayload) {
+    return httpClient.post<{ id: string; message: string }>(
+      API_ENDPOINTS.USERS.CHANGE_PASSWORD(id),
+      payload
+    )
+  },
+
+  resetPassword(id: string, payload: ResetPasswordPayload) {
+    return httpClient.post<{ id: string; message: string; default_password: string }>(
+      API_ENDPOINTS.USERS.RESET_PASSWORD(id),
+      payload
+    )
   },
 
   getActivityLog() {

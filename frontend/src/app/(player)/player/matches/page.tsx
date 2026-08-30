@@ -2,157 +2,189 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Filter, Info } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { currentPlayerId, getPlayerMatches } from "@/lib/admin-data"
+import { ExternalLink } from "lucide-react"
+import {
+  PlayerPageHeader,
+  PlayerPageShell,
+  PlayerPanel,
+  PlayerPanelTitle,
+} from "@/components/layout/player-page-shell"
+import { useAuth } from "@/src/hooks/useAuth"
+import { useCompetitions } from "@/src/hooks/useCompetitions"
+import { useUserRegistrations } from "@/src/hooks/useParticipants"
+import {
+  mapMatchStatusForFilter,
+  opponentLabel,
+  playerResultLabel,
+  usePlayerRecentMatches,
+} from "@/src/hooks/usePlayerRecentMatches"
+import type { Competition } from "@/src/types/competition"
+import { cn } from "@/lib/utils"
 
 type FilterType = "all" | "pending" | "awaiting_review" | "confirmed" | "disputed"
 
-const allMatches = getPlayerMatches(currentPlayerId)
-
-const statusDescriptions = {
-  pending: "Awaiting your result submission",
-  awaiting_review: "You submitted the result - waiting for admin review",
-  confirmed: "Result confirmed by admin - match is complete",
-  disputed: "Match has a dispute filed - under admin review",
+function normalizeGameUrl(url: string) {
+  if (/^https?:\/\//i.test(url)) return url
+  return `https://${url}`
 }
 
-function getStatusBadge(status: string) {
-  // Map old statuses to new ones for display
-  const displayStatus = status === "submitted" ? "awaiting_review" : status === "completed" ? "confirmed" : status
-  
-  switch (displayStatus) {
+function statusLabel(filterKey: string) {
+  if (filterKey === "awaiting_review") return "Awaiting review"
+  if (filterKey === "confirmed") return "Confirmed"
+  return filterKey.replaceAll("_", " ")
+}
+
+function statusClass(filterKey: string) {
+  switch (filterKey) {
     case "pending":
-      return <Badge className="bg-amber-500 text-white">Pending</Badge>
+      return "text-amber-700"
     case "awaiting_review":
-      return <Badge className="bg-blue-500 text-white">Awaiting Review</Badge>
+      return "text-sky-700"
     case "confirmed":
-      return <Badge className="bg-emerald-500 text-white">Confirmed</Badge>
+      return "text-emerald-700"
     case "disputed":
-      return <Badge className="bg-red-500 text-white">Disputed</Badge>
+      return "text-red-600"
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return "text-text-secondary"
   }
-}
-
-function getResultBadge(result: string | undefined) {
-  if (!result) return <span className="text-muted-foreground">-</span>
-  switch (result) {
-    case "win":
-      return <Badge className="bg-emerald-500 text-white">Win</Badge>
-    case "loss":
-      return <Badge className="bg-red-500 text-white">Loss</Badge>
-    case "draw":
-      return <Badge className="bg-slate-500 text-white">Draw</Badge>
-    default:
-      return <span>{result}</span>
-  }
-}
-
-// Helper to map statuses for filtering
-const mapStatusForFilter = (status: string): FilterType | string => {
-  if (status === "submitted") return "awaiting_review"
-  if (status === "completed") return "confirmed"
-  return status as FilterType
 }
 
 export default function PlayerMatchesPage() {
+  const { currentUser } = useAuth()
   const [filter, setFilter] = useState<FilterType>("all")
+  const { data: registrationIds } = useUserRegistrations(currentUser?.id)
+  const { data: competitions } = useCompetitions()
+
+  const joinedCompetitionIds = useMemo(
+    () => (registrationIds ?? []).map(String),
+    [registrationIds]
+  )
+
+  const competitionsById = useMemo(() => {
+    const map: Record<string, Competition | undefined> = {}
+    for (const c of competitions ?? []) map[String(c.id)] = c
+    return map
+  }, [competitions])
+
+  const { matches, isLoading } = usePlayerRecentMatches(
+    currentUser?.id,
+    joinedCompetitionIds,
+    competitionsById,
+    { limit: Number.POSITIVE_INFINITY }
+  )
 
   const filteredMatches = useMemo(() => {
-    return filter === "all"
-      ? allMatches
-      : allMatches.filter((match) => mapStatusForFilter(match.status) === filter)
-  }, [filter])
+    if (filter === "all") return matches
+    return matches.filter((match) => mapMatchStatusForFilter(match.match_status) === filter)
+  }, [filter, matches])
 
-  const filterOptions: Array<{ value: FilterType; label: string; description: string }> = [
-    { value: "all", label: "All Matches", description: "" },
-    { value: "pending", label: "Pending", description: "Awaiting your result submission" },
-    { value: "awaiting_review", label: "Awaiting Review", description: "Waiting for admin verification" },
-    { value: "confirmed", label: "Confirmed", description: "Admin verified results" },
-    { value: "disputed", label: "Disputed", description: "Under dispute review" },
+  const filterOptions: Array<{ value: FilterType; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "pending", label: "Pending" },
+    { value: "awaiting_review", label: "Awaiting" },
+    { value: "confirmed", label: "Confirmed" },
+    { value: "disputed", label: "Disputed" },
   ]
 
   return (
-    <div className="space-y-4 pb-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">My Matches</h1>
-        <p className="text-muted-foreground">{allMatches.length} total matches across all tournaments</p>
+    <PlayerPageShell wide>
+      <PlayerPageHeader
+        title="My Matches"
+        description={
+          isLoading
+            ? "Loading your matches…"
+            : `${matches.length} matches across tournaments`
+        }
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {filterOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setFilter(option.value)}
+            className={cn(
+              "min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors",
+              filter === option.value
+                ? "bg-bg-panel-dark text-white"
+                : "bg-bg-panel-light text-text-secondary hover:text-text-primary"
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
 
-      <TooltipProvider>
-        <div className="flex flex-wrap gap-2">
-          {filterOptions.map((option) => (
-            <Tooltip key={option.value} delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={filter === option.value ? "default" : "outline"}
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => setFilter(option.value)}
-                >
-                  {option.value === "all" ? <Filter className="mr-1.5 size-4" /> : null}
-                  {option.label}
-                  {option.description ? <Info className="ml-1 size-3 opacity-60" /> : null}
-                </Button>
-              </TooltipTrigger>
-              {option.description && (
-                <TooltipContent side="bottom" className="text-xs">
-                  {option.description}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          ))}
+      <PlayerPanel className="px-0 py-0 sm:px-0">
+        <div className="border-b border-border-subtle px-6 py-4 sm:px-8">
+          <PlayerPanelTitle title="Match list" />
         </div>
-      </TooltipProvider>
 
-      <Card className="shadow-sm">
-        <CardContent className="px-0 sm:px-6">
-          {filteredMatches.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Competition</TableHead>
-                  <TableHead>Opponent</TableHead>
-                  <TableHead>Round</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMatches.map((match) => (
-                  <TableRow key={match.id}>
-                    <TableCell className="font-medium">{match.competition}</TableCell>
-                    <TableCell>{match.opponent}</TableCell>
-                    <TableCell>Round {match.round}</TableCell>
-                    <TableCell className="capitalize">{match.playerColor}</TableCell>
-                    <TableCell>{getStatusBadge(mapStatusForFilter(match.status))}</TableCell>
-                    <TableCell>{getResultBadge(match.result)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/player/matches/${match.id}`}>View</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        <div className="scrollbar-none max-h-[65vh] overflow-y-auto px-6 sm:px-8">
+          {isLoading ? (
+            <p className="py-10 text-center text-sm text-text-secondary">Loading matches…</p>
+          ) : filteredMatches.length === 0 ? (
+            <p className="py-10 text-center text-sm text-text-secondary">
+              {filter === "all"
+                ? "No matches yet. Join a tournament to get fixtures."
+                : `No ${filter.replaceAll("_", " ")} matches.`}
+            </p>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-lg font-medium">No matches found</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {filter === "all" ? "You do not have any matches yet." : `No ${filter} matches right now.`}
-              </p>
-            </div>
+            filteredMatches.map((match) => {
+              const filterKey = mapMatchStatusForFilter(match.match_status)
+              const competitionName =
+                competitionsById[String(match.competition_id)]?.name || "Tournament"
+              const result = currentUser
+                ? playerResultLabel(match, currentUser.id)
+                : null
+              const opponent = currentUser
+                ? opponentLabel(match, currentUser.id)
+                : "Opponent"
+
+              return (
+                <div
+                  key={match.id}
+                  className="flex flex-col gap-2 border-b border-border-subtle py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-text-primary">vs {opponent}</p>
+                    <p className="mt-0.5 text-xs text-text-secondary">
+                      {competitionName} · Round {match.round_number}
+                      {match.leg > 1 ? ` · Leg ${match.leg}` : ""}
+                      {result ? ` · ${result}` : ""}
+                    </p>
+                    <p className={cn("mt-1 text-xs font-medium capitalize", statusClass(filterKey))}>
+                      {statusLabel(filterKey)}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3">
+                    {match.chess_game_link ? (
+                      <a
+                        href={normalizeGameUrl(match.chess_game_link)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-text-primary underline underline-offset-2"
+                      >
+                        Game
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-sm text-text-secondary">No game</span>
+                    )}
+                    <Link
+                      href={`/player/matches/${match.id}`}
+                      className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
+                    >
+                      View
+                    </Link>
+                  </div>
+                </div>
+              )
+            })
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </PlayerPanel>
+    </PlayerPageShell>
   )
 }

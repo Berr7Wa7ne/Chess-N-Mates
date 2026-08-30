@@ -10,6 +10,7 @@ import { useAdminScore, useConfirmResult, useForceResult } from '@/src/hooks/use
 import { ApiError } from '@/src/types/api'
 import { ChangeResultModal } from '@/src/components/matches/change-result-modal'
 import { FileDisputeModal } from '@/src/components/matches/file-dispute-modal'
+import { MatchOddsBanter } from '@/src/components/matches/match-odds-banter'
 
 interface DoubleLegCardProps {
   leg1: Match
@@ -253,6 +254,10 @@ export function DoubleLegCard({ leg1, leg2, competitionId, disabled }: DoubleLeg
             <ChessPiece />
           </div>
         </div>
+
+        {(leg1.odds || leg2.odds) && (
+          <MatchOddsBanter odds={leg1.odds || leg2.odds} />
+        )}
 
         {/* Game rows — vertical stack */}
         <div className="space-y-4">

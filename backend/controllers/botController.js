@@ -2902,11 +2902,15 @@ async function extendResolvedDeadline(res, match, hours) {
  */
 exports.registerUser = async (req, res) => {
   try {
+    const { normalizeNgPhone, phoneLookupCandidates } = require('../utils/phone');
+    const { hashDefaultPassword } = require('../utils/password');
     const { phone_number, whatsapp_id, display_name, chess_platform, chess_com_username, lichess_username } = req.body;
 
     if (!phone_number) {
       return res.status(400).json({ success: false, error: { message: 'phone_number is required' } });
     }
+
+    const normalizedPhone = normalizeNgPhone(phone_number) || String(phone_number).trim();
 
     // Determine display name first (needed for existing-user updates)
     let finalDisplayName = display_name;
@@ -2920,10 +2924,12 @@ exports.registerUser = async (req, res) => {
 
     // Check if user already exists by phone_number OR whatsapp_id OR chess_com_username
     let existing = null;
+    const phoneCandidates = phoneLookupCandidates(phone_number);
     const { data: byPhone } = await supabaseAdmin
       .from('users')
       .select('id, display_name, whatsapp_id, chess_com_username')
-      .eq('phone_number', phone_number)
+      .in('phone_number', phoneCandidates.length ? phoneCandidates : [normalizedPhone])
+      .limit(1)
       .maybeSingle();
 
     if (byPhone) {
@@ -2970,19 +2976,22 @@ exports.registerUser = async (req, res) => {
       });
     }
 
+    const password_hash = await hashDefaultPassword();
+
     // Create user
     const { data, error } = await supabaseAdmin
       .from('users')
       .insert([{
-        phone_number,
+        phone_number: normalizedPhone,
         whatsapp_id: whatsapp_id || null,
         display_name: finalDisplayName,
-        email: `${phone_number}@temp.com`,
+        email: `${normalizedPhone}@temp.com`,
         role: 'player',
         chess_platform: chess_platform || null,
         chess_com_username: chess_platform === 'chess.com' ? chess_com_username : null,
         lichess_username: chess_platform === 'lichess' ? lichess_username : null,
         user_status: 'active',
+        password_hash,
       }])
       .select()
       .single();

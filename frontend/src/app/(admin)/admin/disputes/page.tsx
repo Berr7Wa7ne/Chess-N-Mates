@@ -1,35 +1,42 @@
-'use client'
+"use client"
 
-import { useRouter } from 'next/navigation'
-import { AlertTriangle, ExternalLink } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { AlertTriangle, Filter } from "lucide-react"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { PageHeader, TextTruncate } from '@/components/shared'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useDisputes } from '@/src/hooks/useDisputes'
-import type { Dispute, DisputeStatus } from '@/src/types/dispute'
+  AdminContentModal,
+  AdminIconAction,
+  AdminIconRow,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminPanel,
+} from "@/components/layout"
+import { useDisputes } from "@/src/hooks/useDisputes"
+import type { Dispute, DisputeStatus } from "@/src/types/dispute"
+import { cn } from "@/lib/utils"
 
-function StatusBadge({ status }: { status: DisputeStatus }) {
+type FilterType = "all" | DisputeStatus
+
+const filterOptions: { value: FilterType; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "under_review", label: "Under review" },
+  { value: "resolved", label: "Resolved" },
+  { value: "rejected", label: "Rejected" },
+]
+
+function statusStyles(status: DisputeStatus) {
   switch (status) {
-    case 'open':
-      return <Badge className="border-amber-500/20 bg-amber-500/10 text-amber-600">Open</Badge>
-    case 'under_review':
-      return <Badge className="border-blue-500/20 bg-blue-500/10 text-blue-600">Under Review</Badge>
-    case 'resolved':
-      return <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600">Resolved</Badge>
-    case 'rejected':
-      return <Badge variant="secondary">Rejected</Badge>
+    case "open":
+      return "bg-amber-500/10 text-amber-700"
+    case "under_review":
+      return "bg-blue-500/10 text-blue-700"
+    case "resolved":
+      return "bg-emerald-500/10 text-emerald-700"
+    case "rejected":
+      return "bg-black/5 text-text-secondary"
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return "bg-black/5 text-text-secondary"
   }
 }
 
@@ -37,119 +44,113 @@ export default function DisputesPage() {
   const router = useRouter()
   const disputesQuery = useDisputes()
   const disputes: Dispute[] = Array.isArray(disputesQuery.data) ? disputesQuery.data : []
+  const [filter, setFilter] = useState<FilterType>("all")
+  const [filterOpen, setFilterOpen] = useState(false)
+
+  const filtered = useMemo(
+    () =>
+      disputes.filter((d) => (filter === "all" ? true : d.dispute_status === filter)),
+    [disputes, filter]
+  )
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Disputes"
-        subtitle="Review complaints and resolve match issues."
-      />
+    <AdminPageShell>
+      <div className="flex items-start justify-between gap-4">
+        <AdminPageHeader
+          title="Disputes"
+          description="Tap a row to review — keep the list lean"
+        />
+        <AdminIconRow>
+          <AdminIconAction
+            icon={Filter}
+            label="Filter disputes"
+            onClick={() => setFilterOpen(true)}
+            active={filter !== "all"}
+          />
+        </AdminIconRow>
+      </div>
 
-      <Card className="overflow-hidden rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>All Disputes</CardTitle>
-          <CardDescription>
-            Click any row to review and resolve the dispute.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 sm:px-6">
-          {disputesQuery.isLoading ? (
-            <div className="space-y-3 px-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : disputesQuery.isError ? (
-            <div className="flex flex-col items-center gap-2 py-12">
-              <AlertTriangle className="size-8 text-destructive/40" />
-              <p className="text-sm text-destructive">
-                Failed to load disputes
-              </p>
-            </div>
-          ) : disputes.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-12">
-              <AlertTriangle className="size-8 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-muted-foreground">
-                No disputes yet
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                Disputes appear here when flagged by players or created by admin
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Competition</TableHead>
-                  <TableHead>Round</TableHead>
-                  <TableHead>Raised By</TableHead>
-                  <TableHead>Against</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {disputes.map((dispute) => (
-                  <TableRow
-                    key={dispute.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() =>
-                      router.push(`/admin/disputes/${dispute.id}`)
-                    }
-                  >
-                    <TableCell className="font-medium text-sm">
-                      {dispute.competition?.name || '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">
+      <AdminPanel className="px-0 py-0 sm:px-0">
+        {disputesQuery.isLoading ? (
+          <p className="px-6 py-10 text-center text-sm text-text-secondary sm:px-8">
+            Loading disputes…
+          </p>
+        ) : disputesQuery.isError ? (
+          <div className="flex flex-col items-center gap-2 px-6 py-12 sm:px-8">
+            <AlertTriangle className="size-8 text-red-500/40" />
+            <p className="text-sm text-red-600">Failed to load disputes</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-6 py-12 sm:px-8">
+            <AlertTriangle className="size-8 text-text-secondary/30" />
+            <p className="text-sm font-medium text-text-secondary">No disputes</p>
+            <p className="text-xs text-text-secondary/70">
+              They appear here when players flag an issue
+            </p>
+          </div>
+        ) : (
+          <ul>
+            {filtered.map((dispute) => (
+              <li key={dispute.id}>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/admin/disputes/${dispute.id}`)}
+                  className="flex w-full items-center justify-between gap-4 border-b border-border-subtle px-6 py-4 text-left transition-colors last:border-b-0 hover:bg-black/[0.03] sm:px-8"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold text-text-primary">
+                      {dispute.competition?.name || "Dispute"}
                       {dispute.match?.round_number
-                        ? `R${dispute.match.round_number}`
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {dispute.raised_by?.display_name || '—'}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {dispute.opponent?.display_name || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs capitalize text-muted-foreground">
-                        {dispute.category?.replace(/_/g, ' ') || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <TextTruncate
-                        text={dispute.reason}
-                        maxLength={40}
-                        maxWidthClassName="max-w-[180px]"
-                        className="text-left text-sm"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={dispute.dispute_status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/admin/disputes/${dispute.id}`)
-                        }}
-                      >
-                        <ExternalLink className="size-3" />
-                        Review
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                        ? ` · R${dispute.match.round_number}`
+                        : ""}
+                    </p>
+                    <p className="mt-0.5 truncate text-[13px] text-text-secondary">
+                      {dispute.raised_by?.display_name || "—"} vs{" "}
+                      {dispute.opponent?.display_name || "—"} ·{" "}
+                      {dispute.category?.replace(/_/g, " ") || "issue"}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold capitalize",
+                      statusStyles(dispute.dispute_status)
+                    )}
+                  >
+                    {dispute.dispute_status.replace(/_/g, " ")}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminPanel>
+
+      <AdminContentModal
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        title="Filter disputes"
+      >
+        <div className="flex flex-col gap-2">
+          {filterOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                setFilter(option.value)
+                setFilterOpen(false)
+              }}
+              className={cn(
+                "rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-colors",
+                filter === option.value
+                  ? "bg-accent-lime text-text-primary"
+                  : "bg-bg-panel-light text-text-primary hover:bg-black/[0.04]"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </AdminContentModal>
+    </AdminPageShell>
   )
 }

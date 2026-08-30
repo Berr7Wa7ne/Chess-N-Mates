@@ -234,7 +234,7 @@ export default function AdminCompetitionMatchesPage() {
   }
 
   return (
-    <div className="bg-muted/30 min-h-screen -mx-6 px-6 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-5 pb-28">
       <div className="space-y-6">
         {/* ── Navigation ── */}
         <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export default function AdminCompetitionMatchesPage() {
           subtitle={`${competition.tournament_type.replace(/_/g, ' ')} · Round ${competition.current_round} of ${competition.rounds}`}
         />
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
           {/* ════════════ LEFT COLUMN: Matches (no card wrapper) ════════════ */}
           <div className="space-y-4">
             {/* Matches heading with download button */}
@@ -403,7 +403,7 @@ export default function AdminCompetitionMatchesPage() {
             )}
 
             {/* Spacer so content isn't hidden behind sticky bottom bar */}
-            {canAdvance && <div className="h-24" />}
+            {canAdvance && <div className="h-28 md:h-24" />}
           </div>
 
           {/* ════════════ RIGHT COLUMN: Standings Sidebar ════════════ */}
@@ -418,8 +418,8 @@ export default function AdminCompetitionMatchesPage() {
 
       {/* ════════════ BOTTOM STICKY BAR ════════════ */}
       {canAdvance && !isCompleted && (effectiveRound === competitionCurrentRound) && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.08)] px-6 py-4">
-          <div className="mx-auto flex max-w-screen-xl items-center justify-between gap-4">
+        <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 rounded-[20px] border border-border-subtle bg-bg-panel-light/95 px-4 py-4 shadow-lg backdrop-blur-sm md:bottom-3 md:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             {/* Left: status message */}
             {showAmberBar ? (
               <div className="flex items-center gap-2">
@@ -435,7 +435,7 @@ export default function AdminCompetitionMatchesPage() {
               </div>
             ) : showGreenBar ? (
               <div className="flex items-center gap-2">
-                <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-sm">
+                <span className="flex size-6 items-center justify-center rounded-full bg-emerald-100 text-sm text-emerald-600">
                   ✔
                 </span>
                 <span className="text-sm">
@@ -491,8 +491,8 @@ export default function AdminCompetitionMatchesPage() {
 
       {/* Completed state in bottom bar */}
       {isCompleted && (
-        <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background shadow-[0_-2px_8px_rgba(0,0,0,0.06)] px-6 py-4">
-          <div className="mx-auto flex max-w-[1280px] items-center justify-center gap-2">
+        <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 rounded-[20px] border border-border-subtle bg-bg-panel-light px-4 py-4 shadow-lg md:bottom-3 md:px-5">
+          <div className="flex items-center justify-center gap-2">
             <Crown className="size-5 text-amber-500" />
             <span className="text-sm font-medium text-foreground">Tournament complete</span>
           </div>

@@ -25,6 +25,8 @@ export interface Competition {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  image_url?: string | null
+  is_featured?: boolean
 
   tournament_type: TournamentType
   competition_status: CompetitionStatus
@@ -68,6 +70,8 @@ export interface CreateCompetitionPayload {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  image_url?: string | null
+  is_featured?: boolean
 }
 
 export interface UpdateCompetitionPayload {
@@ -93,6 +97,8 @@ export interface UpdateCompetitionPayload {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  image_url?: string | null
+  is_featured?: boolean
 }
 
 export interface ComputeResultsReport {
@@ -163,4 +169,6 @@ export interface StandingEntry {
   sonneborn_berger?: number
   knockout_round_reached?: number
   participant_status?: string
+  /** Estimated % chance of winning this tournament (0–100). */
+  tournament_win_pct?: number
 }

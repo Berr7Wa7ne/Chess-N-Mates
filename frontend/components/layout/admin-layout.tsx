@@ -1,49 +1,18 @@
 "use client"
 
-import { useState } from "react"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { AdminSidebar } from "./admin-sidebar"
-import { AdminTopbar } from "./admin-topbar"
+import { AdminBottomNav } from "./admin-bottom-nav"
+import { AdminIconRail } from "./admin-icon-rail"
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobile()
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
-
-  function handleMenuClick() {
-    if (isMobile) {
-      setMobileSidebarOpen(true)
-      return
-    }
-
-    setDesktopSidebarOpen((open) => !open)
-  }
-
   return (
-    <div className="flex h-screen flex-col bg-[#e9e9e9] text-foreground transition-colors dark:bg-[#111315]">
-      {/* Topbar */}
-      <AdminTopbar
-        onMenuClick={handleMenuClick}
-        showLogo={isMobile || desktopSidebarOpen}
-      />
-
-      {/* Body */}
-      <div className="flex min-h-0 flex-1">
-        {/* Sidebar */}
-        <AdminSidebar
-          desktopOpen={desktopSidebarOpen}
-          onDesktopOpenChange={setDesktopSidebarOpen}
-          mobileOpen={mobileSidebarOpen}
-          onMobileOpenChange={setMobileSidebarOpen}
-        />
-
-        {/* Main Content */}
-        <main className="min-w-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-10">
-          <div className="mx-auto w-full max-w-[1280px]">
-            {children}
-          </div>
+    <div className="admin-shell flex h-dvh max-h-dvh overflow-hidden bg-bg-page p-0 text-text-primary md:p-3 lg:p-5">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1440px] overflow-hidden rounded-none bg-bg-shell md:rounded-[32px]">
+        <AdminIconRail />
+        <main className="player-main min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:p-4 md:p-5 md:pb-5 lg:p-6">
+          <div className="pb-2">{children}</div>
         </main>
       </div>
+      <AdminBottomNav />
     </div>
   )
 }

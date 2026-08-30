@@ -149,7 +149,7 @@ export function PlayerDoubleLegView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full h-9 text-xs"
+                    className="w-full min-h-11 text-sm"
                     onClick={() => setDialogMatch(leg1)}
                   >
                     Submit Result
@@ -189,7 +189,7 @@ export function PlayerDoubleLegView({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full h-9 text-xs"
+                    className="w-full min-h-11 text-sm"
                     onClick={() => setDialogMatch(leg2)}
                   >
                     Submit Result
@@ -232,7 +232,7 @@ export function PlayerDoubleLegView({
                 <span className="truncate text-sm font-semibold text-gray-800 text-right">{playerBName}</span>
               </div>
               {showSubmit ? (
-                <Button variant="outline" size="sm" className="w-full h-9 text-xs" onClick={() => setDialogMatch(match)}>
+                <Button variant="outline" size="sm" className="w-full min-h-11 text-sm" onClick={() => setDialogMatch(match)}>
                   Submit Result
                 </Button>
               ) : (() => {
