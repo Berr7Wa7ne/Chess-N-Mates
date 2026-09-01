@@ -15,7 +15,7 @@ export type RatingStat = {
 
 function WaveFill({ fill, highlight }: { fill: number; highlight?: boolean }) {
   const height = Math.max(22, Math.min(100, fill))
-  const color = highlight ? "var(--accent-lime)" : "#141414"
+  const color = highlight ? "var(--accent-gold)" : "#141414"
 
   return (
     <div

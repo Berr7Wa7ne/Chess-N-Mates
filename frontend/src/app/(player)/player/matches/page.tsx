@@ -174,7 +174,7 @@ export default function PlayerMatchesPage() {
                     )}
                     <Link
                       href={`/player/matches/${match.id}`}
-                      className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
+                      className="min-h-11 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary"
                     >
                       View
                     </Link>

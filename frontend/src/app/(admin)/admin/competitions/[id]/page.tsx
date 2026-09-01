@@ -284,7 +284,7 @@ export default function AdminCompetitionDetailPage() {
             <p className="mt-2 text-[11px] text-white/40">Status</p>
           </div>
           <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
-            <p className="tabular-nums text-2xl font-extrabold text-accent-lime">
+            <p className="tabular-nums text-2xl font-extrabold text-accent-gold">
               {competition.participant_count ?? 0}
               <span className="text-base text-white/40">/{competition.max_participants}</span>
             </p>
@@ -308,7 +308,7 @@ export default function AdminCompetitionDetailPage() {
           type="button"
           onClick={handleStart}
           disabled={startMutation.isPending}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-gold text-sm font-bold text-text-primary disabled:opacity-60"
         >
           {startMutation.isPending ? (
             <Loader2 className="size-4 animate-spin" />

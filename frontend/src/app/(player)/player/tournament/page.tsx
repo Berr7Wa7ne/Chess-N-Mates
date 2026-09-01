@@ -231,7 +231,7 @@ export default function PlayerTournamentPage() {
                   <div
                     className={cn(
                       "flex flex-col gap-3 border-b border-border-subtle px-6 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-8",
-                      selected && "bg-accent-lime/15"
+                      selected && "bg-accent-gold/15"
                     )}
                   >
                     <button
@@ -267,7 +267,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>
@@ -311,7 +311,7 @@ export default function PlayerTournamentPage() {
             type="button"
             onClick={handleJoin}
             disabled={joinMutation.isPending}
-            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-gold text-sm font-bold text-text-primary disabled:opacity-60"
           >
             Join {currentCompetition.name}
           </button>
@@ -460,7 +460,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>

@@ -74,7 +74,7 @@ export default function PlayerLeaderboardPage() {
                     key={entry.userId}
                     className={cn(
                       "grid grid-cols-[3rem_1fr_4.5rem] items-center gap-3 border-b border-border-subtle py-3.5 last:border-b-0",
-                      isYou && "bg-accent-lime/15 -mx-2 rounded-xl px-2"
+                      isYou && "bg-accent-gold/15 -mx-2 rounded-xl px-2"
                     )}
                   >
                     <span className="text-sm font-semibold tabular-nums text-text-primary">

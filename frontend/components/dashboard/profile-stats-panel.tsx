@@ -44,14 +44,14 @@ export function ProfileStatsPanel({ stats }: { stats: ProfileStats }) {
 
       <div className="flex flex-col items-center pt-4 text-center">
         <div className="relative mb-4">
-          <div className="flex size-[96px] items-center justify-center rounded-full bg-[#2A2A2A] text-2xl font-bold text-white ring-2 ring-accent-lime">
+          <div className="flex size-[96px] items-center justify-center rounded-full bg-[#2A2A2A] text-2xl font-bold text-white ring-2 ring-accent-gold">
             {initials(stats.displayName)}
           </div>
-          <span className="absolute bottom-1 right-2 size-3.5 rounded-full bg-accent-lime ring-2 ring-bg-panel-dark" />
+          <span className="absolute bottom-1 right-2 size-3.5 rounded-full bg-accent-gold ring-2 ring-bg-panel-dark" />
         </div>
         <h3 className="text-xl font-bold text-white">{stats.displayName}</h3>
         <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-white/50">
-          <span className="size-1.5 rounded-full bg-accent-lime" />
+          <span className="size-1.5 rounded-full bg-accent-gold" />
           @{stats.handle}
         </p>
       </div>
@@ -64,7 +64,7 @@ export function ProfileStatsPanel({ stats }: { stats: ProfileStats }) {
             className={cn(
               "rounded-2xl p-4 transition-transform hover:scale-[1.02]",
               tile.hero
-                ? "bg-accent-lime text-text-primary"
+                ? "bg-accent-gold text-text-primary"
                 : "border border-white/5 bg-bg-stat-tile text-white"
             )}
           >

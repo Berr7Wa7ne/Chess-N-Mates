@@ -218,12 +218,12 @@ export default function PlayerDashboardPage() {
   const playedSegments: GamesPlayedSegment[] = [
     { id: "wins", label: "Wins", value: Math.max(wins, 0), color: "#141414" },
     { id: "draws", label: "Draws", value: Math.max(draws, 0), color: "#3A3A3A" },
-    { id: "losses", label: "Losses", value: Math.max(losses, 0), color: "#9FE62E" },
+    { id: "losses", label: "Losses", value: Math.max(losses, 0), color: "#B85A02" },
     {
       id: "pending",
       label: "Tournaments",
       value: Math.max(joinedCompetitionIds.length, 0),
-      color: "#C6FF3D",
+      color: "#D36802",
     },
   ]
 
@@ -289,7 +289,7 @@ export default function PlayerDashboardPage() {
             type="button"
             onClick={handleJoinNow}
             disabled={joinMutation.isPending}
-            className="rounded-xl bg-accent-lime px-5 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+            className="rounded-xl bg-accent-gold px-5 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
           >
             {joinMutation.isPending ? "Joining…" : "Join Now"}
           </button>

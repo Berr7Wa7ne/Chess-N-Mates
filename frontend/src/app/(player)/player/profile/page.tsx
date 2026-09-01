@@ -68,7 +68,7 @@ function EditableDetailRow({
             aria-label={`Save ${label}`}
             disabled={saving}
             onClick={onSave}
-            className="flex size-11 items-center justify-center rounded-lg bg-accent-lime text-text-primary disabled:opacity-50"
+            className="flex size-11 items-center justify-center rounded-lg bg-accent-gold text-text-primary disabled:opacity-50"
           >
             <Check className="size-4" />
           </button>
@@ -385,7 +385,7 @@ export default function PlayerProfilePage() {
 
       <PlayerPanel dark>
         <p className="text-[13px] font-medium text-white/50">Community ELO</p>
-        <p className="mt-2 tabular-nums text-5xl font-extrabold tracking-tight text-accent-lime">
+        <p className="mt-2 tabular-nums text-5xl font-extrabold tracking-tight text-accent-gold">
           {communityElo ?? "—"}
         </p>
         <p className="mt-2 text-sm text-white/55">

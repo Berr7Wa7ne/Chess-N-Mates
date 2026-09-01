@@ -43,7 +43,7 @@ export function GamesCollection({ games }: { games: CollectionGame[] }) {
                 <p className="truncate text-xs text-text-secondary">{game.subtitle}</p>
               )}
             </div>
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-lime text-text-primary transition-transform group-hover:scale-105">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-gold text-text-primary transition-transform group-hover:scale-105">
               <ArrowUpRight className="size-3.5" strokeWidth={2.5} />
             </span>
           </Link>

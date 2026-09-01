@@ -525,7 +525,7 @@ export function CreateCompetitionForm({
                   className={cn(
                     "min-h-11 rounded-xl px-3 py-3 text-center text-sm font-semibold transition-all",
                     selected
-                      ? "bg-accent-lime text-text-primary"
+                      ? "bg-accent-gold text-text-primary"
                       : "bg-bg-shell text-text-secondary hover:text-text-primary"
                   )}
                 >
@@ -708,7 +708,7 @@ export function CreateCompetitionForm({
               className={cn(
                 "rounded-xl border px-3 py-3 text-left transition-all",
                 matchLength === opt.value
-                  ? "border-text-primary bg-accent-lime/40"
+                  ? "border-text-primary bg-accent-gold/40"
                   : "border-border-subtle hover:bg-black/[0.03]"
               )}
             >
@@ -868,7 +868,7 @@ export function CreateCompetitionForm({
               type="button"
               onClick={() => handleOpenRegistration(createdCompetitionId)}
               disabled={openRegistrationMutation.isPending}
-              className="rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+              className="rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
             >
               {openRegistrationMutation.isPending ? "Opening…" : "Open registration"}
             </button>
@@ -986,7 +986,7 @@ export function CreateCompetitionForm({
         <button
           type="button"
           onClick={applyFormatRecommendation}
-          className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-lime text-sm font-bold text-text-primary"
+          className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-gold text-sm font-bold text-text-primary"
         >
           <Sparkles className="size-4" />
           Use suggested format
