@@ -23,13 +23,16 @@ export function AdminPageShell({
   children,
   className,
   wide,
+  full,
 }: {
   children: React.ReactNode
   className?: string
   wide?: boolean
+  /** No max-width cap (dashboard full-width mode) */
+  full?: boolean
 }) {
   return (
-    <PlayerPageShell className={className} wide={wide}>
+    <PlayerPageShell className={className} wide={wide} full={full}>
       {children}
     </PlayerPageShell>
   )
@@ -58,7 +61,7 @@ export function AdminIconAction({
   const className = cn(
     "flex size-11 items-center justify-center rounded-xl transition-all duration-150",
     accent
-      ? "bg-accent-lime text-text-primary hover:brightness-95"
+      ? "bg-accent-gold text-text-primary hover:brightness-95"
       : active
         ? "bg-bg-panel-dark text-white"
         : "bg-bg-panel-light text-text-primary hover:bg-black/[0.04]"

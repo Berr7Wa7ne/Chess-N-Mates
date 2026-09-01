@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   Eye,
   KeyRound,
+  Maximize2,
+  Minimize2,
   Plus,
   Trophy,
   Users,
@@ -22,6 +24,7 @@ import {
   AdminPanel,
   AdminPanelTitle,
 } from "@/components/layout"
+import { useAdminWide } from "@/src/hooks/useAdminWide"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useDisputes } from "@/src/hooks/useDisputes"
@@ -31,6 +34,7 @@ import { ApiError } from "@/src/types/api"
 
 export default function AdminDashboardPage() {
   const { currentUser } = useAuth()
+  const { wide, toggle: toggleWide } = useAdminWide()
   const { data: competitions } = useCompetitions()
   const { data: members = [] } = useUsers()
   const disputesQuery = useDisputes()
@@ -110,13 +114,19 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <AdminPageShell>
+    <AdminPageShell full={wide}>
       <div className="flex items-start justify-between gap-4">
         <AdminPageHeader
           title="Dashboard"
           description="Community pulse — open details from the icons"
         />
         <AdminIconRow>
+          <AdminIconAction
+            icon={wide ? Minimize2 : Maximize2}
+            label={wide ? "Exit full width" : "Expand to full width"}
+            onClick={toggleWide}
+            active={wide}
+          />
           <AdminIconAction
             icon={Activity}
             label="Recent activity"
@@ -142,7 +152,7 @@ export default function AdminDashboardPage() {
               key={stat.label}
               className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center"
             >
-              <p className="tabular-nums text-3xl font-extrabold tracking-tight text-accent-lime">
+              <p className="tabular-nums text-3xl font-extrabold tracking-tight text-accent-gold">
                 {stat.value}
               </p>
               <p className="mt-1 text-[12px] font-medium text-white/55">{stat.label}</p>
