@@ -91,13 +91,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null)
   }, [])
 
-  const setUser = useCallback((nextUser: User | AuthUser) => {
-    setStoredUser(nextUser)
-    if (nextUser.role) {
-      setAuthCookies(nextUser.role)
-    }
-    setUserState(nextUser as User)
-  }, [])
+  const setUser = useCallback(
+    (nextUser: User | AuthUser) => {
+      // The portal role is a session choice: a dual-role admin browsing the
+      // member portal must stay 'player'. Profile data fetched from the DB
+      // carries the real account role - never let it overwrite the session
+      // (otherwise RoleGuard/proxy bounce the user into the other portal).
+      const sessionRole = user?.role ?? nextUser.role
+      const merged = {
+        ...(user ?? {}),
+        ...nextUser,
+        role: sessionRole,
+      } as User
+
+      setStoredUser(merged)
+      setAuthCookies(sessionRole)
+      setUserState(merged)
+    },
+    [user]
+  )
 
   const resolveDashboardPath = useCallback(() => {
     if (!user?.role) return '/login'
