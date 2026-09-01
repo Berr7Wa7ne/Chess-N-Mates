@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -42,9 +43,12 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  /** Always-current user snapshot for stable callbacks (avoids stale closures). */
+  const userRef = useRef<User | null>(null)
 
   useEffect(() => {
     const storedUser = getStoredUser()
+    userRef.current = storedUser
     if (storedUser?.role) {
       setAuthCookies(storedUser.role)
     }
@@ -76,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authUser.id = String(authUser.id)
       }
 
+      userRef.current = authUser as User
       setStoredUser(authUser)
       setAuthCookies(authUser.role)
       setUserState(authUser as User)
@@ -88,28 +93,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     clearStoredUser()
     clearAuthCookies()
+    userRef.current = null
     setUserState(null)
   }, [])
 
-  const setUser = useCallback(
-    (nextUser: User | AuthUser) => {
-      // The portal role is a session choice: a dual-role admin browsing the
-      // member portal must stay 'player'. Profile data fetched from the DB
-      // carries the real account role - never let it overwrite the session
-      // (otherwise RoleGuard/proxy bounce the user into the other portal).
-      const sessionRole = user?.role ?? nextUser.role
-      const merged = {
-        ...(user ?? {}),
-        ...nextUser,
-        role: sessionRole,
-      } as User
+  const setUser = useCallback((nextUser: User | AuthUser) => {
+    // The portal role is a session choice: a dual-role admin browsing the
+    // member portal must stay 'player'. Profile data fetched from the DB
+    // carries the real account role - never let it overwrite the session
+    // (otherwise RoleGuard/proxy bounce the user into the other portal).
+    //
+    // Reads the latest user through a ref instead of the closure so this
+    // callback keeps a STABLE identity - a setUser whose identity changes
+    // on every user update loops forever with effects that depend on it.
+    const current = userRef.current
+    const sessionRole = current?.role ?? nextUser.role
+    const merged = {
+      ...(current ?? {}),
+      ...nextUser,
+      role: sessionRole,
+    } as User
 
-      setStoredUser(merged)
-      setAuthCookies(sessionRole)
-      setUserState(merged)
-    },
-    [user]
-  )
+    userRef.current = merged
+    setStoredUser(merged)
+    setAuthCookies(sessionRole)
+    setUserState(merged)
+  }, [])
 
   const resolveDashboardPath = useCallback(() => {
     if (!user?.role) return '/login'
