@@ -141,7 +141,7 @@ open → under_review → resolved OR rejected
 
 | User Types | Command | API Endpoint | Purpose |
 |---|---|---|---|
-| **Everyone** | `Chess.com <username>` | POST `/users/{id}/register-chess` | Link chess account |
+| **Everyone** | `Chess.com <username> <phone>` | POST `/users/{id}/register-chess` | Link chess account |
 | | `Stats <username>` | GET `/users?chess_username=` | View stats (no registration) |
 | **Participants** | `reg-chess <username>` | POST `/competitions/{id}/join` | Register for tournament |
 | | `player-comp` | GET `/competitions/{id}/standings` | View standings |

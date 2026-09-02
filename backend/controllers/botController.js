@@ -2905,7 +2905,7 @@ async function extendResolvedDeadline(res, match, hours) {
 
 /**
  * POST /api/v1/bot/register
- * Register a new user (for Chess.com <username> command).
+ * Register a new user (for "Chess.com <username> <phone>" command).
  * This creates a user in the users table without joining a competition.
  *
  * Body: {
