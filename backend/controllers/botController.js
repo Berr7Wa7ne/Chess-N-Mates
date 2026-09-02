@@ -23,25 +23,29 @@ const {
 /**
  * Look up a user by phone_number, whatsapp_id, or lid.
  * The bot may send any of these identifiers depending on what it has.
+ * WhatsApp groups often identify the sender by a LID (privacy ID) instead of
+ * a phone number, so the lid column / lid-shaped whatsapp_ids are checked too.
  * @param {object} identifiers - { phone_number, whatsapp_id, lid }
  * @returns {object|null} user data or null
  */
 async function lookupUserByIdentifier({ phone_number, whatsapp_id, lid }) {
-  let query = supabaseAdmin
-    .from('users')
-    .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status');
+  const FIELDS = 'id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status';
+  const bareLid = lid ? String(lid).replace(/@.*$/, '') : null;
 
   if (phone_number) {
     // Try exact phone match first
-    query = query.eq('phone_number', phone_number);
-    const { data: exactData, error: exactError } = await query.maybeSingle();
+    const { data: exactData } = await supabaseAdmin
+      .from('users')
+      .select(FIELDS)
+      .eq('phone_number', phone_number)
+      .maybeSingle();
     if (exactData) return exactData;
 
     // If not found, try normalized phone (strip leading 0, ensure country code)
     const normalized = phone_number.replace(/^0+/, '');
     const { data: byNorm } = await supabaseAdmin
       .from('users')
-      .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status')
+      .select(FIELDS)
       .or(`phone_number.eq.${normalized},phone_number.eq.234${normalized}`)
       .maybeSingle();
     if (byNorm) return byNorm;
@@ -49,25 +53,37 @@ async function lookupUserByIdentifier({ phone_number, whatsapp_id, lid }) {
     // Try whatsapp_id lookup
     const { data: byWid } = await supabaseAdmin
       .from('users')
-      .select('id, display_name, phone_number, whatsapp_id, chess_com_username, chess_username, chess_elo, role, user_status')
+      .select(FIELDS)
       .eq('whatsapp_id', `${phone_number}@s.whatsapp.net`)
       .maybeSingle();
     return byWid || null;
-  } else if (whatsapp_id) {
-    query = query.eq('whatsapp_id', whatsapp_id);
-  } else if (lid) {
-    // Try whatsapp_id first (lid might be stored there), then check a lid column if it exists
-    query = query.eq('whatsapp_id', lid);
-  } else {
-    return null;
   }
 
-  const { data: result, error } = await query.maybeSingle();
-  if (error) {
-    console.error('[BOT LOOKUP ERROR]', error.message);
-    return null;
+  if (whatsapp_id || bareLid) {
+    // whatsapp_id may be stored as "<number>@s.whatsapp.net" or "<lid>@lid",
+    // and the lid column stores the bare lid - try every sane variant.
+    const orParts = [];
+    if (whatsapp_id) {
+      orParts.push(`whatsapp_id.eq.${whatsapp_id}`);
+      orParts.push(`whatsapp_id.eq.${String(whatsapp_id).replace(/@.*$/, '')}`);
+    }
+    if (bareLid) {
+      orParts.push(`lid.eq.${bareLid}`, `lid.eq.${lid}`);
+      orParts.push(`whatsapp_id.eq.${bareLid}`, `whatsapp_id.eq.${lid}`);
+    }
+    const { data: result, error } = await supabaseAdmin
+      .from('users')
+      .select(FIELDS)
+      .or(orParts.join(','))
+      .maybeSingle();
+    if (error) {
+      console.error('[BOT LOOKUP ERROR]', error.message);
+      return null;
+    }
+    return result || null;
   }
-  return result;
+
+  return null;
 }
 
 /**
@@ -2904,13 +2920,37 @@ exports.registerUser = async (req, res) => {
   try {
     const { normalizeNgPhone, phoneLookupCandidates } = require('../utils/phone');
     const { hashDefaultPassword } = require('../utils/password');
-    const { phone_number, whatsapp_id, display_name, chess_platform, chess_com_username, lichess_username } = req.body;
+    const {
+      phone_number, whatsapp_id, lid, display_name,
+      chess_platform, chess_com_username, lichess_username,
+      phone,
+    } = req.body;
 
-    if (!phone_number) {
+    // `phone` (optional) is the number the player typed in the command, e.g.
+    // "Chess.com <username> 08012345678". It wins over the sender identifier,
+    // which WhatsApp may replace with a LID in groups.
+    const rawPhone = phone || phone_number;
+
+    if (!rawPhone) {
       return res.status(400).json({ success: false, error: { message: 'phone_number is required' } });
     }
 
-    const normalizedPhone = normalizeNgPhone(phone_number) || String(phone_number).trim();
+    // WhatsApp LIDs (privacy IDs) are NOT phone numbers - storing them makes
+    // app login impossible. Accept only normalizable NG numbers or explicit
+    // +E.164 international numbers; refuse everything else.
+    const normalizedNg = normalizeNgPhone(rawPhone);
+    const plusE164 = /^\+\d{8,15}$/.test(String(rawPhone).trim());
+    if (!normalizedNg && !plusE164) {
+      return res.status(422).json({
+        success: false,
+        phone_unresolved: true,
+        error: {
+          message: 'Could not verify a real phone number. Register with: Chess.com <username> <phone e.g. 08012345678>',
+        },
+      });
+    }
+    const normalizedPhone = normalizedNg || String(rawPhone).trim().replace(/^\+/, '');
+    const bareLid = lid ? String(lid).replace(/@.*$/, '') : null;
 
     // Determine display name first (needed for existing-user updates)
     let finalDisplayName = display_name;
@@ -2922,41 +2962,104 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ success: false, error: { message: 'display_name is required' } });
     }
 
-    // Check if user already exists by phone_number OR whatsapp_id OR chess_com_username
+    // Resolve the SENDER by lid / whatsapp_id first - in groups WhatsApp may
+    // identify the sender by a LID even though we store their real number.
+    let sender = null;
+    const senderOr = [];
+    if (bareLid) {
+      senderOr.push(`lid.eq.${bareLid}`, `lid.eq.${lid}`);
+    }
+    if (whatsapp_id) {
+      senderOr.push(`whatsapp_id.eq.${whatsapp_id}`);
+      senderOr.push(`whatsapp_id.eq.${String(whatsapp_id).replace(/@.*$/, '')}`);
+    }
+    if (senderOr.length) {
+      const { data: bySender } = await supabaseAdmin
+        .from('users')
+        .select('id, display_name, phone_number, whatsapp_id, lid, chess_com_username, chess_username')
+        .or(senderOr.join(','))
+        .maybeSingle();
+      if (bySender) sender = bySender;
+    }
+
+    // Check if user already exists by phone_number OR whatsapp_id OR lid OR chess username
     let existing = null;
-    const phoneCandidates = phoneLookupCandidates(phone_number);
+    const phoneCandidates = phoneLookupCandidates(rawPhone);
     const { data: byPhone } = await supabaseAdmin
       .from('users')
-      .select('id, display_name, whatsapp_id, chess_com_username')
+      .select('id, display_name, whatsapp_id, lid, chess_com_username')
       .in('phone_number', phoneCandidates.length ? phoneCandidates : [normalizedPhone])
       .limit(1)
       .maybeSingle();
 
     if (byPhone) {
       existing = byPhone;
-    } else if (whatsapp_id) {
+    } else if (whatsapp_id || bareLid) {
+      const widOr = [];
+      if (whatsapp_id) {
+        widOr.push(`whatsapp_id.eq.${whatsapp_id}`);
+        widOr.push(`whatsapp_id.eq.${String(whatsapp_id).replace(/@.*$/, '')}`);
+      }
+      if (bareLid) {
+        widOr.push(`lid.eq.${bareLid}`, `lid.eq.${lid}`);
+        widOr.push(`whatsapp_id.eq.${bareLid}`, `whatsapp_id.eq.${lid}`);
+      }
       const { data: byWid } = await supabaseAdmin
         .from('users')
-        .select('id, display_name, whatsapp_id, chess_com_username')
-        .eq('whatsapp_id', whatsapp_id)
+        .select('id, display_name, whatsapp_id, lid, chess_com_username')
+        .or(widOr.join(','))
         .maybeSingle();
       if (byWid) existing = byWid;
     }
 
     if (!existing && chess_com_username) {
+      // Case-insensitive match - chess.com usernames are not case-sensitive,
+      // and exact-case matching created duplicate accounts (mr_zig / Mr_ZiG).
       const { data: byChess } = await supabaseAdmin
         .from('users')
-        .select('id, display_name, whatsapp_id, chess_com_username')
-        .eq('chess_com_username', chess_com_username)
+        .select('id, display_name, whatsapp_id, lid, chess_com_username')
+        .ilike('chess_com_username', chess_com_username)
         .maybeSingle();
       if (byChess) existing = byChess;
     }
 
+    // GUARD 1 - the chess username is linked to a different WhatsApp identity
+    const requestedUsername = String(chess_com_username || lichess_username || '').toLowerCase();
+    if (
+      existing &&
+      requestedUsername &&
+      String(existing.chess_com_username || '').toLowerCase() === requestedUsername &&
+      (!sender || sender.id !== existing.id)
+    ) {
+      return res.status(409).json({
+        success: false,
+        username_taken: true,
+        error: {
+          message: `Chess.com username "${existing.chess_com_username}" is already linked to another WhatsApp number. Only its owner can use Chess.com ${existing.chess_com_username}.`,
+        },
+      });
+    }
+
+    // GUARD 2 - the SENDER is already registered as someone else
+    if (sender && (!existing || existing.id !== sender.id)) {
+      return res.status(409).json({
+        success: false,
+        already_registered_as: sender.display_name,
+        error: {
+          message: `This WhatsApp number is already registered as ${sender.display_name}. Only ${finalDisplayName} can register 'Chess.com ${finalDisplayName}'.`,
+        },
+      });
+    }
+
+
     if (existing) {
-      // User exists — return friendly message, optionally update their whatsapp_id/display_name
+      // User exists — return friendly message, optionally update their whatsapp_id/lid/display_name
       const existingUpdates = {};
       if (whatsapp_id && existing.whatsapp_id !== whatsapp_id) {
         existingUpdates.whatsapp_id = whatsapp_id;
+      }
+      if (bareLid && existing.lid !== bareLid) {
+        existingUpdates.lid = bareLid;
       }
       if (chess_com_username && existing.chess_com_username !== chess_com_username) {
         existingUpdates.chess_com_username = chess_com_username;
@@ -2984,6 +3087,7 @@ exports.registerUser = async (req, res) => {
       .insert([{
         phone_number: normalizedPhone,
         whatsapp_id: whatsapp_id || null,
+        lid: bareLid,
         display_name: finalDisplayName,
         email: `${normalizedPhone}@temp.com`,
         role: 'player',

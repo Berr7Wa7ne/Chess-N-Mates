@@ -40,6 +40,12 @@ function phoneLookupCandidates(input) {
   if (digits) set.add(digits);
   if (raw) set.add(raw);
 
+  // International numbers (e.g. Kenyan 254XXXXXXXXX): include the +E.164 form
+  // so logins/lookups resolve no matter which shape was stored.
+  if (!normalized && digits.length >= 11 && digits.length <= 15 && !digits.startsWith('0')) {
+    set.add(`+${digits}`);
+  }
+
   return [...set].filter(Boolean);
 }
 
