@@ -23,7 +23,6 @@ import { ApiError } from "@/src/types/api"
 import type { Match } from "@/src/types/match"
 import { formatTournamentType } from "@/src/components/competitions/competition-badges"
 import { cn } from "@/lib/utils"
-import { downloadFixturesImage } from "@/src/lib/fixture-export"
 
 export default function PlayerTournamentPage() {
   const [currentRound, setCurrentRound] = useState<number | null>(null)
@@ -174,17 +173,6 @@ export default function PlayerTournamentPage() {
     })
   }, [])
 
-  async function handleDownloadFixtures() {
-    if (!currentCompetition) return
-    if (matches.length === 0) return
-    try {
-      await downloadFixturesImage({ competition: currentCompetition, matches, allRounds: true })
-      toast.success("Fixtures downloaded")
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Failed to download fixtures")
-    }
-  }
-
   return (
     <PlayerPageShell wide>
       <PlayerPageHeader
@@ -319,10 +307,10 @@ export default function PlayerTournamentPage() {
           ) : (
             <MatchesList
               matches={matches}
+              competition={currentCompetition}
               currentRound={effectiveRound}
               onRoundChange={setCurrentRound}
               onViewStandings={() => setStandingsOpen(true)}
-              onDownloadAll={handleDownloadFixtures}
               totalRounds={currentCompetition.rounds}
               competitionName={currentCompetition.name}
               renderMatchActions={(match: Match) => {

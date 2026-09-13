@@ -40,6 +40,7 @@ import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
 import type { Match } from '@/src/types/match'
 import { downloadFixturesImage } from '@/src/lib/fixture-export'
+import { downloadStandingsImage } from '@/src/lib/standings-export'
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -190,36 +191,19 @@ export default function AdminCompetitionDetailPage() {
     }
   }, [matchesQuery.data, competition])
 
-  const handleDownloadStandings = useCallback(() => {
+  const handleDownloadStandings = useCallback(async () => {
     const standings = standingsQuery.data || []
+    if (!competition) return
     if (standings.length === 0) {
       toast.error('No standings to download')
       return
     }
-    const csv = [
-      ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'Abs', 'BYE'].join(','),
-      ...standings.map((s) =>
-        [
-          s.rank,
-          s.display_name,
-          s.played,
-          s.wins,
-          s.draws,
-          s.losses,
-          s.points,
-          s.absences,
-          s.byes,
-        ].join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${competition?.name || 'standings'}-standings.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Standings downloaded')
+    try {
+      await downloadStandingsImage({ competition, standings, format: 'png' })
+      toast.success('Standings downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download standings')
+    }
   }, [standingsQuery.data, competition])
 
   if (!id) {
@@ -455,13 +439,10 @@ export default function AdminCompetitionDetailPage() {
         <div className="space-y-6">
           <MatchesList
             matches={matches}
+            competition={competition}
             currentRound={currentRound}
             onRoundChange={setCurrentRound}
             onViewStandings={() => setStandingsOpen(true)}
-            onDownloadAll={() => {
-              handleDownloadFixtures()
-              setTimeout(handleDownloadStandings, 500)
-            }}
             totalRounds={competition.rounds}
             competitionName={competition.name}
             // Advance round wired into MatchesList

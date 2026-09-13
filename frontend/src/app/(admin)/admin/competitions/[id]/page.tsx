@@ -42,6 +42,7 @@ import {
 import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
 import { downloadFixturesPdf  } from '@/src/lib/fixture-export'
+import { downloadStandingsImage } from '@/src/lib/standings-export'
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -143,46 +144,19 @@ export default function AdminCompetitionDetailPage() {
      }
    }, [matchesQuery.data, competition])
 
-  const handleDownloadStandings = useCallback(() => {
+  const handleDownloadStandings = useCallback(async () => {
     const standings = standingsQuery.data || []
+    if (!competition) return
     if (standings.length === 0) {
       toast.error('No standings to download')
       return
     }
-    const isSwiss = competition?.tournament_type === 'swiss'
-    const headers = isSwiss
-      ? ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'BH', 'BH-C1', 'SB', 'Abs', 'BYE']
-      : ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'Abs', 'BYE']
-    const csv = [
-      headers.join(','),
-      ...standings.map((s) =>
-        (isSwiss
-          ? [
-              s.rank,
-              s.display_name,
-              s.played,
-              s.wins,
-              s.draws,
-              s.losses,
-              s.points,
-              s.buchholz ?? '',
-              s.buchholz_cut1 ?? '',
-              s.sonneborn_berger ?? '',
-              s.absences,
-              s.byes,
-            ]
-          : [s.rank, s.display_name, s.played, s.wins, s.draws, s.losses, s.points, s.absences, s.byes]
-        ).join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${competition?.name || 'standings'}-standings.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Standings downloaded')
+    try {
+      await downloadStandingsImage({ competition, standings, format: 'png' })
+      toast.success('Standings downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download standings')
+    }
   }, [standingsQuery.data, competition])
 
   if (!id) {
@@ -385,7 +359,7 @@ export default function AdminCompetitionDetailPage() {
             className="mt-2 h-10 w-full rounded-xl bg-bg-panel-light text-sm font-semibold"
             onClick={handleDownloadStandings}
           >
-            Download standings CSV
+            Download standings
           </button>
         </div>
       </AdminContentModal>

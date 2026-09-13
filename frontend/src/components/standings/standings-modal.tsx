@@ -1,6 +1,7 @@
 'use client'
 
-import { Medal, Trophy, X } from 'lucide-react'
+import { Download, Medal, Trophy, X } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { downloadStandingsImage } from '@/src/lib/standings-export'
+import { ApiError } from '@/src/types/api'
 import type { StandingEntry, TournamentType } from '@/src/types/competition'
 
 interface StandingsModalProps {
@@ -42,6 +45,24 @@ export function StandingsModal({
   tournamentType,
 }: StandingsModalProps) {
   const isSwiss = tournamentType === 'swiss'
+
+  async function handleDownloadStandings() {
+    if (standings.length === 0) {
+      toast.error('No standings to download')
+      return
+    }
+    try {
+      await downloadStandingsImage({
+        competitionName,
+        tournamentType,
+        standings,
+        format: 'png',
+      })
+      toast.success('Standings downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download standings')
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -148,7 +169,16 @@ export function StandingsModal({
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadStandings}
+            disabled={standings.length === 0}
+            className="min-h-11 gap-2 px-4"
+          >
+            <Download className="size-4" />
+            Download standings
+          </Button>
           <Button variant="outline" onClick={onClose} className="min-h-11 gap-2 px-4">
             <X className="size-4" />
             Close
