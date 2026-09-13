@@ -23,6 +23,7 @@ import { ApiError } from "@/src/types/api"
 import type { Match } from "@/src/types/match"
 import { formatTournamentType } from "@/src/components/competitions/competition-badges"
 import { cn } from "@/lib/utils"
+import { downloadFixturesImage } from "@/src/lib/fixture-export"
 
 export default function PlayerTournamentPage() {
   const [currentRound, setCurrentRound] = useState<number | null>(null)
@@ -173,28 +174,15 @@ export default function PlayerTournamentPage() {
     })
   }, [])
 
-  function handleDownloadFixtures() {
+  async function handleDownloadFixtures() {
+    if (!currentCompetition) return
     if (matches.length === 0) return
-    const csv = [
-      ["Round", "Player A", "Player B", "Status", "Result"].join(","),
-      ...matches.map((m) =>
-        [
-          m.round_number,
-          m.player_a?.display_name || m.player_a_id,
-          m.is_bye ? "BYE" : m.player_b?.display_name || m.player_b_id,
-          m.match_status,
-          m.result_winner || "Pending",
-        ].join(",")
-      ),
-    ].join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${currentCompetition?.name || "fixtures"}-fixtures.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success("Fixtures downloaded")
+    try {
+      await downloadFixturesImage({ competition: currentCompetition, matches, allRounds: true })
+      toast.success("Fixtures downloaded")
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Failed to download fixtures")
+    }
   }
 
   return (
