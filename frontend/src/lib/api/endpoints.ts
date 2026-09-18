@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
     ODDS_HISTORY: (id: string) => `/competitions/${id}/odds-history`,
     FORMAT_ADVICE: '/competitions/format-advice',
     COMPUTE_RESULTS: (id: string) => `/competitions/${id}/compute-results`,
+    COMPUTE_LOGS: (id: string) => `/competitions/${id}/compute-logs`,
     MATCHES: (id: string) => `/competitions/${id}/matches`,
   },
 

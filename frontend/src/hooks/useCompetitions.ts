@@ -82,7 +82,19 @@ export function useComputeResults() {
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.detail(id) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.standings(id) })
       queryClient.invalidateQueries({ queryKey: queryKeys.competitions.matches(id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.competitions.computeLogs(id) })
     },
+  })
+}
+
+export function useComputeLogs(id: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.competitions.computeLogs(id),
+    queryFn: async () => {
+      const response = await competitionService.getComputeLogs(id, { limit: 150 })
+      return response.data
+    },
+    enabled: enabled && !!id,
   })
 }
 

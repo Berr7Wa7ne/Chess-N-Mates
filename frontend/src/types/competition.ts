@@ -119,6 +119,7 @@ export interface ComputeResultsReport {
     action?: string
     fixtures_generated?: number
   }
+  run_id?: string
   errors: Array<{ message?: string; match_id?: string; competition_id?: string }>
   match_results?: Array<{
     match_id: string
@@ -128,6 +129,28 @@ export interface ComputeResultsReport {
     chess_game_link?: string
     candidates?: Array<{ url: string; result_winner: string; end_time?: number }>
   }>
+}
+
+export type ComputeAuditActionResult =
+  | 'success'
+  | 'skipped'
+  | 'needs_review'
+  | 'absent'
+  | 'error'
+  | 'info'
+
+export interface ComputeAuditLog {
+  id: string
+  created_at: string
+  competition_id?: string | null
+  match_id?: string | null
+  run_id?: string | null
+  triggered_by: string
+  actor_user_id?: string | null
+  action: string
+  action_result: ComputeAuditActionResult | string
+  message?: string | null
+  details?: Record<string, unknown> | null
 }
 
 export interface CompetitionListParams {

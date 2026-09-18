@@ -11,6 +11,7 @@ export const queryKeys = {
     detail: (id: string) => ['competitions', id] as const,
     standings: (id: string) => ['competitions', id, 'standings'] as const,
     matches: (id: string) => ['competitions', id, 'matches'] as const,
+    computeLogs: (id: string) => ['competitions', id, 'compute-logs'] as const,
   },
   participants: {
     registrations: (userId: string) => ['participants', 'registrations', userId] as const,

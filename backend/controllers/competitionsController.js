@@ -16,6 +16,7 @@ const {
 } = require('../services/tournamentLifecycle');
 const { advanceCompetitionRound } = require('../services/competitionAdvanceService');
 const { computeCompetition } = require('../services/dailyComputeService');
+const { listComputeAuditLogs } = require('../services/computeAuditService');
 const {
   attachParticipantCounts,
   fetchParticipantsWithUsers,
@@ -401,12 +402,32 @@ exports.computeResults = async (req, res) => {
       ignoreAutoComputeFlag: true,
       forceAbsentPastDeadline: markAbsent,
       looseTimeControl: true,
+      triggered_by: 'admin',
+      actor_user_id: req.body?.user_id || req.user?.id || null,
     });
     res.json({ success: true, data: report });
   } catch (err) {
     res.status(500).json({
       success: false,
       error: { message: err.message || 'Compute failed' },
+    });
+  }
+};
+
+/** GET /competitions/:id/compute-logs */
+exports.getComputeLogs = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const logs = await listComputeAuditLogs(id, {
+      limit: req.query.limit,
+      offset: req.query.offset,
+      run_id: req.query.run_id,
+    });
+    res.json({ success: true, data: logs });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: { message: err.message || 'Failed to load compute logs' },
     });
   }
 };

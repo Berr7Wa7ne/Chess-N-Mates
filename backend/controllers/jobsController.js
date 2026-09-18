@@ -12,12 +12,14 @@ exports.dailyCompute = async (req, res) => {
     if (competitionId) {
       const report = await computeCompetition(competitionId, {
         ignoreAutoComputeFlag: Boolean(req.body?.force),
+        triggered_by: 'job_api',
       });
       return res.json({ success: true, data: report });
     }
 
     const summary = await computeAllActive({
       ignoreAutoComputeFlag: Boolean(req.body?.force),
+      triggered_by: 'job_api',
     });
     return res.json({ success: true, data: summary });
   } catch (err) {

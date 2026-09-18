@@ -10,6 +10,11 @@ const {
 const { advanceCompetitionRound } = require('./competitionAdvanceService');
 const { emitWebhook } = require('./webhookService');
 const { timestamp } = require('../utils/competitionHelpers');
+const {
+  newRunId,
+  writeComputeAudit,
+  writeComputeAuditBatch,
+} = require('./computeAuditService');
 
 /** Look back from deadline (or now) when searching Chess.com archives. */
 const SEARCH_LOOKBACK_MS = 48 * 60 * 60 * 1000;
@@ -179,6 +184,17 @@ async function computeCompetition(competitionId, options = {}) {
   const forceAbsentPastDeadline = options.forceAbsentPastDeadline !== false;
   const report = emptyReport();
   const archiveCache = options.archiveCache || new Map();
+  const runId = options.run_id || newRunId();
+  const triggeredBy = options.triggered_by || 'system';
+  const actorUserId = options.actor_user_id || null;
+  const startedAt = new Date().toISOString();
+
+  const auditBase = {
+    competition_id: competitionId,
+    run_id: runId,
+    triggered_by: triggeredBy,
+    actor_user_id: actorUserId,
+  };
 
   const { data: competition, error: compError } = await supabaseAdmin
     .from('competitions')
@@ -188,32 +204,71 @@ async function computeCompetition(competitionId, options = {}) {
 
   if (compError || !competition) {
     report.errors.push({ competition_id: competitionId, message: 'Competition not found' });
-    return report;
+    await writeComputeAudit({
+      ...auditBase,
+      action: 'compute_run',
+      action_result: 'error',
+      message: 'Competition not found',
+      details: { started_at: startedAt },
+    });
+    return { ...report, run_id: runId };
   }
+
+  auditBase.competition_id = competition.id;
 
   if (competition.competition_status !== 'active') {
     report.skipped += 1;
     report.errors.push({ competition_id: competitionId, message: 'Competition is not active' });
-    return { ...report, competition_id: competitionId, competition_name: competition.name };
+    await writeComputeAudit({
+      ...auditBase,
+      action: 'compute_run',
+      action_result: 'skipped',
+      message: 'Competition is not active',
+      details: {
+        competition_name: competition.name,
+        competition_status: competition.competition_status,
+      },
+    });
+    return {
+      ...report,
+      competition_id: competitionId,
+      competition_name: competition.name,
+      run_id: runId,
+    };
   }
 
   if ((competition.platform || 'chess.com') !== 'chess.com') {
     report.skipped += 1;
+    await writeComputeAudit({
+      ...auditBase,
+      action: 'compute_run',
+      action_result: 'skipped',
+      message: 'Skipped: platform is not chess.com',
+      details: { platform: competition.platform },
+    });
     return {
       ...report,
       competition_id: competitionId,
       competition_name: competition.name,
       message: 'Skipped: platform is not chess.com',
+      run_id: runId,
     };
   }
 
   if (competition.auto_compute_enabled === false && !options.ignoreAutoComputeFlag) {
     report.skipped += 1;
+    await writeComputeAudit({
+      ...auditBase,
+      action: 'compute_run',
+      action_result: 'skipped',
+      message: 'Skipped: auto_compute_enabled is false',
+    });
     return {
       ...report,
       competition_id: competitionId,
       competition_name: competition.name,
       message: 'Skipped: auto_compute_enabled is false',
+      run_id: runId,
     };
   }
 
@@ -227,12 +282,41 @@ async function computeCompetition(competitionId, options = {}) {
 
   if (matchError) {
     report.errors.push({ competition_id: competitionId, message: matchError.message });
-    return { ...report, competition_id: competitionId, competition_name: competition.name };
+    await writeComputeAudit({
+      ...auditBase,
+      action: 'compute_run',
+      action_result: 'error',
+      message: matchError.message,
+      details: { current_round: currentRound },
+    });
+    return {
+      ...report,
+      competition_id: competitionId,
+      competition_name: competition.name,
+      run_id: runId,
+    };
   }
 
   const pending = (roundMatches || []).filter(
     (m) => !m.is_bye && ['pending', 'ongoing'].includes(m.match_status)
   );
+
+  await writeComputeAudit({
+    ...auditBase,
+    action: 'compute_started',
+    action_result: 'info',
+    message: `Started compute for round ${currentRound} (${pending.length} pending match${pending.length === 1 ? '' : 'es'})`,
+    details: {
+      competition_name: competition.name,
+      current_round: currentRound,
+      time_control: competition.time_control,
+      pending_count: pending.length,
+      total_round_matches: (roundMatches || []).length,
+      force_absent_past_deadline: forceAbsentPastDeadline,
+      loose_time_control: options.looseTimeControl !== false,
+      started_at: startedAt,
+    },
+  });
 
   const userIds = [...new Set(pending.flatMap((m) => [m.player_a_id, m.player_b_id]))];
   const usersById = new Map();
@@ -245,6 +329,7 @@ async function computeCompetition(competitionId, options = {}) {
   }
 
   const now = Date.now();
+  const auditBatch = [];
 
   for (const match of pending) {
     try {
@@ -252,6 +337,7 @@ async function computeCompetition(competitionId, options = {}) {
       const playerB = usersById.get(match.player_b_id);
       const userA = chessComHandle(playerA);
       const userB = chessComHandle(playerB);
+      const pairLabel = `${playerA?.display_name || userA || '?'} vs ${playerB?.display_name || userB || '?'}`;
 
       if (!userA || !userB) {
         report.skipped += 1;
@@ -259,6 +345,19 @@ async function computeCompetition(competitionId, options = {}) {
           match_id: match.id,
           status: 'skipped',
           reason: 'Missing chess.com username on one or both players',
+        });
+        auditBatch.push({
+          ...auditBase,
+          match_id: match.id,
+          action: 'match_lookup',
+          action_result: 'skipped',
+          message: `${pairLabel}: missing Chess.com username`,
+          details: {
+            player_a: playerA?.display_name || null,
+            player_b: playerB?.display_name || null,
+            chess_com_a: userA,
+            chess_com_b: userB,
+          },
         });
         continue;
       }
@@ -275,6 +374,17 @@ async function computeCompetition(competitionId, options = {}) {
       });
 
       const resolution = resolveGameCandidates(candidates);
+      const windowDetails = {
+        pair: pairLabel,
+        chess_com_a: userA,
+        chess_com_b: userB,
+        search_since: new Date(sinceMs).toISOString(),
+        search_until: new Date(untilMs).toISOString(),
+        match_deadline: match.deadline,
+        past_deadline: pastDeadline,
+        candidates_found: candidates.length,
+        time_control: competition.time_control,
+      };
 
       if (resolution.decision === 'auto' && resolution.game) {
         await applyAutoScore(match, {
@@ -289,6 +399,21 @@ async function computeCompetition(competitionId, options = {}) {
           result_winner: resolution.game.result_winner,
           chess_game_link: resolution.game.url,
         });
+        auditBatch.push({
+          ...auditBase,
+          match_id: match.id,
+          action: 'match_scored',
+          action_result: 'success',
+          message: `${pairLabel}: scored ${resolution.game.result_winner} from Chess.com`,
+          details: {
+            ...windowDetails,
+            result_winner: resolution.game.result_winner,
+            chess_game_link: resolution.game.url,
+            game_end_time: resolution.game.end_time
+              ? new Date(resolution.game.end_time * 1000).toISOString()
+              : null,
+          },
+        });
         continue;
       }
 
@@ -300,10 +425,24 @@ async function computeCompetition(competitionId, options = {}) {
           status: 'needs_review',
           candidates: resolution.candidates,
         });
+        auditBatch.push({
+          ...auditBase,
+          match_id: match.id,
+          action: 'match_needs_review',
+          action_result: 'needs_review',
+          message: `${pairLabel}: conflicting Chess.com games — needs review`,
+          details: {
+            ...windowDetails,
+            candidates: (resolution.candidates || []).map((c) => ({
+              url: c.url,
+              result_winner: c.result_winner,
+              end_time: c.end_time,
+            })),
+          },
+        });
         continue;
       }
 
-      // Never auto-absent without a deadline (future RR rounds stay open until activated)
       if (forceAbsentPastDeadline && pastDeadline && match.deadline) {
         await applyBothAbsent(match);
         report.absent += 1;
@@ -312,18 +451,35 @@ async function computeCompetition(competitionId, options = {}) {
           status: 'absent',
           reason: 'No game found after deadline',
         });
+        auditBatch.push({
+          ...auditBase,
+          match_id: match.id,
+          action: 'match_absent',
+          action_result: 'absent',
+          message: `${pairLabel}: no game found after deadline — marked both absent`,
+          details: windowDetails,
+        });
         continue;
       }
 
+      const skipReason = pastDeadline
+        ? 'No game found'
+        : match.deadline
+          ? 'No game found yet (before deadline)'
+          : 'No game found yet (round window not opened)';
       report.skipped += 1;
       report.match_results.push({
         match_id: match.id,
         status: 'skipped',
-        reason: pastDeadline
-          ? 'No game found'
-          : match.deadline
-            ? 'No game found yet (before deadline)'
-            : 'No game found yet (round window not opened)',
+        reason: skipReason,
+      });
+      auditBatch.push({
+        ...auditBase,
+        match_id: match.id,
+        action: 'match_lookup',
+        action_result: 'skipped',
+        message: `${pairLabel}: ${skipReason}`,
+        details: windowDetails,
       });
     } catch (err) {
       report.errors.push({
@@ -331,8 +487,18 @@ async function computeCompetition(competitionId, options = {}) {
         competition_id: competitionId,
         message: err.message || String(err),
       });
+      auditBatch.push({
+        ...auditBase,
+        match_id: match.id,
+        action: 'match_lookup',
+        action_result: 'error',
+        message: err.message || String(err),
+        details: { stack: err.stack ? String(err.stack).slice(0, 500) : null },
+      });
     }
   }
+
+  await writeComputeAuditBatch(auditBatch);
 
   const { data: afterMatches } = await supabaseAdmin
     .from('matches')
@@ -350,13 +516,51 @@ async function computeCompetition(competitionId, options = {}) {
       report.advanced = true;
       report.advance_action = advance.data?.action || 'advanced';
       report.advance = advance.data;
+      await writeComputeAudit({
+        ...auditBase,
+        action: 'round_advanced',
+        action_result: 'success',
+        message:
+          advance.data?.action === 'completed'
+            ? 'All matches complete — tournament marked completed'
+            : `Round advanced to ${advance.data?.current_round}`,
+        details: advance.data || {},
+      });
     } else if (advance.error) {
       report.errors.push({
         competition_id: competitionId,
         message: `Auto-advance failed: ${advance.error}`,
       });
+      await writeComputeAudit({
+        ...auditBase,
+        action: 'round_advanced',
+        action_result: 'error',
+        message: `Auto-advance failed: ${advance.error}`,
+      });
     }
   }
+
+  const finishedAt = new Date().toISOString();
+  await writeComputeAudit({
+    ...auditBase,
+    action: 'compute_finished',
+    action_result: report.errors.length > 0 ? 'error' : 'success',
+    message: `Finished: ${report.scored} scored, ${report.needs_review} review, ${report.absent} absent, ${report.skipped} skipped${report.advanced ? ', round advanced' : ''}`,
+    details: {
+      competition_name: competition.name,
+      current_round: currentRound,
+      scored: report.scored,
+      needs_review: report.needs_review,
+      absent: report.absent,
+      skipped: report.skipped,
+      advanced: report.advanced,
+      advance_action: report.advance_action,
+      still_unresolved: unresolved.length,
+      error_count: report.errors.length,
+      started_at: startedAt,
+      finished_at: finishedAt,
+    },
+  });
 
   return {
     ...report,
@@ -364,12 +568,14 @@ async function computeCompetition(competitionId, options = {}) {
     competition_name: competition.name,
     current_round: currentRound,
     still_unresolved: unresolved.length,
+    run_id: runId,
   };
 }
 
 async function computeAllActive(options = {}) {
   const startedAt = new Date().toISOString();
   const archiveCache = new Map();
+  const triggeredBy = options.triggered_by || 'cron';
 
   const { data: competitions, error } = await supabaseAdmin
     .from('competitions')
@@ -393,7 +599,11 @@ async function computeAllActive(options = {}) {
 
   const reports = [];
   for (const c of eligible) {
-    const report = await computeCompetition(c.id, { ...options, archiveCache });
+    const report = await computeCompetition(c.id, {
+      ...options,
+      archiveCache,
+      triggered_by: triggeredBy,
+    });
     reports.push(report);
   }
 

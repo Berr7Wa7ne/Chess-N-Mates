@@ -10,6 +10,7 @@ import type {
   StandingEntry,
   StartCompetitionResult,
   ComputeResultsReport,
+  ComputeAuditLog,
   UpdateCompetitionPayload,
 } from '@/src/types/competition'
 
@@ -58,6 +59,13 @@ export const competitionService = {
       {
         mark_absent_past_deadline: options?.mark_absent_past_deadline === true,
       }
+    )
+  },
+
+  getComputeLogs(id: string, params?: { limit?: number; offset?: number; run_id?: string }) {
+    return httpClient.get<ComputeAuditLog[]>(
+      API_ENDPOINTS.COMPETITIONS.COMPUTE_LOGS(id),
+      params as SearchParams | undefined
     )
   },
 }
