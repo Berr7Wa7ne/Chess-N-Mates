@@ -71,7 +71,7 @@ export function TournamentsBar({ tournaments }: { tournaments: TournamentChip[] 
                   <span
                     className={cn(
                       "absolute bottom-0 right-0 size-2.5 rounded-full ring-2 ring-bg-panel-light",
-                      active ? "bg-accent-lime" : "bg-text-secondary"
+                      active ? "bg-accent-gold" : "bg-text-secondary"
                     )}
                   />
                 </div>

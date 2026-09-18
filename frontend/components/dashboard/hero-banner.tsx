@@ -40,7 +40,7 @@ export function HeroBanner({ slides }: { slides: HeroSlide[] }) {
           <p className="mt-2 text-sm text-white/60">No featured tournaments right now.</p>
           <Link
             href="/player/tournament"
-            className="mt-5 inline-flex rounded-xl bg-accent-lime px-7 py-3.5 text-sm font-bold text-text-primary"
+            className="mt-5 inline-flex rounded-xl bg-accent-gold px-7 py-3.5 text-sm font-bold text-text-primary"
           >
             Browse Tournaments
           </Link>
@@ -69,7 +69,7 @@ export function HeroBanner({ slides }: { slides: HeroSlide[] }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
 
       <div className="relative z-10 flex h-full min-h-[220px] flex-col justify-end p-6 sm:p-8 lg:max-w-[60%]">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-lime">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-gold">
           Featured Tournament
         </p>
         <h1 className="text-[28px] font-bold leading-[1.05] tracking-tight text-text-primary-inverse sm:text-[34px]">
@@ -80,7 +80,7 @@ export function HeroBanner({ slides }: { slides: HeroSlide[] }) {
         </p>
         <Link
           href={slide.ctaHref}
-          className="mt-5 inline-flex w-fit items-center rounded-xl bg-accent-lime px-7 py-3.5 text-sm font-bold text-text-primary transition-colors hover:bg-accent-lime-dim"
+          className="mt-5 inline-flex w-fit items-center rounded-xl bg-accent-gold px-7 py-3.5 text-sm font-bold text-text-primary transition-colors hover:bg-accent-gold-dim"
         >
           {slide.ctaLabel}
         </Link>
@@ -96,7 +96,7 @@ export function HeroBanner({ slides }: { slides: HeroSlide[] }) {
               onClick={() => goTo(i)}
               className={cn(
                 "min-h-4 min-w-4 rounded-full transition-all duration-150",
-                i === index ? "h-7 w-2.5 bg-accent-lime" : "h-2.5 w-2.5 bg-white/40 hover:bg-white/70"
+                i === index ? "h-7 w-2.5 bg-accent-gold" : "h-2.5 w-2.5 bg-white/40 hover:bg-white/70"
               )}
             />
           ))}

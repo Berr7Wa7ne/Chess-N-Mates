@@ -173,30 +173,6 @@ export default function PlayerTournamentPage() {
     })
   }, [])
 
-  function handleDownloadFixtures() {
-    if (matches.length === 0) return
-    const csv = [
-      ["Round", "Player A", "Player B", "Status", "Result"].join(","),
-      ...matches.map((m) =>
-        [
-          m.round_number,
-          m.player_a?.display_name || m.player_a_id,
-          m.is_bye ? "BYE" : m.player_b?.display_name || m.player_b_id,
-          m.match_status,
-          m.result_winner || "Pending",
-        ].join(",")
-      ),
-    ].join("\n")
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${currentCompetition?.name || "fixtures"}-fixtures.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success("Fixtures downloaded")
-  }
-
   return (
     <PlayerPageShell wide>
       <PlayerPageHeader
@@ -231,7 +207,7 @@ export default function PlayerTournamentPage() {
                   <div
                     className={cn(
                       "flex flex-col gap-3 border-b border-border-subtle px-6 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-8",
-                      selected && "bg-accent-lime/15"
+                      selected && "bg-accent-gold/15"
                     )}
                   >
                     <button
@@ -267,7 +243,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>
@@ -311,7 +287,7 @@ export default function PlayerTournamentPage() {
             type="button"
             onClick={handleJoin}
             disabled={joinMutation.isPending}
-            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-gold text-sm font-bold text-text-primary disabled:opacity-60"
           >
             Join {currentCompetition.name}
           </button>
@@ -331,10 +307,10 @@ export default function PlayerTournamentPage() {
           ) : (
             <MatchesList
               matches={matches}
+              competition={currentCompetition}
               currentRound={effectiveRound}
               onRoundChange={setCurrentRound}
               onViewStandings={() => setStandingsOpen(true)}
-              onDownloadAll={handleDownloadFixtures}
               totalRounds={currentCompetition.rounds}
               competitionName={currentCompetition.name}
               renderMatchActions={(match: Match) => {
@@ -460,7 +436,7 @@ export default function PlayerTournamentPage() {
                             handleJoinCompetition(competition.id, competition.name)
                           }
                           disabled={joinMutation.isPending}
-                          className="min-h-11 rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
+                          className="min-h-11 rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary disabled:opacity-60"
                         >
                           Join
                         </button>

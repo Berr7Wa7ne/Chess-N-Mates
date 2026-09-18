@@ -41,6 +41,7 @@ import {
 import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
 import type { Match } from '@/src/types/match'
+import { downloadFixturesImage } from '@/src/lib/fixture-export'
 
 export default function AdminCompetitionMatchesPage() {
   const params = useParams()
@@ -187,9 +188,9 @@ export default function AdminCompetitionMatchesPage() {
     }
   }
 
-  const handleDownloadFixtures = useCallback(() => {
-    const tourneyType = competition?.tournament_type
-    const isSwiss = tourneyType === 'swiss'
+  const handleDownloadFixtures = useCallback(async () => {
+    if (!competition) return
+    const isSwiss = competition.tournament_type === 'swiss'
     const matchesToDownload = isSwiss
       ? matches.filter((m) => m.round_number === effectiveRound)
       : matches
@@ -198,27 +199,17 @@ export default function AdminCompetitionMatchesPage() {
       toast.error('No fixtures to download')
       return
     }
-    const csv = [
-      ['Round', 'Player A', 'Player B', 'Status', 'Result'].join(','),
-      ...matchesToDownload.map((m: Match) =>
-        [
-          m.round_number,
-          m.player_a?.display_name || m.player_a_id,
-          m.is_bye ? 'BYE' : m.player_b?.display_name || m.player_b_id,
-          m.match_status,
-          m.result_winner || 'Pending',
-        ].join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const label = isSwiss ? `round-${effectiveRound}-fixtures` : 'all-fixtures'
-    a.download = `${competition?.name || 'fixtures'}-${label}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Fixtures downloaded')
+    try {
+      await downloadFixturesImage({
+        competition,
+        matches: matchesToDownload,
+        round: isSwiss ? effectiveRound : undefined,
+        allRounds: !isSwiss,
+      })
+      toast.success('Fixtures downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download fixtures')
+    }
   }, [matches, competition, effectiveRound])
 
   if (!id) {

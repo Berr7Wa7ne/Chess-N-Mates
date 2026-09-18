@@ -57,3 +57,20 @@ export function clearAuthCookies() {
 export function getDashboardPath(role: UserRole): string {
   return role === 'admin' ? '/admin/dashboard' : '/player/dashboard'
 }
+
+const LAST_ROLE_KEY = 'chess_last_role'
+
+/**
+ * The portal a dual-role (admin) account picked on its previous login.
+ * Used to pre-select / auto-continue in the login role chooser.
+ */
+export function getLastRoleChoice(): UserRole | null {
+  if (typeof window === 'undefined') return null
+  const value = window.localStorage.getItem(LAST_ROLE_KEY)
+  return value === 'admin' || value === 'player' ? value : null
+}
+
+export function setLastRoleChoice(role: UserRole) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LAST_ROLE_KEY, role)
+}

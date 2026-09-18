@@ -440,7 +440,7 @@ FOR EACH competition:
 
 ### Bot Commands
 Implement parsing + routing for:
-- [ ] `Chess.com <username>` → POST `/users/{id}/register-chess`
+- [ ] `Chess.com <username> <phone>` → POST `/users/{id}/register-chess`
 - [ ] `Stats <username>` → GET `/users?chess_username=`
 - [ ] `reg-chess <username>` → POST `/competitions/{id}/join`
 - [ ] `player-comp` → GET `/competitions/{id}/standings`

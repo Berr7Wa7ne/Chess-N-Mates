@@ -153,7 +153,7 @@ export default function PlayerMatchDetailPage() {
               <button
                 type="button"
                 onClick={() => setResultOpen(true)}
-                className="rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
+                className="rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary"
               >
                 Submit result
               </button>

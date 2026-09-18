@@ -581,9 +581,9 @@ If valid:
   "✅ Great! Thanks for introducing yourself!
   
   Now please link your Chess account using:
-  'Chess.com <username>'
+  'Chess.com <username> <phone number>'
   
-  Example: 'Chess.com GrandMaster_Alex'"
+  Example: 'Chess.com GrandMaster_Alex 08012345678'"
 ```
 
 ---

@@ -11,7 +11,12 @@ import {
   AuthSegmented,
   AuthShell,
 } from '@/src/components/auth/auth-shell'
-import { getDashboardPath } from '@/src/lib/auth-storage'
+import { RoleChoiceModal } from '@/src/components/auth/role-choice-modal'
+import {
+  getDashboardPath,
+  getLastRoleChoice,
+  setLastRoleChoice,
+} from '@/src/lib/auth-storage'
 import { normalizeNgPhone } from '@/src/lib/phone'
 import { useLoginUser } from '@/src/hooks/useLoginUser'
 import { useRegisterUser } from '@/src/hooks/useRegisterUser'
@@ -39,6 +44,12 @@ export function AuthForm() {
   const [chessComUsername, setChessComUsername] = useState('')
   const [lichessUsername, setLichessUsername] = useState('')
   const [verificationState, setVerificationState] = useState<VerificationState>('idle')
+  const [roleChoiceOpen, setRoleChoiceOpen] = useState(false)
+  const [roleChoiceStep, setRoleChoiceStep] = useState<'choose' | 'admin-code'>('choose')
+  const [roleChoiceError, setRoleChoiceError] = useState<string | null>(null)
+  const [switchingRole, setSwitchingRole] = useState(false)
+  const [lastRoleHint, setLastRoleHint] = useState<UserRole | null>(null)
+  const [welcomeName, setWelcomeName] = useState('')
 
   useEffect(() => {
     if (searchParams.get('mode') === 'register') {
@@ -81,10 +92,6 @@ export function AuthForm() {
       toast.error('Please enter your password')
       return
     }
-    if (signInAs === 'admin' && !adminCode.trim()) {
-      toast.error('Admin code is required to sign in as admin')
-      return
-    }
 
     const normalized = normalizeNgPhone(phone)
     if (!normalized) {
@@ -93,13 +100,26 @@ export function AuthForm() {
     }
 
     try {
+      // Always sign in on the member portal first — every account can use it
+      // and it needs no admin code. Dual-role (admin) accounts then get a
+      // role chooser before any redirect happens.
       const user = await loginMutation.mutateAsync({
         phone: normalized,
         password,
-        role: signInAs as UserRole,
-        admin_code: signInAs === 'admin' ? adminCode.trim() : undefined,
+        role: 'player',
       })
       toast.success(`Welcome back, ${user.display_name}!`)
+
+      const accountRole = user.account_role ?? user.role
+      if (accountRole === 'admin') {
+        setWelcomeName(user.display_name)
+        setLastRoleHint(getLastRoleChoice())
+        setRoleChoiceStep('choose')
+        setRoleChoiceError(null)
+        setRoleChoiceOpen(true)
+        return
+      }
+
       router.push(getDashboardPath(user.role))
     } catch (error) {
       toast.error(
@@ -109,6 +129,50 @@ export function AuthForm() {
             ? error.message
             : 'Login failed'
       )
+    }
+  }
+
+  function handleMemberPortal() {
+    setLastRoleChoice('player')
+    setRoleChoiceOpen(false)
+    router.push(getDashboardPath('player'))
+  }
+
+  async function handleAdminPortal(e: React.FormEvent) {
+    e.preventDefault()
+    const normalized = normalizeNgPhone(phone)
+    if (!normalized) {
+      setRoleChoiceError('Invalid phone number')
+      return
+    }
+    if (!adminCode.trim()) {
+      setRoleChoiceError('Enter the admin code')
+      return
+    }
+
+    setSwitchingRole(true)
+    setRoleChoiceError(null)
+    try {
+      const user = await loginMutation.mutateAsync({
+        phone: normalized,
+        password,
+        role: 'admin',
+        admin_code: adminCode.trim(),
+      })
+      setLastRoleChoice('admin')
+      setRoleChoiceOpen(false)
+      toast.success(`Admin portal — welcome, ${user.display_name}!`)
+      router.push(getDashboardPath(user.role))
+    } catch (error) {
+      setRoleChoiceError(
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Admin sign-in failed'
+      )
+    } finally {
+      setSwitchingRole(false)
     }
   }
 
@@ -212,14 +276,7 @@ export function AuthForm() {
   const isPending = loginMutation.isPending || registerMutation.isPending
 
   const portalControl = (
-    <AuthField
-      label={mode === 'login' ? 'Enter as' : 'Register as'}
-      hint={
-        mode === 'login'
-          ? 'Admins can also enter as Member to use the player app.'
-          : undefined
-      }
-    >
+    <AuthField label="Register as">
       <AuthSegmented
         value={signInAs}
         onChange={setSignInAs}
@@ -236,7 +293,7 @@ export function AuthForm() {
       title={mode === 'login' ? 'Sign in' : 'Create account'}
       description={
         mode === 'login'
-          ? 'Pick Member or Admin, then use your phone and password.'
+          ? 'Use your phone and password to continue.'
           : 'Join tournaments with your phone number and a password.'
       }
       footer={
@@ -269,8 +326,6 @@ export function AuthForm() {
     >
       {mode === 'login' ? (
         <form onSubmit={handleLogin} className="space-y-4">
-          {portalControl}
-
           <AuthField label="Phone number" hint="+234, 234, or your 10-digit number.">
             <AuthInput
               id="phone"
@@ -293,19 +348,6 @@ export function AuthForm() {
               required
             />
           </AuthField>
-
-          {signInAs === 'admin' && (
-            <AuthField label="Admin code">
-              <AuthInput
-                id="adminCode"
-                type="password"
-                value={adminCode}
-                onChange={(e) => setAdminCode(e.target.value)}
-                autoComplete="off"
-                required
-              />
-            </AuthField>
-          )}
 
           <AuthPrimaryButton type="submit" pending={isPending}>
             {loginMutation.isPending ? (
@@ -464,6 +506,31 @@ export function AuthForm() {
           </AuthPrimaryButton>
         </form>
       )}
+
+      <RoleChoiceModal
+        open={roleChoiceOpen}
+        onOpenChange={(next) => {
+          setRoleChoiceOpen(next)
+          if (!next) setRoleChoiceError(null)
+        }}
+        displayName={welcomeName}
+        lastRole={lastRoleHint}
+        step={roleChoiceStep}
+        pending={switchingRole}
+        error={roleChoiceError}
+        adminCode={adminCode}
+        onAdminCodeChange={setAdminCode}
+        onPickPlayer={handleMemberPortal}
+        onPickAdmin={() => {
+          setRoleChoiceStep('admin-code')
+          setRoleChoiceError(null)
+        }}
+        onSubmitAdminCode={handleAdminPortal}
+        onBack={() => {
+          setRoleChoiceStep('choose')
+          setRoleChoiceError(null)
+        }}
+      />
     </AuthShell>
   )
 }

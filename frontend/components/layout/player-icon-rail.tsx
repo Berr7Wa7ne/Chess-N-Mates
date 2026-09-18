@@ -59,7 +59,7 @@ export function PlayerIconRail() {
                 className={cn(
                   "flex size-10 items-center justify-center rounded-xl transition-all duration-150 ease-out",
                   isActive
-                    ? "bg-accent-lime text-text-primary"
+                    ? "bg-accent-gold text-text-primary"
                     : "text-white/45 hover:text-white/80"
                 )}
               >
@@ -84,7 +84,7 @@ export function PlayerIconRail() {
               <button
                 type="button"
                 aria-label="Settings"
-                className="flex size-10 items-center justify-center rounded-xl text-white/45 transition-all duration-150 ease-out hover:text-white/80 data-[state=open]:bg-accent-lime data-[state=open]:text-text-primary"
+                className="flex size-10 items-center justify-center rounded-xl text-white/45 transition-all duration-150 ease-out hover:text-white/80 data-[state=open]:bg-accent-gold data-[state=open]:text-text-primary"
               >
                 <Settings className="size-5" strokeWidth={1.75} />
               </button>

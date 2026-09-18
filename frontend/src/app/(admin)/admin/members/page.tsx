@@ -165,7 +165,7 @@ export default function MembersPage() {
               className={cn(
                 "rounded-2xl px-4 py-3.5 text-left text-sm font-semibold transition-colors",
                 filter === option.value
-                  ? "bg-accent-lime text-text-primary"
+                  ? "bg-accent-gold text-text-primary"
                   : "bg-bg-panel-light text-text-primary hover:bg-black/[0.04]"
               )}
             >

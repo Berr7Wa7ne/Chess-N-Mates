@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -43,6 +44,20 @@ export function AdminIconRail({ onOpenRules }: { onOpenRules?: () => void }) {
 
   return (
     <aside className="hidden w-[72px] shrink-0 flex-col items-center self-stretch rounded-l-[32px] bg-bg-panel-dark py-8 md:flex">
+      <Link
+        href="/admin/dashboard"
+        aria-label="Chess N Mates home"
+        className="mb-6 flex shrink-0 items-center justify-center"
+      >
+        <Image
+          src="/latest-app-logo.png"
+          alt="Chess N Mates crest"
+          width={48}
+          height={48}
+          className="h-12 w-12 object-contain"
+          priority
+        />
+      </Link>
       <nav className="flex flex-1 flex-col items-center justify-between gap-2 py-2">
         <div className="flex flex-col items-center gap-5">
           {navItems.map((item) => {
@@ -57,7 +72,7 @@ export function AdminIconRail({ onOpenRules }: { onOpenRules?: () => void }) {
                 className={cn(
                   "flex size-10 items-center justify-center rounded-xl transition-all duration-150 ease-out",
                   isActive
-                    ? "bg-accent-lime text-text-primary"
+                    ? "bg-accent-gold text-text-primary"
                     : "text-white/45 hover:text-white/80"
                 )}
               >
@@ -94,7 +109,7 @@ export function AdminIconRail({ onOpenRules }: { onOpenRules?: () => void }) {
               <button
                 type="button"
                 aria-label="Settings"
-                className="flex size-10 items-center justify-center rounded-xl text-white/45 transition-all duration-150 ease-out hover:text-white/80 data-[state=open]:bg-accent-lime data-[state=open]:text-text-primary"
+                className="flex size-10 items-center justify-center rounded-xl text-white/45 transition-all duration-150 ease-out hover:text-white/80 data-[state=open]:bg-accent-gold data-[state=open]:text-text-primary"
               >
                 <Settings className="size-5" strokeWidth={1.75} />
               </button>

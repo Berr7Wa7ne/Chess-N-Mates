@@ -1530,7 +1530,7 @@ Rank  Player      Score  Wins  Draws  Losses  ELO
 
 | WhatsApp Command | HTTP Method | API Endpoint | Payload |
 |---|---|---|---|
-| `Chess.com <username>` | POST | `/users/{id}/register-chess` | `{chess_username, chess_platform: "chess.com"}` |
+| `Chess.com <username> <phone>` | POST | `/users/{id}/register-chess` | `{chess_username, chess_platform: "chess.com", phone}` |
 | `Stats <username>` | GET | `/users?chess_username=<username>` | - |
 | `reg-chess <username>` | POST | `/competitions/{id}/join` | `{user_id}` |
 | `player-comp` | GET | `/competitions/{id}/standings` | - |

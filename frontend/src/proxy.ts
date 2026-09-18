@@ -14,7 +14,7 @@ function getDashboardPath(role: UserRole) {
   return role === 'admin' ? '/admin/dashboard' : '/player/dashboard'
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthenticated = request.cookies.get('chess_auth')?.value === '1'
   const role = request.cookies.get('chess_role')?.value as UserRole | undefined

@@ -38,14 +38,14 @@ export function AdminBottomNav() {
               className={cn(
                 "flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-medium transition-colors",
                 isActive
-                  ? "text-accent-lime"
+                  ? "text-accent-gold"
                   : "text-white/45 active:text-white/80"
               )}
             >
               <span
                 className={cn(
                   "flex size-9 items-center justify-center rounded-xl",
-                  isActive && "bg-accent-lime text-text-primary"
+                  isActive && "bg-accent-gold text-text-primary"
                 )}
               >
                 <item.icon

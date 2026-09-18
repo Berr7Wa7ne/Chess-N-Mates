@@ -10,8 +10,8 @@
   --bg-panel-light: #f7f7f5;
   --bg-panel-dark: #141414;
   --bg-stat-tile: #1e1e1e;
-  --accent-lime: #c6ff3d;
-  --accent-lime-dim: #9fe62e;
+  --accent-gold: #D36802;
+  --accent-gold-dim: #B85A02;
   --text-primary: #111111;
   --text-primary-inverse: #ffffff;
   --text-secondary: #7a7a78;
@@ -119,8 +119,8 @@
   --color-bg-panel-light: var(--bg-panel-light);
   --color-bg-panel-dark: var(--bg-panel-dark);
   --color-bg-stat-tile: var(--bg-stat-tile);
-  --color-accent-lime: var(--accent-lime);
-  --color-accent-lime-dim: var(--accent-lime-dim);
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-gold-dim: var(--accent-gold-dim);
   --color-text-primary: var(--text-primary);
   --color-text-primary-inverse: var(--text-primary-inverse);
   --color-text-secondary: var(--text-secondary);

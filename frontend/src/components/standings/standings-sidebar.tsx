@@ -1,10 +1,13 @@
 'use client'
 
 import { Download, Info } from 'lucide-react'
-import domtoimage from 'dom-to-image-more'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { downloadStandingsImage } from '@/src/lib/standings-export'
+import { ApiError } from '@/src/types/api'
 import type { StandingEntry, TournamentType } from '@/src/types/competition'
 
 interface StandingsSidebarProps {
@@ -22,17 +25,21 @@ export function StandingsSidebar({
 }: StandingsSidebarProps) {
   const hasByes = standings.some((s) => s.byes > 0)
 
-  async function handleDownloadJpg() {
-    const el = document.getElementById('standings-sidebar-content')
-    if (!el) return
+  async function handleDownloadStandings() {
+    if (standings.length === 0) {
+      toast.error('No standings to download')
+      return
+    }
     try {
-      const dataUrl = await domtoimage.toJpeg(el, { bgcolor: '#ffffff', quality: 0.95 })
-      const link = document.createElement('a')
-      link.download = `${competitionName}-standings.jpg`
-      link.href = dataUrl
-      link.click()
-    } catch (err) {
-      console.error('Failed to export standings image', err)
+      await downloadStandingsImage({
+        competitionName,
+        tournamentType,
+        standings,
+        format: 'png',
+      })
+      toast.success('Standings downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download standings')
     }
   }
 
@@ -40,13 +47,20 @@ export function StandingsSidebar({
     <div className="sticky top-6 self-start">
       <Card className="rounded-2xl shadow-sm">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-base">🏆</span>
+              <img
+                src="/trophy-gold.svg"
+                alt="Trophy"
+                style={{ width: 20, height: 20, objectFit: 'contain' }}
+              />
               <span className="font-semibold text-sm">LIVE STANDINGS</span>
             </div>
-            <button onClick={handleDownloadJpg} title="Download standings" type="button">
-              <Download className="size-4 text-muted-foreground hover:text-foreground transition-colors" />
+            <button
+              onClick={handleDownloadStandings}
+              disabled={standings.length === 0}
+            >
+              <Download className="size-5" />
             </button>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">Updates as results come in</p>

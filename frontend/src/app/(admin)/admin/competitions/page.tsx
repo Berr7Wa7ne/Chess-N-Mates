@@ -157,13 +157,13 @@ export default function AdminCompetitionsPage() {
               <li key={competition.id}>
                 <Link
                   href={`/admin/competitions/${competition.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-bg-stat-tile px-4 py-3 transition-colors hover:border-accent-lime/40"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-bg-stat-tile px-4 py-3 transition-colors hover:border-accent-gold/40"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-white">
                       {competition.name}
                       {competition.is_featured ? (
-                        <span className="ml-2 text-[11px] font-bold text-accent-lime">
+                        <span className="ml-2 text-[11px] font-bold text-accent-gold">
                           Featured
                         </span>
                       ) : null}
@@ -173,7 +173,7 @@ export default function AdminCompetitionsPage() {
                       {competition.participant_count ?? 0} players
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-lg bg-accent-lime px-3 py-1.5 text-xs font-bold text-text-primary">
+                  <span className="shrink-0 rounded-lg bg-accent-gold px-3 py-1.5 text-xs font-bold text-text-primary">
                     Manage
                   </span>
                 </Link>
@@ -209,7 +209,7 @@ export default function AdminCompetitionsPage() {
             <p className="text-sm font-medium text-text-secondary">No competitions yet</p>
             <Link
               href="/admin/competitions/new"
-              className="rounded-xl bg-accent-lime px-4 py-2.5 text-sm font-bold text-text-primary"
+              className="rounded-xl bg-accent-gold px-4 py-2.5 text-sm font-bold text-text-primary"
             >
               Create competition
             </Link>
@@ -341,7 +341,7 @@ export default function AdminCompetitionsPage() {
                   className={cn(
                     "rounded-xl px-3 py-2 text-sm font-semibold",
                     typeFilter === value
-                      ? "bg-accent-lime text-text-primary"
+                      ? "bg-accent-gold text-text-primary"
                       : "bg-bg-panel-light text-text-secondary"
                   )}
                 >
@@ -369,7 +369,7 @@ export default function AdminCompetitionsPage() {
                   className={cn(
                     "rounded-xl px-3 py-2 text-sm font-semibold",
                     statusFilter === value
-                      ? "bg-accent-lime text-text-primary"
+                      ? "bg-accent-gold text-text-primary"
                       : "bg-bg-panel-light text-text-secondary"
                   )}
                 >

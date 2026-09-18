@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 import { cn } from '@/lib/utils'
 
 export function AuthShell({
@@ -15,7 +17,15 @@ export function AuthShell({
     <div className="flex min-h-dvh items-center justify-center bg-bg-page p-0 sm:p-5">
       <div className="w-full max-w-md overflow-hidden rounded-none bg-bg-shell shadow-sm sm:rounded-[32px]">
         <div className="bg-bg-panel-dark px-5 py-8 text-text-primary-inverse sm:px-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-lime">
+          <Image
+            src="/latest-app-logo.png"
+            alt="Chess N Mates crest"
+            width={56}
+            height={56}
+            className="mb-3 h-14 w-auto object-contain"
+            priority
+          />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-gold">
             Chess-N-Mates
           </p>
           <h1 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
@@ -107,7 +117,7 @@ export function AuthPrimaryButton({
       {...props}
       disabled={props.disabled || pending}
       className={cn(
-        'inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-lime text-sm font-bold text-text-primary transition-opacity disabled:opacity-60',
+        'inline-flex h-12 w-full items-center justify-center rounded-xl bg-accent-gold text-sm font-bold text-text-primary transition-opacity disabled:opacity-60',
         props.className
       )}
     >

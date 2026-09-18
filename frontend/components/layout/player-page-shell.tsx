@@ -5,17 +5,20 @@ export function PlayerPageShell({
   children,
   className,
   wide,
+  full,
 }: {
   children: React.ReactNode
   className?: string
   /** Slightly wider for tables */
   wide?: boolean
+  /** No max-width cap (admin dashboard full-width mode) */
+  full?: boolean
 }) {
   return (
     <div
       className={cn(
         "mx-auto flex w-full flex-col gap-5 pb-6",
-        wide ? "max-w-3xl" : "max-w-2xl",
+        full ? "max-w-none" : wide ? "max-w-3xl" : "max-w-2xl",
         className
       )}
     >

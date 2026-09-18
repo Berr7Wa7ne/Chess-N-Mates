@@ -216,7 +216,7 @@ Complete mapping of:
 - ✅ Message templates for responses
 
 **Commands**:
-- `Chess.com <username>` → Register chess account
+- `Chess.com <username> <phone>` → Register chess account
 - `Stats <username>` → View stats (no registration)
 - `reg-chess <username>` → Join tournament
 - `player-comp` → View standings

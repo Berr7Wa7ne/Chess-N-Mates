@@ -2,19 +2,23 @@
 
 import { Download, Loader2, SkipForward, Trophy } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { MatchCard } from '@/src/components/matches/match-card'
 import { RoundNavigation, type MatchFilter } from '@/src/components/matches/round-navigation'
+import { downloadFixturesPdf } from '@/src/lib/fixture-export'
+import { ApiError } from '@/src/types/api'
+import type { Competition } from '@/src/types/competition'
 import type { Match, MatchStatus } from '@/src/types/match'
 
 interface MatchesListProps {
   matches: Match[]
+  competition: Competition
   currentRound: number
   onRoundChange: (round: number) => void
   onViewStandings: () => void
-  onDownloadAll?: () => void
   totalRounds: number
   competitionName: string
   renderMatchActions?: (match: Match) => React.ReactNode
@@ -29,10 +33,10 @@ interface MatchesListProps {
 
 export function MatchesList({
   matches,
+  competition,
   currentRound,
   onRoundChange,
   onViewStandings,
-  onDownloadAll,
   totalRounds,
   competitionName,
   renderMatchActions,
@@ -44,6 +48,20 @@ export function MatchesList({
   onAdvanceRound,
 }: MatchesListProps) {
   const [activeFilter, setActiveFilter] = useState<MatchFilter>('all')
+
+  // Download the full fixture list as a PDF — one round per page (same as admin).
+  async function handleDownloadFixtures() {
+    if (matches.length === 0) {
+      toast.error('No fixtures to download')
+      return
+    }
+    try {
+      await downloadFixturesPdf({ competition, matches })
+      toast.success('Fixtures downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download fixtures')
+    }
+  }
 
   // Unique sorted round numbers from data
   const roundNumbers = [...new Set(matches.map((m) => m.round_number))].sort((a, b) => a - b)
@@ -178,17 +196,15 @@ export function MatchesList({
             View Standings
           </Button>
 
-          {onDownloadAll && (
-            <Button
-              variant="outline"
-              onClick={onDownloadAll}
-              size="sm"
-              className="gap-2 rounded-xl"
-            >
-              <Download className="size-4" />
-              Download All
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={handleDownloadFixtures}
+            size="sm"
+            className="gap-2 rounded-xl"
+          >
+            <Download className="size-4" />
+            Download All Fixtures
+          </Button>
         </div>
       </CardContent>
     </Card>

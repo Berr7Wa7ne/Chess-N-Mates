@@ -127,7 +127,7 @@ router.post('/resolve-match', botController.resolveMatch);
 // NEW: BOT USER REGISTRATION
 // ============================================
 
-// Register a new user (for Chess.com <username> command)
+// Register a new user (for "Chess.com <username> <phone>" command)
 // Creates user in users table without joining a competition
 router.post('/register', botController.registerUser);
 

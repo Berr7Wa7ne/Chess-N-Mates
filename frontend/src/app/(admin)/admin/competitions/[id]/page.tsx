@@ -41,6 +41,8 @@ import {
 } from '@/src/hooks/useCompetitions'
 import { useCompetitionMatches } from '@/src/hooks/useMatches'
 import { ApiError } from '@/src/types/api'
+import { downloadFixturesPdf  } from '@/src/lib/fixture-export'
+import { downloadStandingsImage } from '@/src/lib/standings-export'
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
@@ -127,74 +129,34 @@ export default function AdminCompetitionDetailPage() {
     }
   }
 
-  const handleDownloadFixtures = useCallback(() => {
-    const matches = matchesQuery.data || []
-    if (matches.length === 0) {
-      toast.error('No fixtures to download')
-      return
-    }
-    const csv = [
-      ['Round', 'Player A', 'Player B', 'Status', 'Result'].join(','),
-      ...matches.map((m) =>
-        [
-          m.round_number,
-          m.player_a?.display_name || m.player_a_id,
-          m.is_bye ? 'BYE' : m.player_b?.display_name || m.player_b_id,
-          m.match_status,
-          m.result_winner || 'Pending',
-        ].join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${competition?.name || 'fixtures'}-fixtures.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Fixtures downloaded')
-  }, [matchesQuery.data, competition])
+   const handleDownloadFixtures = useCallback(async () => {
+     const matches = matchesQuery.data || []
+     if (!competition) return
+     if (matches.length === 0) {
+       toast.error('No fixtures to download')
+       return
+     }
+     try {
+       await downloadFixturesPdf({ competition, matches })
+       toast.success('Fixtures downloaded')
+     } catch (error) {
+       toast.error(error instanceof ApiError ? error.message : 'Failed to download fixtures')
+     }
+   }, [matchesQuery.data, competition])
 
-  const handleDownloadStandings = useCallback(() => {
+  const handleDownloadStandings = useCallback(async () => {
     const standings = standingsQuery.data || []
+    if (!competition) return
     if (standings.length === 0) {
       toast.error('No standings to download')
       return
     }
-    const isSwiss = competition?.tournament_type === 'swiss'
-    const headers = isSwiss
-      ? ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'BH', 'BH-C1', 'SB', 'Abs', 'BYE']
-      : ['Rank', 'Player', 'P', 'W', 'D', 'L', 'Pts', 'Abs', 'BYE']
-    const csv = [
-      headers.join(','),
-      ...standings.map((s) =>
-        (isSwiss
-          ? [
-              s.rank,
-              s.display_name,
-              s.played,
-              s.wins,
-              s.draws,
-              s.losses,
-              s.points,
-              s.buchholz ?? '',
-              s.buchholz_cut1 ?? '',
-              s.sonneborn_berger ?? '',
-              s.absences,
-              s.byes,
-            ]
-          : [s.rank, s.display_name, s.played, s.wins, s.draws, s.losses, s.points, s.absences, s.byes]
-        ).join(',')
-      ),
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${competition?.name || 'standings'}-standings.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Standings downloaded')
+    try {
+      await downloadStandingsImage({ competition, standings, format: 'png' })
+      toast.success('Standings downloaded')
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Failed to download standings')
+    }
   }, [standingsQuery.data, competition])
 
   if (!id) {
@@ -284,7 +246,7 @@ export default function AdminCompetitionDetailPage() {
             <p className="mt-2 text-[11px] text-white/40">Status</p>
           </div>
           <div className="rounded-2xl border border-white/5 bg-bg-stat-tile px-3 py-4 text-center">
-            <p className="tabular-nums text-2xl font-extrabold text-accent-lime">
+            <p className="tabular-nums text-2xl font-extrabold text-accent-gold">
               {competition.participant_count ?? 0}
               <span className="text-base text-white/40">/{competition.max_participants}</span>
             </p>
@@ -308,7 +270,7 @@ export default function AdminCompetitionDetailPage() {
           type="button"
           onClick={handleStart}
           disabled={startMutation.isPending}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-lime text-sm font-bold text-text-primary disabled:opacity-60"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent-gold text-sm font-bold text-text-primary disabled:opacity-60"
         >
           {startMutation.isPending ? (
             <Loader2 className="size-4 animate-spin" />
@@ -397,7 +359,7 @@ export default function AdminCompetitionDetailPage() {
             className="mt-2 h-10 w-full rounded-xl bg-bg-panel-light text-sm font-semibold"
             onClick={handleDownloadStandings}
           >
-            Download standings CSV
+            Download standings
           </button>
         </div>
       </AdminContentModal>
