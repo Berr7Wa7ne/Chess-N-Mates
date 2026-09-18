@@ -21,6 +21,7 @@ const {
   fetchParticipantsWithUsers,
   getParticipantCount,
   timestamp,
+  matchDeadlineIso,
 } = require('../utils/competitionHelpers');
 
 /** Persist odds snapshot at most once per 15 minutes per competition (fire-and-forget). */
@@ -79,6 +80,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'rules',
   'round_robin_legs',
   'auto_compute_enabled',
+  'match_deadline_hours',
   'image_url',
   'is_featured',
 ];
@@ -107,6 +109,7 @@ exports.createCompetition = async (req, res) => {
     rules,
     round_robin_legs,
     auto_compute_enabled,
+    match_deadline_hours,
     image_url,
     is_featured,
   } = req.body;
@@ -175,6 +178,10 @@ if (!created_by || !isValidUUID(created_by)) {
       rules: rules ?? [],
       round_robin_legs: round_robin_legs ?? 1,
       auto_compute_enabled: auto_compute_enabled !== false,
+      match_deadline_hours: Math.min(
+        Math.max(Number(match_deadline_hours) || 24, 1),
+        168
+      ),
       image_url: image_url?.trim() || null,
       is_featured: Boolean(is_featured),
       competition_status: 'draft',
@@ -314,7 +321,7 @@ exports.startCompetition = async (req, res) => {
     1
   );
 
-  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const deadlineDate = matchDeadlineIso(competition);
   // RR generates all rounds upfront — only round 1 gets a live deadline
   const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate, { activeRound: 1 });
 
@@ -385,12 +392,15 @@ exports.advanceRound = async (req, res) => {
 
 exports.computeResults = async (req, res) => {
   const { id } = req.params;
-  const ignoreAutoComputeFlag = Boolean(req.body?.force);
 
   try {
+    // Admin Compute: pull Chess.com games and score. Do NOT mass-mark absent
+    // unless explicitly requested — same-day Swiss needs re-clicks as games finish.
+    const markAbsent = req.body?.mark_absent_past_deadline === true;
     const report = await computeCompetition(id, {
-      ignoreAutoComputeFlag: true, // admin button always runs
-      forceAbsentPastDeadline: req.body?.mark_absent_past_deadline !== false,
+      ignoreAutoComputeFlag: true,
+      forceAbsentPastDeadline: markAbsent,
+      looseTimeControl: true,
     });
     res.json({ success: true, data: report });
   } catch (err) {

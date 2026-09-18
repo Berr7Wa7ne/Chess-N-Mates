@@ -1,12 +1,13 @@
 // controllers/botController.js — Bot-specific API endpoints
 const { supabaseAdmin } = require('../config/supabase');
 const { emitWebhook, getWebhookUrl } = require('../services/webhookService');
-const { timestamp } = require('../utils/competitionHelpers');
 const {
+  timestamp,
   getParticipantCount,
   attachParticipantCounts,
   fetchParticipantsWithUsers,
   isRegistrationOpen,
+  matchDeadlineIso,
 } = require('../utils/competitionHelpers');
 const { generateFixtures } = require('../services/fixtureGenerator');
 const { computeStandings } = require('../services/standingsService');
@@ -956,7 +957,7 @@ exports.compBegin = async (req, res) => {
     // Generate fixtures
     const fixtures = generateFixtures(competition, eligible, existingMatches || [], [], 1);
 
-    const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const deadlineDate = matchDeadlineIso(competition);
     const matchRows = fixturesToMatchRows(competition.id, fixtures, 1, deadlineDate, {
       activeRound: 1,
     });
@@ -1133,7 +1134,7 @@ exports.compAdvance = async (req, res) => {
 
     const fixtures = generateFixtures(competition, participants, allMatches || [], completedMatches, nextRound);
 
-    const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const deadlineDate = matchDeadlineIso(competition);
     const matchRows = fixturesToMatchRows(competition.id, fixtures, nextRound, deadlineDate, {
       activeRound: nextRound,
     });

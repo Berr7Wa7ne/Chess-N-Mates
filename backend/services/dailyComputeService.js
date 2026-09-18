@@ -28,18 +28,32 @@ function chessComHandle(user) {
 }
 
 /**
- * Search window for a pairing.
- * - Always search through *now* so late games still score when admin/cron runs.
- * - Prefer (min(deadline, now) − lookback) as `since` — not bulk `created_at`
- *   (RR inserts every round on day one with the same timestamp).
+ * Search window for a pairing (Swiss + RR + same-day).
+ *
+ * - Always search through *now* so admin Compute finds games just finished.
+ * - Prefer match.created_at when the row was opened recently (Swiss / activated RR).
+ * - If created_at is far older than the deadline (bulk RR day-one insert), use
+ *   the deadline window instead.
  */
 function matchSearchWindow(match, now = Date.now()) {
   const deadlineMs = match.deadline ? new Date(match.deadline).getTime() : null;
   const createdMs = match.created_at ? new Date(match.created_at).getTime() : null;
   const pastDeadline = deadlineMs != null && !Number.isNaN(deadlineMs) ? now > deadlineMs : false;
 
+  const STALE_BULK_MS = 36 * 60 * 60 * 1000;
   let sinceMs;
-  if (deadlineMs != null && !Number.isNaN(deadlineMs)) {
+
+  const deadlineLooksRefreshed =
+    deadlineMs != null &&
+    createdMs != null &&
+    !Number.isNaN(deadlineMs) &&
+    !Number.isNaN(createdMs) &&
+    deadlineMs - createdMs > STALE_BULK_MS;
+
+  if (createdMs != null && !Number.isNaN(createdMs) && !deadlineLooksRefreshed) {
+    // Swiss / freshly created round: search from when the pairing was opened
+    sinceMs = createdMs;
+  } else if (deadlineMs != null && !Number.isNaN(deadlineMs)) {
     sinceMs = Math.min(deadlineMs, now) - SEARCH_LOOKBACK_MS;
   } else if (createdMs != null && !Number.isNaN(createdMs)) {
     sinceMs = createdMs;
@@ -255,6 +269,7 @@ async function computeCompetition(competitionId, options = {}) {
         sinceMs,
         untilMs,
         timeControl: competition.time_control || null,
+        looseTimeControl: options.looseTimeControl !== false,
         cache: archiveCache,
         delayMs: 120,
       });

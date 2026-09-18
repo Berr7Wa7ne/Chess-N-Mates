@@ -244,6 +244,9 @@ export function CreateCompetitionForm({
   const [autoComputeEnabled, setAutoComputeEnabled] = useState(
     competition?.auto_compute_enabled !== false
   )
+  const [matchDeadlineHours, setMatchDeadlineHours] = useState(
+    String(competition?.match_deadline_hours ?? 24)
+  )
   const [imageUrl, setImageUrl] = useState(competition?.image_url ?? "")
   const [isFeatured, setIsFeatured] = useState(Boolean(competition?.is_featured))
 
@@ -299,6 +302,7 @@ export function CreateCompetitionForm({
     setPrize(competition.prize ?? "")
     setPlatform(competition.platform ?? "chess.com")
     setAutoComputeEnabled(competition.auto_compute_enabled !== false)
+    setMatchDeadlineHours(String(competition.match_deadline_hours ?? 24))
     setImageUrl(competition.image_url ?? "")
     setIsFeatured(Boolean(competition.is_featured))
     const ml = competition.match_length as MatchLength
@@ -429,6 +433,7 @@ export function CreateCompetitionForm({
       round_robin_legs:
         tournamentType === "round_robin" && matchLength === "double_game" ? 2 : 1,
       auto_compute_enabled: platform === "chess.com" ? autoComputeEnabled : false,
+      match_deadline_hours: Number(matchDeadlineHours) || 24,
       image_url: imageUrl.trim() || null,
       is_featured: isFeatured,
       rules: rules.length > 0 ? rules : undefined,
@@ -752,15 +757,42 @@ export function CreateCompetitionForm({
             </Select>
           </div>
           {platform === "chess.com" && (
-            <div className="flex items-start gap-3 rounded-xl bg-bg-shell px-3 py-3">
-              <Checkbox
-                id="autoCompute"
-                checked={autoComputeEnabled}
-                onCheckedChange={(checked) => setAutoComputeEnabled(checked === true)}
-              />
-              <Label htmlFor="autoCompute" className="cursor-pointer text-sm font-medium">
-                Auto-compute results from Chess.com
-              </Label>
+            <div className="space-y-3 rounded-xl bg-bg-shell px-3 py-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="autoCompute"
+                  checked={autoComputeEnabled}
+                  onCheckedChange={(checked) => setAutoComputeEnabled(checked === true)}
+                />
+                <Label htmlFor="autoCompute" className="cursor-pointer text-sm font-medium">
+                  Auto-compute results from Chess.com
+                </Label>
+              </div>
+              {autoComputeEnabled && (
+                <div className="space-y-2 pl-7">
+                  <Label htmlFor="matchDeadlineHours" className="text-sm">
+                    Round time limit
+                  </Label>
+                  <Select value={matchDeadlineHours} onValueChange={setMatchDeadlineHours}>
+                    <SelectTrigger id="matchDeadlineHours" className="h-11 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 hour (same-day Swiss)</SelectItem>
+                      <SelectItem value="2">2 hours (same-day)</SelectItem>
+                      <SelectItem value="3">3 hours</SelectItem>
+                      <SelectItem value="4">4 hours</SelectItem>
+                      <SelectItem value="6">6 hours</SelectItem>
+                      <SelectItem value="12">12 hours</SelectItem>
+                      <SelectItem value="24">24 hours (default)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    After each round, click Compute results to pull finished Chess.com games and
+                    open the next round when all pairings are scored.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <div className="space-y-2">
@@ -1015,7 +1047,9 @@ export function CreateCompetitionForm({
           <li className="flex items-center gap-3">
             <ListChecks className="size-4 text-text-secondary" />
             {platform}
-            {platform === "chess.com" && autoComputeEnabled ? " · auto-compute on" : ""}
+            {platform === "chess.com" && autoComputeEnabled
+              ? ` · auto-compute · ${matchDeadlineHours}h rounds`
+              : ""}
             {isFeatured ? " · featured" : ""}
           </li>
           {rules.length ? (

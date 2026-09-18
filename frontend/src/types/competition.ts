@@ -25,6 +25,8 @@ export interface Competition {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  /** Hours each round stays open (1–2 for same-day events). Default 24. */
+  match_deadline_hours?: number
   image_url?: string | null
   is_featured?: boolean
 
@@ -70,6 +72,7 @@ export interface CreateCompetitionPayload {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  match_deadline_hours?: number
   image_url?: string | null
   is_featured?: boolean
 }
@@ -97,6 +100,7 @@ export interface UpdateCompetitionPayload {
   rules?: string[]
   round_robin_legs?: number
   auto_compute_enabled?: boolean
+  match_deadline_hours?: number
   image_url?: string | null
   is_featured?: boolean
 }
@@ -110,6 +114,11 @@ export interface ComputeResultsReport {
   skipped: number
   advanced: boolean
   advance_action?: string | null
+  advance?: {
+    current_round?: number
+    action?: string
+    fixtures_generated?: number
+  }
   errors: Array<{ message?: string; match_id?: string; competition_id?: string }>
   match_results?: Array<{
     match_id: string

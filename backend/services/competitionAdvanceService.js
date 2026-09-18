@@ -10,7 +10,7 @@ const {
   applyByeParticipantUpdates,
   eliminateKnockoutLosers,
 } = require('./tournamentLifecycle');
-const { fetchParticipantsWithUsers, timestamp } = require('../utils/competitionHelpers');
+const { fetchParticipantsWithUsers, timestamp, matchDeadlineIso } = require('../utils/competitionHelpers');
 
 /**
  * Advance an active competition to the next round (or complete it).
@@ -127,7 +127,7 @@ async function advanceCompetitionRound(competitionId, options = {}) {
     nextRound
   );
 
-  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const deadlineDate = matchDeadlineIso(competition);
   const matchRows = fixturesToMatchRows(competitionId, fixtures, nextRound, deadlineDate, {
     activeRound: nextRound,
   });
