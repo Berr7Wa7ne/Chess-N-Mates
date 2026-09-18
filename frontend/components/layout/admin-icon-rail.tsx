@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   AlertTriangle,
+  BookOpen,
   LayoutDashboard,
   LogOut,
   Medal,
@@ -30,7 +31,7 @@ const navItems = [
   { title: "Leaderboard", href: "/admin/leaderboard", icon: Medal },
 ]
 
-export function AdminIconRail() {
+export function AdminIconRail({ onOpenRules }: { onOpenRules?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { logout } = useAuth()
@@ -67,6 +68,18 @@ export function AdminIconRail() {
         </div>
 
         <div className="flex flex-col items-center gap-5">
+          {onOpenRules && (
+            <button
+              type="button"
+              aria-label="App rules"
+              title="App rules"
+              onClick={onOpenRules}
+              className="flex size-10 items-center justify-center rounded-xl text-white/45 transition-all duration-150 ease-out hover:text-white/80"
+            >
+              <BookOpen className="size-5" strokeWidth={1.75} />
+            </button>
+          )}
+
           <button
             type="button"
             aria-label="Refresh"
@@ -97,6 +110,15 @@ export function AdminIconRail() {
                   Dashboard
                 </Link>
               </DropdownMenuItem>
+              {onOpenRules && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={onOpenRules}
+                >
+                  <BookOpen className="mr-2 size-4" />
+                  App rules
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
                 <LogOut className="mr-2 size-4" />
