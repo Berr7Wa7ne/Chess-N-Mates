@@ -11,8 +11,48 @@ const { advanceCompetitionRound } = require('./competitionAdvanceService');
 const { emitWebhook } = require('./webhookService');
 const { timestamp } = require('../utils/competitionHelpers');
 
+/** Look back from deadline (or now) when searching Chess.com archives. */
+const SEARCH_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
 function getScoreHelpers() {
   return require('../controllers/matchesController');
+}
+
+function chessComHandle(user) {
+  if (!user) return null;
+  return (
+    (user.chess_com_username && String(user.chess_com_username).trim()) ||
+    (user.chess_username && String(user.chess_username).trim()) ||
+    null
+  );
+}
+
+/**
+ * Search window for a pairing.
+ * - Always search through *now* so late games still score when admin/cron runs.
+ * - Prefer (min(deadline, now) − lookback) as `since` — not bulk `created_at`
+ *   (RR inserts every round on day one with the same timestamp).
+ */
+function matchSearchWindow(match, now = Date.now()) {
+  const deadlineMs = match.deadline ? new Date(match.deadline).getTime() : null;
+  const createdMs = match.created_at ? new Date(match.created_at).getTime() : null;
+  const pastDeadline = deadlineMs != null && !Number.isNaN(deadlineMs) ? now > deadlineMs : false;
+
+  let sinceMs;
+  if (deadlineMs != null && !Number.isNaN(deadlineMs)) {
+    sinceMs = Math.min(deadlineMs, now) - SEARCH_LOOKBACK_MS;
+  } else if (createdMs != null && !Number.isNaN(createdMs)) {
+    sinceMs = createdMs;
+  } else {
+    sinceMs = now - SEARCH_LOOKBACK_MS;
+  }
+
+  return {
+    sinceMs,
+    untilMs: now,
+    deadlineMs,
+    pastDeadline,
+  };
 }
 
 function emptyReport() {
@@ -185,7 +225,7 @@ async function computeCompetition(competitionId, options = {}) {
   if (userIds.length > 0) {
     const { data } = await supabaseAdmin
       .from('users')
-      .select('id, chess_com_username, display_name')
+      .select('id, chess_com_username, chess_username, display_name')
       .in('id', userIds);
     for (const u of data || []) usersById.set(u.id, u);
   }
@@ -196,8 +236,8 @@ async function computeCompetition(competitionId, options = {}) {
     try {
       const playerA = usersById.get(match.player_a_id);
       const playerB = usersById.get(match.player_b_id);
-      const userA = playerA?.chess_com_username;
-      const userB = playerB?.chess_com_username;
+      const userA = chessComHandle(playerA);
+      const userB = chessComHandle(playerB);
 
       if (!userA || !userB) {
         report.skipped += 1;
@@ -209,13 +249,7 @@ async function computeCompetition(competitionId, options = {}) {
         continue;
       }
 
-      const sinceMs = match.created_at
-        ? new Date(match.created_at).getTime()
-        : now - 48 * 60 * 60 * 1000;
-      const deadlineMs = match.deadline ? new Date(match.deadline).getTime() : null;
-      const pastDeadline = deadlineMs != null ? now > deadlineMs : false;
-      // Search up to deadline (or now if no deadline / still open)
-      const untilMs = deadlineMs != null ? deadlineMs : now;
+      const { sinceMs, untilMs, pastDeadline } = matchSearchWindow(match, now);
 
       const candidates = await findGamesBetweenPlayers(userA, userB, {
         sinceMs,
@@ -254,7 +288,8 @@ async function computeCompetition(competitionId, options = {}) {
         continue;
       }
 
-      if (forceAbsentPastDeadline && pastDeadline) {
+      // Never auto-absent without a deadline (future RR rounds stay open until activated)
+      if (forceAbsentPastDeadline && pastDeadline && match.deadline) {
         await applyBothAbsent(match);
         report.absent += 1;
         report.match_results.push({
@@ -269,7 +304,11 @@ async function computeCompetition(competitionId, options = {}) {
       report.match_results.push({
         match_id: match.id,
         status: 'skipped',
-        reason: pastDeadline ? 'No game found' : 'No game found yet (before deadline)',
+        reason: pastDeadline
+          ? 'No game found'
+          : match.deadline
+            ? 'No game found yet (before deadline)'
+            : 'No game found yet (round window not opened)',
       });
     } catch (err) {
       report.errors.push({
@@ -373,4 +412,6 @@ async function computeAllActive(options = {}) {
 module.exports = {
   computeCompetition,
   computeAllActive,
+  matchSearchWindow,
+  chessComHandle,
 };

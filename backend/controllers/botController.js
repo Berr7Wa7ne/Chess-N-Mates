@@ -957,7 +957,9 @@ exports.compBegin = async (req, res) => {
     const fixtures = generateFixtures(competition, eligible, existingMatches || [], [], 1);
 
     const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const matchRows = fixturesToMatchRows(competition.id, fixtures, 1, deadlineDate);
+    const matchRows = fixturesToMatchRows(competition.id, fixtures, 1, deadlineDate, {
+      activeRound: 1,
+    });
 
     if (matchRows.length > 0) {
       const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -1132,7 +1134,9 @@ exports.compAdvance = async (req, res) => {
     const fixtures = generateFixtures(competition, participants, allMatches || [], completedMatches, nextRound);
 
     const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const matchRows = fixturesToMatchRows(competition.id, fixtures, nextRound, deadlineDate);
+    const matchRows = fixturesToMatchRows(competition.id, fixtures, nextRound, deadlineDate, {
+      activeRound: nextRound,
+    });
 
     if (matchRows.length > 0) {
       const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -1146,6 +1150,15 @@ exports.compAdvance = async (req, res) => {
       competition.id,
       fixtures.filter((f) => f.is_bye)
     );
+
+    // Open (or refresh) the next round's play window for pre-created RR fixtures
+    await supabaseAdmin
+      .from('matches')
+      .update({ deadline: deadlineDate })
+      .eq('competition_id', competition.id)
+      .eq('round_number', nextRound)
+      .eq('is_bye', false)
+      .in('match_status', ['pending', 'ongoing']);
 
     await supabaseAdmin
       .from('competitions')

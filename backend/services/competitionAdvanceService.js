@@ -128,7 +128,9 @@ async function advanceCompetitionRound(competitionId, options = {}) {
   );
 
   const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const matchRows = fixturesToMatchRows(competitionId, fixtures, nextRound, deadlineDate);
+  const matchRows = fixturesToMatchRows(competitionId, fixtures, nextRound, deadlineDate, {
+    activeRound: nextRound,
+  });
 
   if (matchRows.length > 0) {
     const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -142,6 +144,20 @@ async function advanceCompetitionRound(competitionId, options = {}) {
     competitionId,
     fixtures.filter((f) => f.is_bye)
   );
+
+  // Round-robin pre-creates all rounds on start. When advancing, open the next
+  // round's window so Chess.com auto-compute searches the right dates.
+  const { error: openRoundError } = await supabaseAdmin
+    .from('matches')
+    .update({ deadline: deadlineDate })
+    .eq('competition_id', competitionId)
+    .eq('round_number', nextRound)
+    .eq('is_bye', false)
+    .in('match_status', ['pending', 'ongoing']);
+
+  if (openRoundError) {
+    return { success: false, status: 400, error: openRoundError.message };
+  }
 
   await supabaseAdmin
     .from('competitions')

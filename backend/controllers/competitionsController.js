@@ -315,7 +315,8 @@ exports.startCompetition = async (req, res) => {
   );
 
   const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate);
+  // RR generates all rounds upfront — only round 1 gets a live deadline
+  const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate, { activeRound: 1 });
 
   if (matchRows.length > 0) {
     const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
