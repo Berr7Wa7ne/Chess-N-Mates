@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
 import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
-import { buildCommunityLeaderboard } from "@/src/lib/community-leaderboard"
+import { useCommunityLeaderboard } from "@/src/hooks/useCommunityLeaderboard"
 import { queryKeys } from "@/src/lib/query-keys"
 import { userService } from "@/src/services/user.service"
 import type { Competition, StandingEntry } from "@/src/types/competition"
@@ -46,8 +46,9 @@ function isSamePlayer(
 }
 
 /**
- * Dashboard community stats — same tournament pool as the leaderboard
- * (active + completed standings), not only registration records.
+ * Shows the community ELO from the replay engine plus the player record from
+ * the leaderboard. The board only counts competitions from the August 2026
+ * epoch onward, so someone who has not played is not ranked yet.
  */
 export function usePlayerCommunityStats(): PlayerCommunityStats {
   const { currentUser } = useAuth()
@@ -82,6 +83,10 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
   const { byCompetitionId, isLoading: standingsLoading } =
     useCompetitionsStandings(rankingCompetitionIds)
 
+  const { entries: leaderboardEntries, eloByUserId, isLoading: boardLoading } =
+    useCommunityLeaderboard()
+
+
   return useMemo(() => {
     const handles = [
       normalizeHandle(user?.chess_com_username),
@@ -90,11 +95,10 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
       normalizeHandle(user?.display_name),
     ].filter(Boolean)
 
-    const leaderboard = buildCommunityLeaderboard(byCompetitionId)
     const meFromBoard =
       (currentUser &&
-        leaderboard.find((e) => String(e.userId) === String(currentUser.id))) ||
-      leaderboard.find((e) => {
+        leaderboardEntries.find((e) => String(e.userId) === String(currentUser.id))) ||
+      leaderboardEntries.find((e) => {
         const handle = normalizeHandle(e.chessUsername)
         const name = normalizeHandle(e.displayName)
         return handles.some((h) => h === handle || h === name)
@@ -104,8 +108,8 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
     let wins = meFromBoard?.matchWins ?? 0
     let draws = meFromBoard?.matchDraws ?? 0
     let losses = meFromBoard?.matchLosses ?? 0
+    let games = wins + draws + losses
 
-    // Prefer direct standings rows when board match failed (edge cases)
     if (!meFromBoard && currentUser) {
       for (const rows of Object.values(byCompetitionId)) {
         const row = rows.find((r) => isSamePlayer(r, currentUser.id, handles))
@@ -114,9 +118,9 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
         draws += Number(row.draws) || 0
         losses += Number(row.losses) || 0
       }
+      games = wins + draws + losses
     }
 
-    // Last tournament with a standing row (prefer completed → active → newest)
     let lastStanding: StandingEntry | null = null
     let lastTournamentName: string | null = null
     let bestScore = -1
@@ -128,9 +132,9 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
         const competition = competitionsById.get(String(competitionId))
         const statusBoost =
           competition?.competition_status === "completed"
-            ? 2_000_000_000_000
+            ? 2000000000000
             : competition?.competition_status === "active"
-              ? 1_000_000_000_000
+              ? 1000000000000
               : 0
         const time = new Date(
           competition?.end_date ||
@@ -148,15 +152,18 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
     }
 
     const communityElo =
-      lastStanding?.chess_elo ?? user?.chess_elo ?? null
+      currentUser && eloByUserId[String(currentUser.id)] != null
+        ? eloByUserId[String(currentUser.id)]
+        : null
 
-    const games = wins + draws + losses
     const ratio =
       games === 0
-        ? "—"
+        ? "-"
         : losses === 0
           ? wins.toFixed(2)
           : (wins / losses).toFixed(2)
+
+
 
     const displayName =
       meFromBoard?.displayName?.trim() ||
@@ -182,7 +189,7 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
       lastTournamentName,
       isLoading:
         Boolean(currentUser?.id) &&
-        (profileLoading || competitionsLoading || standingsLoading),
+        (profileLoading || competitionsLoading || standingsLoading || boardLoading),
       profileUser: user
         ? {
             chess_com_username: user.chess_com_username,
@@ -198,8 +205,12 @@ export function usePlayerCommunityStats(): PlayerCommunityStats {
     competitionsById,
     competitionsLoading,
     currentUser,
+    eloByUserId,
+    leaderboardEntries,
     profileLoading,
     standingsLoading,
+    boardLoading,
     user,
   ])
 }
+

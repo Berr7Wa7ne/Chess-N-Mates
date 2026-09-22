@@ -74,6 +74,7 @@ export async function downloadStandingsImage(params: DownloadStandingsParams): P
           roundLabel={roundLabel}
           tournamentType={tournamentType}
           standings={standings}
+          participantCount={competition?.participant_count ?? standings.length}
         />
       )
     })

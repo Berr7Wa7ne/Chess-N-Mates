@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge"
 import { PlayerIdentity } from "@/components/shared"
 import { useCommunityLeaderboard } from "@/src/hooks/useCommunityLeaderboard"
 import { useCompetitions } from "@/src/hooks/useCompetitions"
-import { useCompetitionsStandings } from "@/src/hooks/useCompetitionsStandings"
 import { useUserRegistrations } from "@/src/hooks/useParticipants"
 import { useUser } from "@/src/hooks/useUsers"
 import { userService } from "@/src/services/user.service"
@@ -47,21 +46,7 @@ export default function PlayerDetailPage() {
   const [adminCode, setAdminCode] = useState("")
   const [showReset, setShowReset] = useState(false)
 
-  const rankingCompetitionIds = useMemo(
-    () =>
-      (competitions ?? [])
-        .filter((c) => ["active", "completed"].includes(c.competition_status))
-        .map((c) => c.id),
-    [competitions]
-  )
-
-  const { byCompetitionId, isLoading: standingsLoading } =
-    useCompetitionsStandings(rankingCompetitionIds)
-
-  const { entries, isLoading: leaderboardLoading } = useCommunityLeaderboard(
-    byCompetitionId,
-    competitionsLoading || standingsLoading
-  )
+  const { entries, isLoading: leaderboardLoading } = useCommunityLeaderboard()
 
   const standing = entries.find((entry) => String(entry.userId) === String(id))
 
