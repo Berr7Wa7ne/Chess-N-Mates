@@ -5,20 +5,36 @@
 const { POINTS } = require('./tournament/scoring');
 const { getKnockoutLosers } = require('./tournament/knockout');
 
-function fixturesToMatchRows(competitionId, fixtures, roundFallback, deadlineDate) {
+/**
+ * @param {string} competitionId
+ * @param {Array} fixtures
+ * @param {number} roundFallback - used when fixture has no round_number
+ * @param {string|null} deadlineDate - ISO deadline for the *active* round only
+ * @param {{ activeRound?: number }} [options]
+ *   Round-robin inserts all rounds at start; only `activeRound` (default 1)
+ *   gets a live deadline. Later rounds stay null until advance activates them.
+ */
+function fixturesToMatchRows(competitionId, fixtures, roundFallback, deadlineDate, options = {}) {
+  const activeRound = Number(options.activeRound ?? roundFallback ?? 1);
+
   return (fixtures || [])
     .filter((f) => f.player_a_id && f.player_b_id)
-    .map((f) => ({
-      competition_id: competitionId,
-      round_number: f.round_number || roundFallback,
-      player_a_id: f.player_a_id,
-      player_b_id: f.player_b_id,
-      match_status: f.is_bye ? 'completed' : 'pending',
-      is_bye: Boolean(f.is_bye),
-      result_winner: f.is_bye ? 'a' : null,
-      leg: f.leg || 1,
-      deadline: f.is_bye ? null : deadlineDate,
-    }));
+    .map((f) => {
+      const roundNumber = f.round_number || roundFallback;
+      const isActiveRound = Number(roundNumber) === activeRound;
+      return {
+        competition_id: competitionId,
+        round_number: roundNumber,
+        player_a_id: f.player_a_id,
+        player_b_id: f.player_b_id,
+        match_status: f.is_bye ? 'completed' : 'pending',
+        is_bye: Boolean(f.is_bye),
+        result_winner: f.is_bye ? 'a' : null,
+        leg: f.leg || 1,
+        // Future RR rounds: no deadline until the round is opened
+        deadline: f.is_bye || !isActiveRound ? null : deadlineDate,
+      };
+    });
 }
 
 /**

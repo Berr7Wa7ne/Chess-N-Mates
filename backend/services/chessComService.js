@@ -70,7 +70,8 @@ function parseTimeControl(timeControlStr) {
  * @param {string} gameTimeControl - e.g. "600", "300+2" (from chess.com API)
  * @returns {{ valid: boolean, reason?: string }}
  */
-function validateTimeControl(competitionTimeControl, gameTimeClass, gameTimeControl) {
+function validateTimeControl(competitionTimeControl, gameTimeClass, gameTimeControl, options = {}) {
+  const loose = Boolean(options.loose);
   const compParsed = parseTimeControl(competitionTimeControl)
   if (!compParsed) {
     return { valid: false, reason: 'Competition time control is not in a recognized format' }
@@ -109,11 +110,15 @@ function validateTimeControl(competitionTimeControl, gameTimeClass, gameTimeCont
     }
   }
 
-  // If game has a time_control value, compare directly
+  // If game has a time_control value, compare directly (unless loose class-only match)
   if (gameTimeControl) {
     const gameParsed = parseTimeControl(gameTimeControl)
     if (gameParsed && !gameParsed.isDaily) {
       if (gameParsed.baseSeconds !== compParsed.baseSeconds || gameParsed.increment !== compParsed.increment) {
+        if (loose) {
+          // Same-day / admin compute: accept any game in the right speed class
+          return { valid: true }
+        }
         return {
           valid: false,
           reason: `Game time control (${gameTimeControl}) does not match competition time control (${competitionTimeControl})`,
@@ -418,6 +423,7 @@ async function findGamesBetweenPlayers(userA, userB, options = {}) {
     sinceMs = 0,
     untilMs = Date.now(),
     timeControl = null,
+    looseTimeControl = false,
     cache = null,
     delayMs = 150,
   } = options
@@ -446,7 +452,9 @@ async function findGamesBetweenPlayers(userA, userB, options = {}) {
     if (endTime && (endTime < sinceSec || endTime > untilSec)) continue
 
     if (timeControl) {
-      const tc = validateTimeControl(timeControl, game.time_class, game.time_control)
+      const tc = validateTimeControl(timeControl, game.time_class, game.time_control, {
+        loose: looseTimeControl,
+      })
       if (!tc.valid) continue
     }
 
@@ -457,7 +465,7 @@ async function findGamesBetweenPlayers(userA, userB, options = {}) {
     if (!url) continue
 
     const existing = byUrl.get(url)
-    if (!existing || endTime < existing.end_time) {
+    if (!existing || endTime > existing.end_time) {
       byUrl.set(url, {
         url,
         end_time: endTime,
@@ -475,7 +483,7 @@ async function findGamesBetweenPlayers(userA, userB, options = {}) {
  * Resolve candidates into a clear auto-score decision.
  * - 0 → none
  * - 1 → auto
- * - many same result → earliest
+ * - many same result → latest (same-day: the game they just finished)
  * - conflicting results → needs_review
  */
 function resolveGameCandidates(candidates) {
@@ -491,7 +499,7 @@ function resolveGameCandidates(candidates) {
 
   const results = new Set(sorted.map((c) => c.result_winner))
   if (results.size === 1) {
-    return { decision: 'auto', game: sorted[0], candidates: sorted }
+    return { decision: 'auto', game: sorted[sorted.length - 1], candidates: sorted }
   }
 
   return { decision: 'needs_review', game: null, candidates: sorted }

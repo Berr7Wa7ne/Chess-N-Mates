@@ -13,6 +13,7 @@ router.patch('/:id', competitionsController.updateCompetition);
 router.post('/:id/start', competitionsController.startCompetition);
 router.post('/:id/advance-round', competitionsController.advanceRound);
 router.post('/:id/compute-results', competitionsController.computeResults);
+router.get('/:id/compute-logs', competitionsController.getComputeLogs);
 router.get('/:id/standings', competitionsController.getStandings);
 router.get('/:id/h2h', competitionsController.getCompetitionH2H);
 router.get('/:id/odds-history', competitionsController.getOddsHistory);

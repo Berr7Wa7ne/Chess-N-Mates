@@ -16,11 +16,13 @@ const {
 } = require('../services/tournamentLifecycle');
 const { advanceCompetitionRound } = require('../services/competitionAdvanceService');
 const { computeCompetition } = require('../services/dailyComputeService');
+const { listComputeAuditLogs } = require('../services/computeAuditService');
 const {
   attachParticipantCounts,
   fetchParticipantsWithUsers,
   getParticipantCount,
   timestamp,
+  matchDeadlineIso,
 } = require('../utils/competitionHelpers');
 
 /** Persist odds snapshot at most once per 15 minutes per competition (fire-and-forget). */
@@ -79,6 +81,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'rules',
   'round_robin_legs',
   'auto_compute_enabled',
+  'match_deadline_hours',
   'image_url',
   'is_featured',
 ];
@@ -107,6 +110,7 @@ exports.createCompetition = async (req, res) => {
     rules,
     round_robin_legs,
     auto_compute_enabled,
+    match_deadline_hours,
     image_url,
     is_featured,
   } = req.body;
@@ -175,6 +179,10 @@ if (!created_by || !isValidUUID(created_by)) {
       rules: rules ?? [],
       round_robin_legs: round_robin_legs ?? 1,
       auto_compute_enabled: auto_compute_enabled !== false,
+      match_deadline_hours: Math.min(
+        Math.max(Number(match_deadline_hours) || 24, 1),
+        168
+      ),
       image_url: image_url?.trim() || null,
       is_featured: Boolean(is_featured),
       competition_status: 'draft',
@@ -314,8 +322,9 @@ exports.startCompetition = async (req, res) => {
     1
   );
 
-  const deadlineDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate);
+  const deadlineDate = matchDeadlineIso(competition);
+  // RR generates all rounds upfront — only round 1 gets a live deadline
+  const matchRows = fixturesToMatchRows(id, fixtures, 1, deadlineDate, { activeRound: 1 });
 
   if (matchRows.length > 0) {
     const { error: matchError } = await supabaseAdmin.from('matches').insert(matchRows);
@@ -384,18 +393,41 @@ exports.advanceRound = async (req, res) => {
 
 exports.computeResults = async (req, res) => {
   const { id } = req.params;
-  const ignoreAutoComputeFlag = Boolean(req.body?.force);
 
   try {
+    // Admin Compute: pull Chess.com games and score. Do NOT mass-mark absent
+    // unless explicitly requested — same-day Swiss needs re-clicks as games finish.
+    const markAbsent = req.body?.mark_absent_past_deadline === true;
     const report = await computeCompetition(id, {
-      ignoreAutoComputeFlag: true, // admin button always runs
-      forceAbsentPastDeadline: req.body?.mark_absent_past_deadline !== false,
+      ignoreAutoComputeFlag: true,
+      forceAbsentPastDeadline: markAbsent,
+      looseTimeControl: true,
+      triggered_by: 'admin',
+      actor_user_id: req.body?.user_id || req.user?.id || null,
     });
     res.json({ success: true, data: report });
   } catch (err) {
     res.status(500).json({
       success: false,
       error: { message: err.message || 'Compute failed' },
+    });
+  }
+};
+
+/** GET /competitions/:id/compute-logs */
+exports.getComputeLogs = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const logs = await listComputeAuditLogs(id, {
+      limit: req.query.limit,
+      offset: req.query.offset,
+      run_id: req.query.run_id,
+    });
+    res.json({ success: true, data: logs });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: { message: err.message || 'Failed to load compute logs' },
     });
   }
 };

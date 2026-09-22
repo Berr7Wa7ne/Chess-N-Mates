@@ -72,10 +72,22 @@ function timestamp() {
   return new Date().toISOString();
 }
 
+/**
+ * Round play window end as ISO string.
+ * Uses competitions.match_deadline_hours (default 24). Same-day events: 1–2.
+ */
+function matchDeadlineIso(competition, fromDate = new Date()) {
+  const raw = Number(competition?.match_deadline_hours);
+  const hours = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 168) : 24;
+  const base = fromDate instanceof Date ? fromDate : new Date(fromDate);
+  return new Date(base.getTime() + hours * 60 * 60 * 1000).toISOString();
+}
+
 module.exports = {
   getParticipantCount,
   attachParticipantCounts,
   fetchParticipantsWithUsers,
   isRegistrationOpen,
   timestamp,
+  matchDeadlineIso,
 };

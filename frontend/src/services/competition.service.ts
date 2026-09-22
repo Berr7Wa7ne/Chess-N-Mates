@@ -10,6 +10,7 @@ import type {
   StandingEntry,
   StartCompetitionResult,
   ComputeResultsReport,
+  ComputeAuditLog,
   UpdateCompetitionPayload,
 } from '@/src/types/competition'
 
@@ -52,10 +53,19 @@ export const competitionService = {
     return httpClient.get<StandingEntry[]>(API_ENDPOINTS.COMPETITIONS.STANDINGS(id))
   },
 
-  computeResults(id: string) {
+  computeResults(id: string, options?: { mark_absent_past_deadline?: boolean }) {
     return httpClient.post<ComputeResultsReport>(
       API_ENDPOINTS.COMPETITIONS.COMPUTE_RESULTS(id),
-      {}
+      {
+        mark_absent_past_deadline: options?.mark_absent_past_deadline === true,
+      }
+    )
+  },
+
+  getComputeLogs(id: string, params?: { limit?: number; offset?: number; run_id?: string }) {
+    return httpClient.get<ComputeAuditLog[]>(
+      API_ENDPOINTS.COMPETITIONS.COMPUTE_LOGS(id),
+      params as SearchParams | undefined
     )
   },
 }

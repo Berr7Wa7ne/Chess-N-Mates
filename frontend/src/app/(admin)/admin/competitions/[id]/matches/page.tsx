@@ -10,6 +10,7 @@ import {
   Download,
   Loader2,
   RefreshCw,
+  ScrollText,
   SkipForward,
   Trophy,
 } from 'lucide-react'
@@ -30,6 +31,7 @@ import { ScoringCard } from '@/src/components/matches/scoring-card'
 import { DoubleLegCard } from '@/src/components/matches/double-leg-card'
 import { StandingsSidebar } from '@/src/components/standings/standings-sidebar'
 import { ChampionModal } from '@/src/components/competitions/champion-modal'
+import { ComputeLogsModal } from '@/src/components/matches/compute-logs-modal'
 import {
   useCompetition,
   useCompetitionStandings,
@@ -55,6 +57,7 @@ export default function AdminCompetitionMatchesPage() {
   const [advancePendingModalOpen, setAdvancePendingModalOpen] = useState(false)
   const [championModalOpen, setChampionModalOpen] = useState(false)
   const [championDismissed, setChampionDismissed] = useState(false)
+  const [computeLogsOpen, setComputeLogsOpen] = useState(false)
 
   const competition = competitionQuery.data
   const matches = matchesQuery.data || []
@@ -118,13 +121,30 @@ export default function AdminCompetitionMatchesPage() {
     try {
       const result = await computeMutation.mutateAsync(id)
       const data = result.data
+      const skippedReasons = (data.match_results || [])
+        .filter((r) => r.status === 'skipped')
+        .map((r) => r.reason)
+        .filter(Boolean)
       const parts = [
-        `${data.scored} scored`,
+        `${data.scored ?? 0} scored from Chess.com`,
         data.needs_review > 0 ? `${data.needs_review} need review` : null,
         data.absent > 0 ? `${data.absent} absent` : null,
-        data.advanced ? 'round advanced' : null,
+        data.skipped > 0 ? `${data.skipped} waiting` : null,
+        data.advanced
+          ? data.advance_action === 'completed'
+            ? 'tournament completed'
+            : 'next round opened'
+          : null,
       ].filter(Boolean)
-      toast.success(`Compute complete: ${parts.join(', ') || 'no changes'}`)
+      if ((data.scored ?? 0) === 0 && !data.advanced) {
+        const hint = skippedReasons[0] || 'No finished Chess.com games found yet for this round'
+        toast.message(`Compute: ${parts.join(', ') || 'no changes'} — ${hint}`)
+      } else {
+        toast.success(`Compute complete: ${parts.join(', ')}`)
+      }
+      if (data.advanced && data.advance?.current_round) {
+        setCurrentRound(data.advance.current_round)
+      }
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'Failed to compute results')
     }
@@ -262,7 +282,18 @@ export default function AdminCompetitionMatchesPage() {
                     ) : (
                       <RefreshCw className="size-4" />
                     )}
-                    Compute results
+                    Compute Chess.com
+                  </Button>
+                )}
+                {competition.platform === 'chess.com' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setComputeLogsOpen(true)}
+                    className="gap-2"
+                  >
+                    <ScrollText className="size-4" />
+                    Compute logs
                   </Button>
                 )}
                 {roundMatches.length > 0 && (
@@ -499,6 +530,13 @@ export default function AdminCompetitionMatchesPage() {
         }}
         winner={winner}
         competitionName={competition?.name || ''}
+      />
+
+      <ComputeLogsModal
+        open={computeLogsOpen}
+        onClose={() => setComputeLogsOpen(false)}
+        competitionId={id}
+        competitionName={competition?.name}
       />
 
       {/* ── Advance with Pending Confirmation Dialog ── */}

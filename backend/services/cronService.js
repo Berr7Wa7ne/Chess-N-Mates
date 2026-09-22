@@ -27,7 +27,7 @@ function startDailyComputeCron() {
     console.log('[cron] Starting daily-compute job…');
     try {
       const { computeAllActive } = require('../services/dailyComputeService');
-      const summary = await computeAllActive();
+      const summary = await computeAllActive({ triggered_by: 'cron' });
       console.log(
         `[cron] daily-compute done: scored=${summary.scored} review=${summary.needs_review} absent=${summary.absent} advanced=${summary.advanced}`
       );
