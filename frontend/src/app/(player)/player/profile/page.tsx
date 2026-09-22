@@ -12,6 +12,7 @@ import {
 } from "@/components/layout/player-page-shell"
 import { useAuth } from "@/src/hooks/useAuth"
 import { useCompetitions, useCompetitionStandings } from "@/src/hooks/useCompetitions"
+import { useCommunityLeaderboard } from "@/src/hooks/useCommunityLeaderboard"
 import { useUserRegistrations } from "@/src/hooks/useParticipants"
 import { queryKeys } from "@/src/lib/query-keys"
 import { userService } from "@/src/services/user.service"
@@ -187,7 +188,8 @@ export default function PlayerProfilePage() {
     )
   }, [user, standingsQuery.data])
 
-  const communityElo = lastStanding?.chess_elo ?? user?.chess_elo ?? null
+  const { eloByUserId } = useCommunityLeaderboard()
+  const communityElo = user?.id ? (eloByUserId[String(user.id)] ?? null) : null
 
   const name = user?.display_name || ""
   const username = user?.chess_username || ""
