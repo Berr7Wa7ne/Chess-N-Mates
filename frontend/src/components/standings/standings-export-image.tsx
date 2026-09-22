@@ -1,23 +1,16 @@
 'use client'
-
 import type { StandingEntry, TournamentType } from '@/src/types/competition'
-
 // ─── Palette (mirrors the fixture export image) ─────────────────────
-
 const GOLD = '#D36802'
 const GOLD_LIGHT = '#F4A93D'
 const GOLD_DARK = '#B4550A'
 const BLACK = '#0B0B0C'
 const MUTED = '#9CA3AF'
-
 const GREEN = '#16a34a'
 const AMBER = '#d97706'
 const RED = '#dc2626'
-
 // ─── Pace — the "story" colours (above / at / below par) ─────────────
-
 type Pace = 'above' | 'at' | 'below'
-
 /**
  * Club scoring is WIN = 2, DRAW = 1, LOSS = 0 (backend/services/tournament/scoring.js),
  * so "par" after N completed games is exactly N points (50% of the max possible).
@@ -31,21 +24,17 @@ function paceOf(row: StandingEntry): Pace {
   if (row.points === row.played) return 'at'
   return 'below'
 }
-
 interface PaceStyle {
   color: string
   tint: string
   label: string
 }
-
 const PACE: Record<Pace, PaceStyle> = {
   above: { color: GREEN, tint: 'rgba(22, 163, 74, 0.10)', label: 'ABOVE PAR' },
   at: { color: AMBER, tint: 'rgba(217, 119, 6, 0.09)', label: 'AT PAR' },
   below: { color: RED, tint: 'rgba(220, 38, 38, 0.10)', label: 'BELOW PAR' },
 }
-
 // ─── Small ornaments (mirror the fixture export image) ───────────────
-
 function ArrowFlourish({ flip }: { flip?: boolean }) {
   return (
     <svg
@@ -59,7 +48,6 @@ function ArrowFlourish({ flip }: { flip?: boolean }) {
     </svg>
   )
 }
-
 function LegendChip({ color, text }: { color: string; text: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -77,15 +65,13 @@ function LegendChip({ color, text }: { color: string; text: string }) {
     </div>
   )
 }
-
 // ─── Table cells ─────────────────────────────────────────────────────
-
 function NumberCell({ value, color, strong }: { value: string | number; color?: string; strong?: boolean }) {
   return (
     <div
       style={{
         textAlign: 'center',
-        fontSize: 19,
+        fontSize: 20,
         fontWeight: strong ? 800 : 700,
         fontVariantNumeric: 'tabular-nums',
         color: color ?? BLACK,
@@ -95,21 +81,20 @@ function NumberCell({ value, color, strong }: { value: string | number; color?: 
     </div>
   )
 }
-
 // ─── Standings row ───────────────────────────────────────────────────
-
 interface StandingsExportRowProps {
   row: StandingEntry
   isSwiss: boolean
-  showWinPct: boolean
+  showBye: boolean
   cols: string
 }
 
-function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportRowProps) {
+function StandingsExportRow({ row, isSwiss, showBye, cols }: StandingsExportRowProps) {
   const pace = paceOf(row)
   const style = PACE[pace]
   const subtitle = row.chess_elo != null ? `ELO ${row.chess_elo}` : row.chess_username || ''
-
+  const absences = row.absences ?? 0
+  const showRed = absences > 0
   return (
     <div
       style={{
@@ -119,7 +104,7 @@ function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportR
         background: style.tint,
         borderBottom: '1px solid #ececec',
         position: 'relative',
-        padding: '12px 20px',
+        padding: '16px 36px 16px 30px',
       }}
     >
       {/* pace accent stripe */}
@@ -133,12 +118,11 @@ function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportR
           background: style.color,
         }}
       />
-
       {/* rank badge: gold → bronze gradient, black number (mirror fixture) */}
       <div
         style={{
-          width: 44,
-          height: 44,
+          width: 52,
+          height: 52,
           borderRadius: 12,
           background: `linear-gradient(150deg, ${GOLD_LIGHT} 0%, ${GOLD} 55%, ${GOLD_DARK} 100%)`,
           boxShadow:
@@ -154,17 +138,15 @@ function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportR
       >
         {row.rank}
       </div>
-
       {/* player name + ELO */}
-      <div style={{ minWidth: 0, padding: '0 12px 0 10px' }}>
+      <div style={{ minWidth: 0, padding: '0 16px 0 14px' }}>
         <div
           style={{
             fontSize: 20,
-            fontWeight: 700,
+            fontWeight: 800,
             color: BLACK,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            lineHeight: 1.25,
+            overflowWrap: 'break-word',
           }}
         >
           {row.display_name}
@@ -173,14 +155,12 @@ function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportR
           <div style={{ fontSize: 14, fontWeight: 600, color: MUTED, marginTop: 2 }}>{subtitle}</div>
         )}
       </div>
-
       <NumberCell value={row.played} />
       <NumberCell value={row.wins} />
-      <NumberCell value={row.draws} />
-      <NumberCell value={row.losses} />
+      <NumberCell value={row.draws} color={AMBER} />
+      <NumberCell value={row.losses} color={RED} />
       {/* Pts — coloured to mirror the row's pace story */}
       <NumberCell value={row.points} color={style.color} strong />
-
       {isSwiss && (
         <>
           <NumberCell value={row.buchholz ?? '—'} />
@@ -188,56 +168,50 @@ function StandingsExportRow({ row, isSwiss, showWinPct, cols }: StandingsExportR
           <NumberCell value={row.sonneborn_berger ?? '—'} />
         </>
       )}
-
       <NumberCell value={row.absences} />
-      <NumberCell value={row.byes} />
-      {showWinPct && (
-        <NumberCell value={row.tournament_win_pct != null ? `${row.tournament_win_pct}%` : '—'} />
-      )}
+      {showBye && <NumberCell value={row.byes ?? 0} />}
     </div>
   )
 }
 // ─── Export poster ───────────────────────────────────────────────────
-
 export interface StandingsExportImageProps {
   competitionName: string
   roundLabel: string
   tournamentType?: TournamentType
   standings: StandingEntry[]
+  participantCount?: number
 }
-
 export function StandingsExportImage({
   competitionName,
   roundLabel,
   tournamentType,
   standings,
+  participantCount,
 }: StandingsExportImageProps) {
   const isSwiss = tournamentType === 'swiss'
-  const showWinPct = standings.some((s) => s.tournament_win_pct != null)
-
+  const count = participantCount ?? standings.length;
+  const hasByeData = standings.some((s) => (s.byes ?? 0) > 0);
+  const showBye = hasByeData || (count % 2 === 1);
   const cols = [
-    '56px',
+    '60px',
     'minmax(0, 1fr)',
-    '46px', // P
-    '46px', // W
-    '46px', // D
-    '46px', // L
-    '62px', // Pts
-    ...(isSwiss ? ['62px', '66px', '62px'] : []), // BH, BH-C1, SB
-    '44px', // Abs
-    '46px', // BYE
-    ...(showWinPct ? ['68px'] : []),
+    '56px',
+    '56px',
+    '56px',
+    '56px',
+    '72px',
+    ...(isSwiss ? ['72px', '76px', '72px'] : []),
+    '56px',
+    ...(showBye ? ['56px'] : []),
   ].join(' ')
-
   const headerCell: React.CSSProperties = {
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: 800,
-    letterSpacing: '1px',
+    letterSpacing: '1.5px',
     color: '#fff',
   }
   const headerCellLeft: React.CSSProperties = { ...headerCell, textAlign: 'left' }
-
   return (
     <div
       style={{
@@ -245,7 +219,7 @@ export function StandingsExportImage({
         width: 1080,
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 1536, // keeps the portrait proportions of the reference (~2:3)
+        minHeight: 1536,
         background: '#ffffff',
         overflow: 'hidden',
         fontFamily: '"Poppins", ui-sans-serif, system-ui, sans-serif',
@@ -261,7 +235,6 @@ export function StandingsExportImage({
           opacity: 0.55,
         }}
       />
-
       {/* Chess pieces — plain <img> (same reason as fixture-export-image: plays well with dom-to-image) */}
       <img
         src="/chesspiece.png"
@@ -292,7 +265,6 @@ export function StandingsExportImage({
           zIndex: 2,
         }}
       />
-
       <div
         style={{
           position: 'relative',
@@ -311,7 +283,6 @@ export function StandingsExportImage({
             style={{ width: 180, height: 180, objectFit: 'contain', margin: '0 auto' }}
           />
         </div>
-
         {/* round label: [trophy] ROUND X [trophy]  +  ◁ STANDINGS ▷ */}
         <div style={{ textAlign: 'center', marginTop: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
@@ -327,7 +298,6 @@ export function StandingsExportImage({
             <ArrowFlourish flip />
           </div>
         </div>
-
         {/* black banner: LIVE STANDINGS · <competition> */}
         <div
           style={{
@@ -338,10 +308,10 @@ export function StandingsExportImage({
             borderRadius: 12,
           }}
         >
-          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.5px', color: '#fff' }}>
+          <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.5px', color: '#fff' }}>
             LIVE STANDINGS&nbsp;·&nbsp;
           </span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: GOLD }}>{competitionName}</span>
+          <span style={{ fontSize: 19, fontWeight: 800, color: GOLD }}>{competitionName}</span>
         </div>
 {/* standings table */}
         <div
@@ -358,7 +328,7 @@ export function StandingsExportImage({
               gridTemplateColumns: cols,
               alignItems: 'center',
               background: '#111',
-              padding: '14px 20px',
+              padding: '16px 20px',
               gap: 0,
             }}
           >
@@ -377,25 +347,19 @@ export function StandingsExportImage({
               </>
             )}
             <div style={headerCell} title="Absences">ABS</div>
-            <div style={headerCell} title="Byes">BYE</div>
-            {showWinPct && (
-              <div style={headerCell} title="Estimated chance of winning this tournament">WIN%</div>
-            )}
+            {showBye && <div style={headerCell} title="Byes">BYE</div>}
           </div>
-
           {standings.map((row, i) => (
             <StandingsExportRow
               key={row.user_id ?? i}
               row={row}
               isSwiss={isSwiss}
-              showWinPct={showWinPct}
+              showBye={showBye}
               cols={cols}
             />
           ))}
         </div>
-
         <div style={{ flex: '1 1 0px' }} />
-
         {/* footer: colour legend + scoring */}
         <div style={{ textAlign: 'center', marginTop: 36, position: 'relative', zIndex: 3 }}>
           <div
