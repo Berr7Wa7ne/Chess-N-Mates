@@ -39,6 +39,9 @@ export function useCompetitionStandings(id: string, enabled = true) {
       return response.data
     },
     enabled: enabled && !!id,
+    // Win% must track live results each round — don't serve a stale Monte Carlo
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   })
 }
 
