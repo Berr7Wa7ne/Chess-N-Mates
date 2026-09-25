@@ -500,10 +500,10 @@ exports.adminScoreMatch = async (req, res) => {
   const { id } = req.params;
   const { result_winner, is_absent, absence_side } = req.body;
 
-  if (!['a', 'b', 'draw'].includes(result_winner)) {
+  if (!['a', 'b', 'draw', 'both'].includes(result_winner)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'result_winner must be a, b, or draw' },
+      error: { message: 'result_winner must be a, b, draw, or both' },
     });
   }
 
