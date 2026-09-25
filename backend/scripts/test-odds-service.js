@@ -29,9 +29,9 @@ function assert(cond, msg) {
 }
 
 const participants = [
-  { user_id: 'u1', participant_status: 'active', users: { display_name: 'Alice', chess_elo: 1700 } },
-  { user_id: 'u2', participant_status: 'active', users: { display_name: 'Bob', chess_elo: 1400 } },
-  { user_id: 'u3', participant_status: 'active', users: { display_name: 'Cara', chess_elo: 1500 } },
+  { user_id: 'u1', participant_status: 'active', users: { display_name: 'Alice', chess_com_rating: 1700 } },
+  { user_id: 'u2', participant_status: 'active', users: { display_name: 'Bob', chess_com_rating: 1400 } },
+  { user_id: 'u3', participant_status: 'active', users: { display_name: 'Cara', chess_com_rating: 1500 } },
 ];
 
 const matches = [
@@ -45,8 +45,8 @@ const matches = [
     result_winner: 'a',
     is_bye: false,
     is_absent: false,
-    player_a: { display_name: 'Alice', chess_elo: 1700 },
-    player_b: { display_name: 'Bob', chess_elo: 1400 },
+    player_a: { display_name: 'Alice', chess_com_rating: 1700, chess_elo: 1000 },
+    player_b: { display_name: 'Bob', chess_com_rating: 1400, chess_elo: 1000 },
   },
   {
     id: 'm2',
@@ -58,8 +58,8 @@ const matches = [
     result_winner: null,
     is_bye: false,
     is_absent: false,
-    player_a: { display_name: 'Cara', chess_elo: 1500 },
-    player_b: { display_name: 'Bob', chess_elo: 1400 },
+    player_a: { display_name: 'Cara', chess_com_rating: 1500, chess_elo: 1000 },
+    player_b: { display_name: 'Bob', chess_com_rating: 1400, chess_elo: 1000 },
   },
 ];
 
