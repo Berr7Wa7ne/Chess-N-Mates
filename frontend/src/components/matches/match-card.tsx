@@ -169,7 +169,7 @@ export function MatchCard({ match, actions }: MatchCardProps) {
         </div>
       </div>
 
-      {/* Win likelihood banter (pending / ongoing) */}
+      {/* Win likelihood (pending / ongoing) */}
       {(match.match_status === 'pending' || match.match_status === 'ongoing') && match.odds && (
         <MatchOddsBanter odds={match.odds} />
       )}
