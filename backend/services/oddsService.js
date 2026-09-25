@@ -54,8 +54,10 @@ function eloOf(playerLike) {
 /**
  * Attach chess_com_rating onto player-like objects (match.player_a/b or participants).
  * Mutates in place for efficiency; returns the same references.
+ * Also write-backs to users.chess_elo when we know the user id, so live
+ * odds stay correct even if an older API process only reads chess_elo.
  */
-async function hydrateChessComRatings(playerLikes, timeControl) {
+async function hydrateChessComRatings(playerLikes, timeControl, options = {}) {
   const list = (playerLikes || []).filter(Boolean);
   if (list.length === 0) return list;
 
@@ -72,15 +74,41 @@ async function hydrateChessComRatings(playerLikes, timeControl) {
     })
   );
 
+  const writeBack = options.writeBack !== false;
+  const pendingWrites = new Map(); // userId → rating
+
   for (let i = 0; i < list.length; i++) {
     const username = usernameByIndex[i];
     const rating = username ? ratingByUser.get(username.toLowerCase()) ?? null : null;
     list[i].chess_com_rating = rating;
+    if (rating != null) {
+      list[i].chess_elo = rating;
+    }
     // Keep nested users in sync for participant-shaped objects
     if (list[i].users && typeof list[i].users === 'object') {
       list[i].users.chess_com_rating = rating;
+      if (rating != null) list[i].users.chess_elo = rating;
+    }
+
+    if (writeBack && rating != null) {
+      const uid = list[i].id || list[i].user_id || list[i].users?.id;
+      if (uid) pendingWrites.set(uid, rating);
     }
   }
+
+  if (writeBack && pendingWrites.size > 0) {
+    try {
+      const { supabaseAdmin } = require('../config/supabase');
+      await Promise.all(
+        [...pendingWrites.entries()].map(([id, chess_elo]) =>
+          supabaseAdmin.from('users').update({ chess_elo }).eq('id', id)
+        )
+      );
+    } catch (err) {
+      console.warn('[odds] chess_elo write-back skipped:', err.message);
+    }
+  }
+
   return list;
 }
 
