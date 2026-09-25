@@ -129,6 +129,14 @@ function applyMatches(statsMap, matches) {
       playerB.points += 1;
       playerA.opponents.push({ id: playerB.user_id, sb: 1 });
       playerB.opponents.push({ id: playerA.user_id, sb: 1 });
+    } else if (match.result_winner === 'both') {
+      // Admin mutual win: both played, both get a win + 2 points
+      playerA.wins += 1;
+      playerA.points += 2;
+      playerB.wins += 1;
+      playerB.points += 2;
+      playerA.opponents.push({ id: playerB.user_id, sb: 2 });
+      playerB.opponents.push({ id: playerA.user_id, sb: 2 });
     }
   }
 
@@ -186,6 +194,9 @@ function headToHeadScore(playerA, playerB, completedMatches) {
     } else if (match.result_winner === 'draw') {
       aScore += 1;
       bScore += 1;
+    } else if (match.result_winner === 'both') {
+      aScore += 2;
+      bScore += 2;
     }
   }
 

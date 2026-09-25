@@ -6,14 +6,12 @@ import type { MatchOdds } from '@/src/types/match'
 interface MatchOddsBanterProps {
   odds?: MatchOdds | null
   className?: string
-  /** Compact bar only (no banter sentence). */
-  compact?: boolean
 }
 
 /**
- * Match win likelihood bar + banter line for pending/ongoing fixtures.
+ * Match win likelihood bar for pending/ongoing fixtures (percentages only).
  */
-export function MatchOddsBanter({ odds, className, compact }: MatchOddsBanterProps) {
+export function MatchOddsBanter({ odds, className }: MatchOddsBanterProps) {
   if (!odds) return null
 
   const aStronger = odds.favorite === 'a'
@@ -53,16 +51,6 @@ export function MatchOddsBanter({ odds, className, compact }: MatchOddsBanterPro
           {odds.win_pct_b}%
         </span>
       </div>
-      {!compact && (
-        <p className="text-[11px] leading-snug text-muted-foreground">{odds.banter}</p>
-      )}
-      {!compact && odds.h2h.played > 0 && (
-        <p className="text-[10px] text-muted-foreground/80">
-          Tournament H2H: {odds.h2h.wins_a}W–{odds.h2h.losses_a}L–{odds.h2h.draws}D
-          <span className="mx-1">·</span>
-          Draw {odds.draw_pct}%
-        </p>
-      )}
     </div>
   )
 }

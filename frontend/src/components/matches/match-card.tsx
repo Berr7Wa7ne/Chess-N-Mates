@@ -77,6 +77,7 @@ function getWinnerLabel(match: Match): string | null {
   if (match.result_winner === 'a') return match.player_a?.display_name || 'Player A'
   if (match.result_winner === 'b') return match.player_b?.display_name || 'Player B'
   if (match.result_winner === 'draw') return 'Draw'
+  if (match.result_winner === 'both') return 'Both win'
   return null
 }
 
@@ -168,7 +169,7 @@ export function MatchCard({ match, actions }: MatchCardProps) {
         </div>
       </div>
 
-      {/* Win likelihood banter (pending / ongoing) */}
+      {/* Win likelihood (pending / ongoing) */}
       {(match.match_status === 'pending' || match.match_status === 'ongoing') && match.odds && (
         <MatchOddsBanter odds={match.odds} />
       )}
