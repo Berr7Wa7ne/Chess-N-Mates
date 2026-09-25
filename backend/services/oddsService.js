@@ -8,7 +8,8 @@
  *
  * Tournament win %:
  *   Monte Carlo over remaining incomplete fixtures, then format-aware standings.
- *   For Swiss/KO rounds not yet paired, remaining rounds are estimated vs field Elo.
+ *   For Swiss rounds not yet paired, remaining rounds are resimulated with
+ *   score-aware Swiss pairing + Elo/H2H (recomputed on every standings fetch).
  *
  * Ratings: prefer live Chess.com ratings (hydrated via hydrateChessComRatings),
  * not the in-app users.chess_elo field.
@@ -361,46 +362,145 @@ function eloByParticipantId(participants) {
 }
 
 /**
- * Soft expected points for Swiss rounds not yet paired.
- * Applied inside each MC trial after simulating known fixtures.
+ * How many Swiss rounds still need pairing beyond the known fixture list.
+ * Known incomplete matches (current round) are simulated separately.
  */
-function softSwissRemainder(participants, competition, eloMap, rng) {
-  const type = competition.tournament_type || 'round_robin';
+function unpairedSwissRoundsAhead(competition, matches) {
   const totalRounds = Number(competition.rounds) || 0;
-  const currentRound = Number(competition.current_round) || 0;
-  const pendingRounds = Math.max(0, totalRounds - currentRound);
-  if (type !== 'swiss' || pendingRounds <= 0) return new Map();
+  if (totalRounds <= 0) return 0;
+  let maxRoundWithFixtures = 0;
+  for (const m of matches || []) {
+    const r = Number(m.round_number) || 0;
+    if (r > maxRoundWithFixtures) maxRoundWithFixtures = r;
+  }
+  // Prefer explicit current_round when fixtures lag; never go below max fixture round
+  const current = Math.max(
+    Number(competition.current_round) || 0,
+    maxRoundWithFixtures
+  );
+  return Math.max(0, totalRounds - current);
+}
 
-  const activeIds = (participants || [])
-    .filter((p) => ['registered', 'active'].includes(p.participant_status))
-    .map((p) => p.user_id);
-  if (activeIds.length < 2) return new Map();
+/**
+ * Fast score-aware Swiss pairing for MC soft rounds (top-vs-bottom within
+ * the remaining pool, rematch avoidance). Not identical to the live pairer
+ * but preserves the key property: leaders meet leaders.
+ */
+function softPairScoreGroups(sortedPlayers, history) {
+  const { hasPlayedBefore } = require('./tournament/scoring');
+  const remaining = [...sortedPlayers];
+  const pairs = [];
 
-  const bonus = new Map(activeIds.map((id) => [id, 0]));
-  for (let r = 0; r < pendingRounds; r++) {
-    const shuffled = [...activeIds];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    for (let i = 0; i + 1 < shuffled.length; i += 2) {
-      const a = shuffled[i];
-      const b = shuffled[i + 1];
-      const probs = matchOutcomeProbabilities(eloMap.get(a) || DEFAULT_ELO, eloMap.get(b) || DEFAULT_ELO, null);
-      const outcome = pickOutcome(probs, rng);
-      if (outcome === 'a') bonus.set(a, bonus.get(a) + 2);
-      else if (outcome === 'b') bonus.set(b, bonus.get(b) + 2);
-      else {
-        bonus.set(a, bonus.get(a) + 1);
-        bonus.set(b, bonus.get(b) + 1);
+  while (remaining.length >= 2) {
+    const a = remaining.shift();
+    let oppIdx = -1;
+    // Prefer opponent from the lower half of what's left (classic Swiss feel)
+    const halfStart = Math.floor(remaining.length / 2);
+    for (let i = remaining.length - 1; i >= halfStart; i--) {
+      if (!hasPlayedBefore(history, a.user_id, remaining[i].user_id)) {
+        oppIdx = i;
+        break;
       }
     }
+    if (oppIdx < 0) {
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        if (!hasPlayedBefore(history, a.user_id, remaining[i].user_id)) {
+          oppIdx = i;
+          break;
+        }
+      }
+    }
+    if (oppIdx < 0) oppIdx = remaining.length - 1;
+    const b = remaining.splice(oppIdx, 1)[0];
+    pairs.push({ player_a_id: a.user_id, player_b_id: b.user_id, is_bye: false });
   }
-  return bonus;
+
+  if (remaining.length === 1) {
+    pairs.push({
+      player_a_id: remaining[0].user_id,
+      player_b_id: remaining[0].user_id,
+      is_bye: true,
+    });
+  }
+  return pairs;
+}
+
+/**
+ * Simulate unpaired future Swiss rounds inside one MC trial.
+ * Score-group pairing so a player far behind cannot soft-luck the title
+ * via random Elo pairings. Match probs include tournament H2H.
+ */
+function simulateFutureSwissRounds({
+  participants,
+  trialMatches,
+  competition,
+  eloMap,
+  rng,
+  futureRoundCount,
+}) {
+  if (futureRoundCount <= 0) return trialMatches;
+
+  const { withLiveScores, isActiveParticipant, sortByScoreAndElo } = require('./tournament/scoring');
+
+  let history = [...trialMatches];
+  const startRound =
+    Math.max(
+      0,
+      ...history.map((m) => Number(m.round_number) || 0),
+      Number(competition.current_round) || 0
+    ) + 1;
+
+  for (let r = 0; r < futureRoundCount; r++) {
+    const roundNumber = startRound + r;
+    const scored = withLiveScores(
+      (participants || []).filter(isActiveParticipant),
+      history
+    ).map((p) => ({
+      ...p,
+      chess_elo: eloMap.get(p.user_id) || eloOf(p.users || p),
+    }));
+    const sorted = sortByScoreAndElo(scored);
+    const pairings = softPairScoreGroups(sorted, history);
+
+    for (const pair of pairings) {
+      if (pair.is_bye) {
+        history.push({
+          id: `soft-bye-${roundNumber}-${pair.player_a_id}`,
+          round_number: roundNumber,
+          player_a_id: pair.player_a_id,
+          player_b_id: pair.player_a_id,
+          is_bye: true,
+          is_absent: false,
+          match_status: 'completed',
+          result_winner: 'a',
+        });
+        continue;
+      }
+
+      const eloA = eloMap.get(pair.player_a_id) || DEFAULT_ELO;
+      const eloB = eloMap.get(pair.player_b_id) || DEFAULT_ELO;
+      const h2h = computeHeadToHead(pair.player_a_id, pair.player_b_id, history);
+      const probs = matchOutcomeProbabilities(eloA, eloB, h2h);
+      history.push({
+        id: `soft-${roundNumber}-${pair.player_a_id}-${pair.player_b_id}`,
+        round_number: roundNumber,
+        player_a_id: pair.player_a_id,
+        player_b_id: pair.player_b_id,
+        is_bye: false,
+        is_absent: false,
+        match_status: 'completed',
+        result_winner: pickOutcome(probs, rng),
+      });
+    }
+  }
+
+  return history;
 }
 
 /**
  * Monte Carlo tournament win probabilities.
+ * Always conditioned on completed results so far; incomplete fixtures + unpaired
+ * future Swiss rounds are resimulated each call (every standings fetch / round).
  * @returns {Map<string, number>} user_id → probability 0..1
  */
 function simulateTournamentWinOdds(participants, matches, competition, options = {}) {
@@ -408,6 +508,7 @@ function simulateTournamentWinOdds(participants, matches, competition, options =
   const tournamentType = competition.tournament_type || 'round_robin';
   const rng = mulberry32(options.seed ?? Date.now() % 1e9);
   const eloMap = eloByParticipantId(participants);
+  const futureSwiss = unpairedSwissRoundsAhead(competition, matches);
 
   const incomplete = (matches || []).filter(
     (m) =>
@@ -430,9 +531,7 @@ function simulateTournamentWinOdds(participants, matches, competition, options =
   });
   const modelById = new Map(matchModels.map((m) => [m.matchId, m]));
 
-  const hasSoftSwiss =
-    (competition.tournament_type || '') === 'swiss' &&
-    Number(competition.rounds || 0) > Number(competition.current_round || 0);
+  const hasSoftSwiss = tournamentType === 'swiss' && futureSwiss > 0;
 
   const winCounts = new Map();
   for (const p of participants || []) {
@@ -446,7 +545,7 @@ function simulateTournamentWinOdds(participants, matches, competition, options =
     if (standings[0]) winCounts.set(standings[0].user_id, sims);
   } else {
     for (let i = 0; i < sims; i++) {
-      const simulated = (matches || []).map((m) => {
+      let simulated = (matches || []).map((m) => {
         const model = modelById.get(m.id);
         if (!model) return m;
         return {
@@ -454,26 +553,22 @@ function simulateTournamentWinOdds(participants, matches, competition, options =
           match_status: 'completed',
           result_winner: pickOutcome(model.probs, rng),
           is_absent: false,
-          is_bye: false,
+          is_bye: Boolean(m.is_bye),
         };
       });
 
-      let standings = computeStandings(participants, simulated, { tournamentType });
-
       if (hasSoftSwiss) {
-        const bonus = softSwissRemainder(participants, competition, eloMap, rng);
-        standings = [...standings]
-          .map((row) => ({
-            ...row,
-            points: row.points + (bonus.get(row.user_id) || 0),
-          }))
-          .sort((a, b) => {
-            if (b.points !== a.points) return b.points - a.points;
-            if (b.wins !== a.wins) return b.wins - a.wins;
-            return (b.chess_elo || 0) - (a.chess_elo || 0);
-          });
+        simulated = simulateFutureSwissRounds({
+          participants,
+          trialMatches: simulated,
+          competition,
+          eloMap,
+          rng,
+          futureRoundCount: futureSwiss,
+        });
       }
 
+      const standings = computeStandings(participants, simulated, { tournamentType });
       const top = standings[0];
       if (top) {
         winCounts.set(top.user_id, (winCounts.get(top.user_id) || 0) + 1);

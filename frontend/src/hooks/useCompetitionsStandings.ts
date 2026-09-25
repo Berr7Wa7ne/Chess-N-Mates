@@ -15,7 +15,8 @@ export function useCompetitionsStandings(competitionIds: string[]) {
         const response = await competitionService.getStandings(id)
         return response.data ?? []
       },
-      staleTime: 60_000,
+      staleTime: 30_000,
+      refetchOnWindowFocus: true,
     })),
   })
 
