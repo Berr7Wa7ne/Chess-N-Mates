@@ -1,5 +1,5 @@
 export type MatchStatus = 'pending' | 'ongoing' | 'result_submitted' | 'completed' | 'disputed' | 'cancelled'
-export type ResultWinner = 'a' | 'b' | 'draw'
+export type ResultWinner = 'a' | 'b' | 'draw' | 'both'
 export type ResultSource = 'manual' | 'player_submit' | 'chess_com_auto' | 'absent_auto'
 
 export interface AutoCandidate {

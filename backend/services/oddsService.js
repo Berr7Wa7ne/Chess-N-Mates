@@ -168,6 +168,12 @@ function computeHeadToHead(playerAId, playerBId, matches) {
       draws += 1;
       pointsFor += 1;
       pointsAgainst += 1;
+    } else if (match.result_winner === 'both') {
+      // Mutual win: counts as a played game; competitively neutral for odds blend
+      outcome = 'draw';
+      draws += 1;
+      pointsFor += 2;
+      pointsAgainst += 2;
     } else if (match.result_winner === 'a') {
       if (aIsA) {
         outcome = 'win';

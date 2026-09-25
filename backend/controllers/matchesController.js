@@ -405,10 +405,10 @@ exports.forceResult = async (req, res) => {
   const { id } = req.params;
   const { result_winner, reason, is_absent, absence_side, chess_game_link } = req.body;
 
-  if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
+  if (!result_winner || !['a', 'b', 'draw', 'both'].includes(result_winner)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'result_winner must be "a", "b", or "draw"' },
+      error: { message: 'result_winner must be "a", "b", "draw", or "both"' },
     });
   }
 
@@ -746,6 +746,25 @@ async function updateParticipantScores(competitionId, match) {
         })
         .eq('id', partB.id);
     }
+  } else if (match.result_winner === 'both') {
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Number(partA.score || 0) + 2,
+          wins: (partA.wins || 0) + 1,
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Number(partB.score || 0) + 2,
+          wins: (partB.wins || 0) + 1,
+        })
+        .eq('id', partB.id);
+    }
   }
 }
 
@@ -883,6 +902,26 @@ async function reverseParticipantScores(competitionId, match) {
         .update({
           score: Math.max(0, Number(partB.score || 0) - 1),
           draws: Math.max(0, (partB.draws || 0) - 1),
+        })
+        .eq('id', partB.id);
+    }
+  } else if (match.result_winner === 'both') {
+    // Previously: both got +2 pts +1 win
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partA.score || 0) - 2),
+          wins: Math.max(0, (partA.wins || 0) - 1),
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partB.score || 0) - 2),
+          wins: Math.max(0, (partB.wins || 0) - 1),
         })
         .eq('id', partB.id);
     }
