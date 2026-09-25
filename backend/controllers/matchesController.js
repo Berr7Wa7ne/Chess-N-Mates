@@ -2,7 +2,10 @@ const { supabase, supabaseAdmin } = require('../config/supabase');
 const { timestamp } = require('../utils/competitionHelpers');
 const { verifyGameAndDetermineWinner } = require('../services/chessComService');
 const { emitWebhook } = require('../services/webhookService');
-const { enrichMatchesWithOdds, computeMatchOdds } = require('../services/oddsService');
+const { enrichMatchesWithOdds, computeMatchOdds, hydrateOddsEntities } = require('../services/oddsService');
+
+const MATCH_PLAYER_SELECT =
+  'id, display_name, chess_username, chess_com_username, chess_elo, chess_platform';
 
 exports.getCompetitionMatches = async (req, res) => {
   const competitionId = req.params.competition_id || req.params.id;
@@ -12,8 +15,8 @@ exports.getCompetitionMatches = async (req, res) => {
     .from('matches')
     .select(`
       *,
-      player_a:player_a_id(id, display_name, chess_username, chess_elo),
-      player_b:player_b_id(id, display_name, chess_username, chess_elo)
+      player_a:player_a_id(${MATCH_PLAYER_SELECT}),
+      player_b:player_b_id(${MATCH_PLAYER_SELECT})
     `)
     .eq('competition_id', competitionId)
     .order('round_number', { ascending: true })
@@ -35,12 +38,23 @@ exports.getCompetitionMatches = async (req, res) => {
       .from('matches')
       .select(`
         *,
-        player_a:player_a_id(id, display_name, chess_username, chess_elo),
-        player_b:player_b_id(id, display_name, chess_username, chess_elo)
+        player_a:player_a_id(${MATCH_PLAYER_SELECT}),
+        player_b:player_b_id(${MATCH_PLAYER_SELECT})
       `)
       .eq('competition_id', competitionId);
     h2hPool = allMatches || data || [];
   }
+
+  const { data: competition } = await supabaseAdmin
+    .from('competitions')
+    .select('time_control')
+    .eq('id', competitionId)
+    .maybeSingle();
+
+  await hydrateOddsEntities({
+    matches: [...(data || []), ...(h2hPool || [])],
+    timeControl: competition?.time_control,
+  });
 
   const enriched = enrichMatchesWithOdds(data || [], h2hPool);
   res.json({ success: true, data: enriched });
@@ -53,8 +67,9 @@ exports.getMatch = async (req, res) => {
     .from('matches')
     .select(`
       *,
-      player_a:player_a_id(id, display_name, chess_username, chess_elo),
-      player_b:player_b_id(id, display_name, chess_username, chess_elo)
+      player_a:player_a_id(${MATCH_PLAYER_SELECT}),
+      player_b:player_b_id(${MATCH_PLAYER_SELECT}),
+      competition:competition_id(id, time_control)
     `)
     .eq('id', id)
     .single();
@@ -65,10 +80,15 @@ exports.getMatch = async (req, res) => {
     .from('matches')
     .select(`
       *,
-      player_a:player_a_id(id, display_name, chess_username, chess_elo),
-      player_b:player_b_id(id, display_name, chess_username, chess_elo)
+      player_a:player_a_id(${MATCH_PLAYER_SELECT}),
+      player_b:player_b_id(${MATCH_PLAYER_SELECT})
     `)
     .eq('competition_id', data.competition_id);
+
+  await hydrateOddsEntities({
+    matches: [data, ...(siblingMatches || [])],
+    timeControl: data.competition?.time_control,
+  });
 
   const odds = computeMatchOdds(data, siblingMatches || [data]);
   res.json({ success: true, data: odds ? { ...data, odds } : data });
@@ -385,10 +405,10 @@ exports.forceResult = async (req, res) => {
   const { id } = req.params;
   const { result_winner, reason, is_absent, absence_side, chess_game_link } = req.body;
 
-  if (!result_winner || !['a', 'b', 'draw'].includes(result_winner)) {
+  if (!result_winner || !['a', 'b', 'draw', 'both'].includes(result_winner)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'result_winner must be "a", "b", or "draw"' },
+      error: { message: 'result_winner must be "a", "b", "draw", or "both"' },
     });
   }
 
@@ -480,10 +500,10 @@ exports.adminScoreMatch = async (req, res) => {
   const { id } = req.params;
   const { result_winner, is_absent, absence_side } = req.body;
 
-  if (!['a', 'b', 'draw'].includes(result_winner)) {
+  if (!['a', 'b', 'draw', 'both'].includes(result_winner)) {
     return res.status(400).json({
       success: false,
-      error: { message: 'result_winner must be a, b, or draw' },
+      error: { message: 'result_winner must be a, b, draw, or both' },
     });
   }
 
@@ -726,6 +746,25 @@ async function updateParticipantScores(competitionId, match) {
         })
         .eq('id', partB.id);
     }
+  } else if (match.result_winner === 'both') {
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Number(partA.score || 0) + 2,
+          wins: (partA.wins || 0) + 1,
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Number(partB.score || 0) + 2,
+          wins: (partB.wins || 0) + 1,
+        })
+        .eq('id', partB.id);
+    }
   }
 }
 
@@ -863,6 +902,26 @@ async function reverseParticipantScores(competitionId, match) {
         .update({
           score: Math.max(0, Number(partB.score || 0) - 1),
           draws: Math.max(0, (partB.draws || 0) - 1),
+        })
+        .eq('id', partB.id);
+    }
+  } else if (match.result_winner === 'both') {
+    // Previously: both got +2 pts +1 win
+    if (partA) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partA.score || 0) - 2),
+          wins: Math.max(0, (partA.wins || 0) - 1),
+        })
+        .eq('id', partA.id);
+    }
+    if (partB) {
+      await supabaseAdmin
+        .from('competition_participants')
+        .update({
+          score: Math.max(0, Number(partB.score || 0) - 2),
+          wins: Math.max(0, (partB.wins || 0) - 1),
         })
         .eq('id', partB.id);
     }

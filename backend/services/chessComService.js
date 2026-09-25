@@ -177,6 +177,79 @@ async function verifyPlayer(username) {
   }
 }
 
+const ratingsCache = new Map() // username → { at, ratings }
+const RATINGS_TTL_MS = 10 * 60 * 1000
+
+/**
+ * Prefer a real Chess.com handle over phone numbers / numeric IDs.
+ */
+function resolveChessComUsername(user) {
+  if (!user) return null
+  const candidates = [
+    user.chess_com_username,
+    user.chess_platform === 'chess.com' ? user.chess_username : null,
+    user.display_name,
+    user.chess_username,
+  ]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean)
+
+  const named = candidates.find((c) => /[a-zA-Z]/.test(c) && !/^\+?\d+$/.test(c))
+  return named || null
+}
+
+/**
+ * Fetch Chess.com published ratings for a username.
+ * @returns {Promise<{ rapid: number|null, blitz: number|null, bullet: number|null }|null>}
+ */
+async function fetchPlayerRatings(username) {
+  if (!username || !String(username).trim()) return null
+  const key = String(username).toLowerCase()
+  const cached = ratingsCache.get(key)
+  if (cached && Date.now() - cached.at < RATINGS_TTL_MS) return cached.ratings
+
+  try {
+    const res = await fetch(`${CHESS_COM_BASE}/player/${encodeURIComponent(key)}/stats`, {
+      headers: { 'User-Agent': 'ChessMates Tournament App' },
+    })
+    if (!res.ok) {
+      ratingsCache.set(key, { at: Date.now(), ratings: null })
+      return null
+    }
+    const data = await res.json()
+    const ratings = {
+      rapid: data.chess_rapid?.last?.rating ?? null,
+      blitz: data.chess_blitz?.last?.rating ?? null,
+      bullet: data.chess_bullet?.last?.rating ?? null,
+    }
+    ratingsCache.set(key, { at: Date.now(), ratings })
+    return ratings
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Pick the Chess.com rating that matches a competition time control.
+ * Falls back: matching class → rapid → blitz → bullet.
+ */
+function ratingForTimeControl(ratings, timeControlStr) {
+  if (!ratings) return null
+  const parsed = parseTimeControl(timeControlStr)
+  let preferred = 'rapid'
+  if (parsed && !parsed.isDaily) {
+    if (parsed.baseSeconds <= 120) preferred = 'bullet'
+    else if (parsed.baseSeconds <= 300) preferred = 'blitz'
+    else preferred = 'rapid'
+  }
+  const order = [preferred, 'rapid', 'blitz', 'bullet']
+  for (const key of order) {
+    const v = ratings[key]
+    if (v != null && Number.isFinite(Number(v)) && Number(v) > 0) return Number(v)
+  }
+  return null
+}
+
 /**
  * chess.com has NO "get game by ID" endpoint.
  * Games are only available via per-player monthly archives:
@@ -516,4 +589,7 @@ module.exports = {
   findGamesBetweenPlayers,
   mapGameToMatchWinner,
   resolveGameCandidates,
+  resolveChessComUsername,
+  fetchPlayerRatings,
+  ratingForTimeControl,
 }

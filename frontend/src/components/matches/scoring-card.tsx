@@ -50,6 +50,7 @@ function ChessPiece({ className = '' }: { className?: string }) {
 function getResultLabel(winner: ResultWinner, match: Match): string {
   if (winner === 'a') return `${match.player_a?.display_name || 'Player A'} wins`
   if (winner === 'b') return `${match.player_b?.display_name || 'Player B'} wins`
+  if (winner === 'both') return 'Both awarded a win (2 pts each)'
   return 'Draw'
 }
 

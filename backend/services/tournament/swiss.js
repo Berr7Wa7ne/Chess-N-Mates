@@ -132,7 +132,10 @@ function tryPairPool(pool, existingMatches) {
 }
 
 /**
- * Pair across floating score groups: merge adjacent groups until even and pairable.
+ * Pair across floating score groups.
+ * Odd / unpairable brackets float ONE player at a time from the next lower
+ * group (FIDE-style), never the entire adjacent group — that would collapse
+ * winners-vs-losers into a single top-half/bottom-half pairing.
  */
 function pairWithFloats(sortedPlayers, existingMatches) {
   const pairs = [];
@@ -148,22 +151,13 @@ function pairWithFloats(sortedPlayers, existingMatches) {
 
     let pool = sortedPlayers.slice(i, j);
 
-    // Grow pool by floating down until even and pairable (or end of list)
-    while (pool.length % 2 !== 0 || tryPairPool(pool, existingMatches) === null) {
-      if (j >= sortedPlayers.length) {
-        // Stuck at end with odd/unpairable — break and let remainder handler deal
-        break;
-      }
-      // Float next player(s) from lower group into this pool
-      const nextScore = Number(sortedPlayers[j].score ?? 0);
-      while (j < sortedPlayers.length && Number(sortedPlayers[j].score ?? 0) === nextScore) {
-        pool.push(sortedPlayers[j]);
-        j += 1;
-      }
-      if (pool.length > sortedPlayers.length) break;
-      // Safety: if pool already includes everyone remaining, stop growing
-      if (j >= sortedPlayers.length) break;
-      // If even and pairable, stop; else continue floating
+    // Float one player at a time until the pool is even and pairable
+    while (
+      (pool.length % 2 !== 0 || tryPairPool(pool, existingMatches) === null) &&
+      j < sortedPlayers.length
+    ) {
+      pool.push(sortedPlayers[j]);
+      j += 1;
       if (pool.length % 2 === 0 && tryPairPool(pool, existingMatches) !== null) break;
     }
 

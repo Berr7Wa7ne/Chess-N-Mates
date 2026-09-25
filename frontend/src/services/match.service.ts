@@ -8,6 +8,7 @@ import type {
   ForceResultPayload,
   ExtendDeadlinePayload,
   MarkAbsentPayload,
+  AdminScorePayload,
 } from '@/src/types/match'
 
 export const matchService = {
@@ -46,7 +47,7 @@ export const matchService = {
     )
   },
 
-  adminScore(id: string, payload: { result_winner: 'a' | 'b' | 'draw' }) {
+  adminScore(id: string, payload: AdminScorePayload) {
     return httpClient.post(API_ENDPOINTS.MATCHES.ADMIN_SCORE(id), payload)
   },
 }

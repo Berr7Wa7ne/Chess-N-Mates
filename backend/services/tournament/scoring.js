@@ -26,6 +26,7 @@ function hasPlayedBefore(matches, playerA, playerB) {
   return (matches || []).some(
     (m) =>
       !m.is_bye &&
+      m.match_status === 'completed' &&
       ((m.player_a_id === playerA && m.player_b_id === playerB) ||
         (m.player_a_id === playerB && m.player_b_id === playerA))
   );
@@ -91,6 +92,13 @@ function computeLiveScores(participants, matches) {
       }
       if (scores.has(match.player_b_id)) {
         scores.set(match.player_b_id, scores.get(match.player_b_id) + POINTS.DRAW);
+      }
+    } else if (match.result_winner === 'both') {
+      if (scores.has(match.player_a_id)) {
+        scores.set(match.player_a_id, scores.get(match.player_a_id) + POINTS.WIN);
+      }
+      if (scores.has(match.player_b_id)) {
+        scores.set(match.player_b_id, scores.get(match.player_b_id) + POINTS.WIN);
       }
     }
   }
