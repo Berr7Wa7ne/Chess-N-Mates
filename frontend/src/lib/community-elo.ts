@@ -22,8 +22,9 @@
  *
  *      winner += swing, loser -= swing
  *
- *  - Draws and bye matches leave ratings unchanged; a both-absent match is not
- *    a result. A default win from an absence counts as a decisive result.
+ *  - Draws, mutual wins (`both`), and bye matches leave ratings unchanged; a
+ *    both-absent match is not a result. A default win from an absence counts as
+ *    a decisive result.
  *
  * The module is intentionally dependency-free so it can be compiled and tested
  * standalone with plain Node (see frontend/scripts/test-community-elo.cjs).
@@ -34,7 +35,7 @@ export interface CommunityMatchInput {
   playerAId: string
   playerBId?: string | null
   matchStatus?: string | null
-  resultWinner?: 'a' | 'b' | 'draw' | null
+  resultWinner?: 'a' | 'b' | 'draw' | 'both' | null
   isBye?: boolean | null
   isAbsent?: boolean | null
   absenceSide?: 'a' | 'b' | 'both' | null
@@ -84,7 +85,7 @@ function resolveResult(
   match: CommunityMatchInput
 ): { winnerId: string; loserId: string } | null {
   if (!isCountableMatch(match)) return null
-  if (match.resultWinner === 'draw') return null
+  if (match.resultWinner === 'draw' || match.resultWinner === 'both') return null
 
   if (match.resultWinner === 'a') {
     return { winnerId: match.playerAId, loserId: match.playerBId as string }
