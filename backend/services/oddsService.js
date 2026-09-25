@@ -1,5 +1,5 @@
 /**
- * Match & tournament win odds from Elo + in-tournament head-to-head.
+ * Match & tournament win odds from Chess.com Elo + in-tournament head-to-head.
  *
  * Match model:
  *   - Base expected score from Elo (standard 400-scale logistic)
@@ -9,9 +9,17 @@
  * Tournament win %:
  *   Monte Carlo over remaining incomplete fixtures, then format-aware standings.
  *   For Swiss/KO rounds not yet paired, remaining rounds are estimated vs field Elo.
+ *
+ * Ratings: prefer live Chess.com ratings (hydrated via hydrateChessComRatings),
+ * not the in-app users.chess_elo field.
  */
 
 const { computeStandings } = require('./standingsService');
+const {
+  resolveChessComUsername,
+  fetchPlayerRatings,
+  ratingForTimeControl,
+} = require('./chessComService');
 
 const DEFAULT_ELO = 1000;
 const H2H_BLEND_MAX = 0.55; // max weight on H2H when many games exist
@@ -19,10 +27,77 @@ const MONTE_CARLO_SIMS = 2500;
 const DRAW_BASE = 0.28;
 const DRAW_DECAY_PER_ELO = 0.00045;
 
+/**
+ * Resolve rating for odds. Prefers Chess.com fields set by hydrateChessComRatings.
+ * Falls back to chess_elo only when no chess_com_* field is present (unit tests /
+ * offline). Once hydrated with chess_com_rating: null, uses DEFAULT_ELO instead
+ * of in-app Elo so odds never treat placeholder club ratings as real.
+ */
 function eloOf(playerLike) {
   if (!playerLike) return DEFAULT_ELO;
+  if (Object.prototype.hasOwnProperty.call(playerLike, 'chess_com_rating')) {
+    const v = Number(playerLike.chess_com_rating);
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_ELO;
+  }
+  const com =
+    playerLike.chess_com_rapid ??
+    playerLike.chess_rapid ??
+    playerLike.ratings?.rapid ??
+    playerLike.ratings?.blitz;
+  if (com != null && Number.isFinite(Number(com)) && Number(com) > 0) {
+    return Number(com);
+  }
   const v = playerLike.chess_elo ?? playerLike.elo;
-  return Number.isFinite(Number(v)) ? Number(v) : DEFAULT_ELO;
+  return Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : DEFAULT_ELO;
+}
+
+/**
+ * Attach chess_com_rating onto player-like objects (match.player_a/b or participants).
+ * Mutates in place for efficiency; returns the same references.
+ */
+async function hydrateChessComRatings(playerLikes, timeControl) {
+  const list = (playerLikes || []).filter(Boolean);
+  if (list.length === 0) return list;
+
+  const usernameByIndex = list.map((p) =>
+    resolveChessComUsername(p.users || p)
+  );
+  const unique = [...new Set(usernameByIndex.filter(Boolean))];
+  const ratingByUser = new Map();
+
+  await Promise.all(
+    unique.map(async (username) => {
+      const ratings = await fetchPlayerRatings(username);
+      ratingByUser.set(username.toLowerCase(), ratingForTimeControl(ratings, timeControl));
+    })
+  );
+
+  for (let i = 0; i < list.length; i++) {
+    const username = usernameByIndex[i];
+    const rating = username ? ratingByUser.get(username.toLowerCase()) ?? null : null;
+    list[i].chess_com_rating = rating;
+    // Keep nested users in sync for participant-shaped objects
+    if (list[i].users && typeof list[i].users === 'object') {
+      list[i].users.chess_com_rating = rating;
+    }
+  }
+  return list;
+}
+
+/**
+ * Hydrate ratings on match player_a/player_b and optional participant list.
+ */
+async function hydrateOddsEntities({ matches, participants, timeControl } = {}) {
+  const players = [];
+  for (const m of matches || []) {
+    if (m.player_a) players.push(m.player_a);
+    if (m.player_b) players.push(m.player_b);
+  }
+  for (const p of participants || []) {
+    players.push(p);
+    if (p.users) players.push(p.users);
+  }
+  await hydrateChessComRatings(players, timeControl);
 }
 
 /** Expected score for A vs B (includes draws as half-points conceptually). */
@@ -491,6 +566,9 @@ module.exports = {
   attachTournamentOdds,
   buildCompetitionH2HMatrix,
   buildOddsSnapshotPayload,
+  hydrateChessComRatings,
+  hydrateOddsEntities,
+  eloOf,
   DEFAULT_ELO,
   MONTE_CARLO_SIMS,
 };

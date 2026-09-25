@@ -7,6 +7,7 @@ const {
   enrichMatchesWithOdds,
   buildOddsSnapshotPayload,
   computeHeadToHead,
+  hydrateOddsEntities,
 } = require('../services/oddsService');
 const { emitWebhook } = require('../services/webhookService');
 const {
@@ -41,6 +42,11 @@ async function maybePersistOddsSnapshot(competition, participants, matches, stan
       if (ageMs < 15 * 60 * 1000) return;
     }
 
+    await hydrateOddsEntities({
+      matches,
+      participants,
+      timeControl: competition.time_control,
+    });
     const withMatchOdds = enrichMatchesWithOdds(matches || [], matches || []);
     const payload = buildOddsSnapshotPayload(standingsWithOdds, withMatchOdds, competition);
     payload.h2h_matrix = buildCompetitionH2HMatrix(participants, matches || []);
@@ -538,6 +544,11 @@ exports.getStandings = async (req, res) => {
     tournamentType: competition.tournament_type,
   });
 
+  await hydrateOddsEntities({
+    matches: matches || [],
+    participants,
+    timeControl: competition.time_control,
+  });
   const withOdds = attachTournamentOdds(standings, participants, matches || [], competition);
 
   // Track over time without blocking the response
