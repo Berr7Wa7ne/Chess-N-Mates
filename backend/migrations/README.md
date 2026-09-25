@@ -85,3 +85,4 @@ After running the migration:
 - [ ] `.env` has `SUPABASE_SERVICE_KEY` set
 - [ ] Backend restarted
 - [ ] Test user registration works without RLS error
+- 
