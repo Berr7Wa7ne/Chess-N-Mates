@@ -416,7 +416,15 @@ function softPairScoreGroups(sortedPlayers, history) {
         }
       }
     }
-    if (oppIdx < 0) oppIdx = remaining.length - 1;
+    // Hard rematch ban: if no fresh opponent, give this player a bye
+    if (oppIdx < 0) {
+      pairs.push({
+        player_a_id: a.user_id,
+        player_b_id: a.user_id,
+        is_bye: true,
+      });
+      continue;
+    }
     const b = remaining.splice(oppIdx, 1)[0];
     pairs.push({ player_a_id: a.user_id, player_b_id: b.user_id, is_bye: false });
   }

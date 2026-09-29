@@ -279,7 +279,7 @@ console.log('Swiss pairing checks\n');
   ok('Odd winner bracket floats one loser (winners play winners)');
 }
 
-// 9. Unpairable rematch forced when everyone already played (4 players complete RR then Swiss)
+// 9. Hard rematch ban: when everyone already met, never rematch — byes instead
 {
   const players = makePlayers(4);
   const history = [
@@ -292,15 +292,48 @@ console.log('Swiss pairing checks\n');
   ];
   const scored = withLiveScores(players, history);
   const pairs = generateSwissPairings(scored, history);
-  assertValidRound(pairs, 4, 'forced rematch');
-  const mustRematch = pairs.filter((p) => !p.is_bye).every((g) =>
-    hasPlayedBefore(history, g.player_a_id, g.player_b_id)
+  const games = pairs.filter((p) => !p.is_bye);
+  assert(
+    games.every((g) => !hasPlayedBefore(history, g.player_a_id, g.player_b_id)),
+    'Hard ban: no rematch games emitted'
   );
-  assert(mustRematch, 'When no fresh opponents left, rematches are allowed');
-  ok('Forced rematch path when no legal new opponents');
+  assert(games.length === 0, 'When no fresh opponents exist, emit byes not rematches');
+  assert(pairs.filter((p) => p.is_bye).length === 4, 'All four get byes when fully played out');
+  ok('Hard rematch ban: byes instead of rematches when no fresh opponents');
 }
 
-// 10. The leading bracket must float PAST a repeat opponent when a fresh one exists
+// 10. Pending fixtures also block rematch (not only completed)
+{
+  const players = makePlayers(4);
+  const history = [
+    {
+      player_a_id: 'p1',
+      player_b_id: 'p2',
+      is_bye: false,
+      match_status: 'pending',
+      result_winner: null,
+    },
+    {
+      player_a_id: 'p3',
+      player_b_id: 'p4',
+      is_bye: false,
+      match_status: 'pending',
+      result_winner: null,
+    },
+  ];
+  // Scores still 0 — R2-style re-pair from same field should not rematch pending R1 pairs
+  const pairs = generateSwissPairings(players, history);
+  const games = pairs.filter((p) => !p.is_bye);
+  for (const g of games) {
+    assert(
+      !hasPlayedBefore(history, g.player_a_id, g.player_b_id),
+      `pending also blocks rematch: ${g.player_a_id} vs ${g.player_b_id}`
+    );
+  }
+  ok('Pending fixtures block rematch the same as completed games');
+}
+
+// 11. The leading bracket must float PAST a repeat opponent when a fresh one exists
 //     (regression: f7197d63-style R5 bug - afangMonster vs EUK2026 in September 2026).
 //     Setup: p1 alone on 4.0; p2..p4 on 2.0 (p2 = highest Elo, already played p1);
 //     p5..p8 on 0.

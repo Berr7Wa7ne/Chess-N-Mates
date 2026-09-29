@@ -22,14 +22,20 @@ function sortByScoreAndElo(participants) {
   });
 }
 
+/**
+ * True if these two players already have (or are scheduled in) a real game.
+ * Counts completed + in-progress fixtures so a pending round still blocks rematch.
+ * Byes and cancelled matches do not count.
+ */
 function hasPlayedBefore(matches, playerA, playerB) {
-  return (matches || []).some(
-    (m) =>
-      !m.is_bye &&
-      m.match_status === 'completed' &&
-      ((m.player_a_id === playerA && m.player_b_id === playerB) ||
-        (m.player_a_id === playerB && m.player_b_id === playerA))
-  );
+  return (matches || []).some((m) => {
+    if (m.is_bye) return false;
+    if (m.match_status === 'cancelled') return false;
+    return (
+      (m.player_a_id === playerA && m.player_b_id === playerB) ||
+      (m.player_a_id === playerB && m.player_b_id === playerA)
+    );
+  });
 }
 
 /** Color balance: +1 white (player_a), -1 black (player_b). Positive = more whites. */
