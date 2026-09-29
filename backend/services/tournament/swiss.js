@@ -37,15 +37,18 @@ function chooseByePlayer(players, existingMatches) {
  * Try to find a perfect matching within `pool` avoiding rematches.
  * Uses backtracking; pool sizes for Swiss rounds are small enough.
  */
-function tryPairPool(pool, existingMatches) {
+function tryPairPool(pool, existingMatches, allowRematch = true) {
   if (pool.length === 0) return [];
   if (pool.length % 2 !== 0) return null;
 
   const ids = pool.map((p) => p.user_id);
   const byId = new Map(pool.map((p) => [p.user_id, p]));
 
-  // Order: attempt higher seeds first (already sorted)
-  function search(remaining) {
+  // Order: attempt higher seeds first (already sorted).
+  // `allowRematchSearch` is false while the caller can still grow the pool: a
+  // matching that only exists because a pair already met must not end the search
+  // early, otherwise the leading bracket settles for a repeat opponent.
+  function search(remaining, allowRematchSearch) {
     if (remaining.length === 0) return [];
     const a = remaining[0];
     const rest = remaining.slice(1);
@@ -77,17 +80,23 @@ function tryPairPool(pool, existingMatches) {
       const isRematch = hasPlayedBefore(existingMatches, a, b);
       if (isRematch) continue;
 
-      const sub = search(next);
+      const sub = search(next, allowRematchSearch);
       if (sub !== null) {
         return [{ a, b }, ...sub];
       }
     }
 
-    // Second pass: allow rematches if unavoidable
+    // Second pass: allow rematches if unavoidable — but only when the caller has
+    // genuinely run out of fresh opponents (allowRematchSearch). Returning a
+    // rematch for a small pool would otherwise stop pairWithFloats from floating
+    // a further player in, and the leading bracket would repeat a meeting that a
+    // larger pool could have avoided.
+    if (!allowRematchSearch) return null;
+
     for (const b of unique) {
       if (!hasPlayedBefore(existingMatches, a, b)) continue;
       const next = rest.filter((id) => id !== b);
-      const sub = search(next);
+      const sub = search(next, allowRematchSearch);
       if (sub !== null) {
         return [{ a, b }, ...sub];
       }
@@ -122,7 +131,7 @@ function tryPairPool(pool, existingMatches) {
     }));
   }
 
-  const result = search(ids);
+  const result = search(ids, allowRematch);
   if (!result) return null;
 
   return result.map(({ a, b }) => ({
@@ -151,17 +160,27 @@ function pairWithFloats(sortedPlayers, existingMatches) {
 
     let pool = sortedPlayers.slice(i, j);
 
-    // Float one player at a time until the pool is even and pairable
+    // Float one player at a time until the pool is even and pairable.
+    // Rematches are rejected while growing the pool (allowRematch = false): a
+    // fresh opponent for the leading bracket almost always exists further down
+    // the field, so settling for a repeat meeting here is the wrong trade.
     while (
-      (pool.length % 2 !== 0 || tryPairPool(pool, existingMatches) === null) &&
+      (pool.length % 2 !== 0 || tryPairPool(pool, existingMatches, false) === null) &&
       j < sortedPlayers.length
     ) {
       pool.push(sortedPlayers[j]);
       j += 1;
-      if (pool.length % 2 === 0 && tryPairPool(pool, existingMatches) !== null) break;
+      if (pool.length % 2 === 0 && tryPairPool(pool, existingMatches, false) !== null) break;
     }
 
-    const paired = tryPairPool(pool, existingMatches);
+    let paired = tryPairPool(pool, existingMatches, false);
+
+    // The field is exhausted and no fresh pairing exists (everyone has already
+    // played everyone) — only now allow rematches, then fall back to greedy.
+    if (!paired && j >= sortedPlayers.length) {
+      paired = tryPairPool(pool, existingMatches, true);
+    }
+
     if (paired) {
       pairs.push(...paired);
       i = j;

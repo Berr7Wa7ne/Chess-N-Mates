@@ -7,6 +7,9 @@
     "start": "node index.js",
     "migrate": "node scripts/run-migrations.js",
     "migrate:chess-com": "node scripts/run-migrations.js add_chess_com_auto_compute.sql",
+    "verify:swap-nccg-123": "node scripts/verify-swap-nccg-123.js",
+    "audit:swiss": "node scripts/audit-swiss-rematches.js",
+    "test:swiss": "node scripts/test-swiss-pairing.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

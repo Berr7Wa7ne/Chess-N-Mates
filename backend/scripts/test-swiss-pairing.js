@@ -300,4 +300,38 @@ console.log('Swiss pairing checks\n');
   ok('Forced rematch path when no legal new opponents');
 }
 
+// 10. The leading bracket must float PAST a repeat opponent when a fresh one exists
+//     (regression: f7197d63-style R5 bug - afangMonster vs EUK2026 in September 2026).
+//     Setup: p1 alone on 4.0; p2..p4 on 2.0 (p2 = highest Elo, already played p1);
+//     p5..p8 on 0.
+{
+  const players = makePlayers(8, { elos: [2500, 2000, 1900, 1800, 1500, 1400, 1300, 1200] });
+  const history = [
+    { player_a_id: 'p1', player_b_id: 'p2', is_bye: false, match_status: 'completed', result_winner: 'a' },
+    { player_a_id: 'p1', player_b_id: 'p3', is_bye: false, match_status: 'completed', result_winner: 'a' },
+    { player_a_id: 'p2', player_b_id: 'p2', is_bye: true, match_status: 'completed', result_winner: 'a' },
+    { player_a_id: 'p3', player_b_id: 'p5', is_bye: false, match_status: 'completed', result_winner: 'a' },
+    { player_a_id: 'p4', player_b_id: 'p6', is_bye: false, match_status: 'completed', result_winner: 'a' },
+  ];
+  // live scores: p1=4, p2/p3/p4=2, p5..p8=0
+  const pairs = generateSwissPairings(players, history);
+  assertValidRound(pairs, 8, 'leader floats past repeat');
+
+  const rematched = pairs.some(
+    (g) => !g.is_bye && hasPlayedBefore(history, g.player_a_id, g.player_b_id)
+  );
+  assert(!rematched, 'leader bracket must not rematch while fresh opponents exist');
+
+  const leaderGame = pairs.find(
+    (g) => !g.is_bye && (g.player_a_id === 'p1' || g.player_b_id === 'p1')
+  );
+  const opponent = leaderGame.player_a_id === 'p1' ? leaderGame.player_b_id : leaderGame.player_a_id;
+  assert(opponent !== 'p2', `leader repeated the only prior opponent (${opponent})`);
+  assert(
+    opponent === 'p3' || opponent === 'p4',
+    `leader should float into the 2.0 group against a fresh opponent, got ${opponent}`
+  );
+  ok('Leader floats past a repeat opponent when a fresh one exists');
+}
+
 console.log(`\nAll ${passed} Swiss pairing checks passed.`);
