@@ -5,9 +5,9 @@
  * - Live scores from completed matches (byes included)
  * - Odd-player bye to lowest eligible player (fewest prior byes)
  * - Score-group pairing with top-half vs bottom-half preference
- * - Hard rematch avoidance when a legal pairing exists
+ * - HARD rematch avoidance — players who already met are never paired again
  * - Color balancing (player_a = white)
- * - Float to adjacent score groups when a bracket is stuck
+ * - Float to adjacent score groups when a bracket cannot be paired rematch-free
  */
 
 const {
@@ -34,58 +34,25 @@ function chooseByePlayer(players, existingMatches) {
 }
 
 /**
- * Try to find a perfect matching within `pool` avoiding rematches.
- * Uses backtracking; pool sizes for Swiss rounds are small enough.
+ * Perfect rematch-free matching within `pool`, or null if impossible.
+ * Never pairs players who have already met.
  */
 function tryPairPool(pool, existingMatches) {
   if (pool.length === 0) return [];
   if (pool.length % 2 !== 0) return null;
 
   const ids = pool.map((p) => p.user_id);
-  const byId = new Map(pool.map((p) => [p.user_id, p]));
 
-  // Order: attempt higher seeds first (already sorted)
   function search(remaining) {
     if (remaining.length === 0) return [];
     const a = remaining[0];
     const rest = remaining.slice(1);
 
-    // Prefer opponents in reverse order (top vs bottom), then any legal
+    // Prefer classic Swiss feel: top vs bottom of the remaining list
     const candidates = [...rest].reverse();
 
-    const ordered = [
-      ...candidates.filter((b) => !hasPlayedBefore(existingMatches, a, b)),
-      ...candidates.filter((b) => hasPlayedBefore(existingMatches, a, b)),
-    ];
-
-    // Deduplicate while preserving order
-    const seen = new Set();
-    const unique = [];
-    for (const b of ordered) {
-      if (seen.has(b)) continue;
-      seen.add(b);
-      unique.push(b);
-    }
-
-    for (const b of unique) {
-      if (hasPlayedBefore(existingMatches, a, b)) {
-        // Only allow rematch if no rematch-free pairing exists at this branch —
-        // try rematch-free first (already ordered), fall through only when needed.
-      }
-      const next = rest.filter((id) => id !== b);
-      // Prefer non-rematch: skip rematch candidates until rematch-free exhausted
-      const isRematch = hasPlayedBefore(existingMatches, a, b);
-      if (isRematch) continue;
-
-      const sub = search(next);
-      if (sub !== null) {
-        return [{ a, b }, ...sub];
-      }
-    }
-
-    // Second pass: allow rematches if unavoidable
-    for (const b of unique) {
-      if (!hasPlayedBefore(existingMatches, a, b)) continue;
+    for (const b of candidates) {
+      if (hasPlayedBefore(existingMatches, a, b)) continue;
       const next = rest.filter((id) => id !== b);
       const sub = search(next);
       if (sub !== null) {
@@ -96,11 +63,10 @@ function tryPairPool(pool, existingMatches) {
     return null;
   }
 
-  // Prefer classic Swiss: pair i with i + n/2 when legal (accelerates search quality)
+  // Fast path: classic i vs i+n/2 when every pair is rematch-free
   const n = ids.length;
   const half = n / 2;
   const preferred = [];
-  const used = new Set();
   let classicOk = true;
 
   for (let i = 0; i < half; i++) {
@@ -111,11 +77,9 @@ function tryPairPool(pool, existingMatches) {
       break;
     }
     preferred.push({ a, b });
-    used.add(a);
-    used.add(b);
   }
 
-  if (classicOk && used.size === n) {
+  if (classicOk) {
     return preferred.map(({ a, b }) => ({
       ...assignColors(a, b, existingMatches),
       is_bye: false,
@@ -132,17 +96,47 @@ function tryPairPool(pool, existingMatches) {
 }
 
 /**
+ * Greedy rematch-free pairs only (no rematch fallback).
+ * Unpaired players are returned so the caller can assign byes / float.
+ */
+function greedyRematchFree(pool, existingMatches) {
+  const used = new Set();
+  const pairs = [];
+  const unpaired = [];
+
+  for (const p of pool) {
+    if (used.has(p.user_id)) continue;
+    const opp = pool.find(
+      (q) =>
+        q.user_id !== p.user_id &&
+        !used.has(q.user_id) &&
+        !hasPlayedBefore(existingMatches, p.user_id, q.user_id)
+    );
+    if (!opp) {
+      unpaired.push(p);
+      continue;
+    }
+    pairs.push({
+      ...assignColors(p.user_id, opp.user_id, existingMatches),
+      is_bye: false,
+    });
+    used.add(p.user_id);
+    used.add(opp.user_id);
+  }
+
+  return { pairs, unpaired };
+}
+
+/**
  * Pair across floating score groups.
- * Odd / unpairable brackets float ONE player at a time from the next lower
- * group (FIDE-style), never the entire adjacent group — that would collapse
- * winners-vs-losers into a single top-half/bottom-half pairing.
+ * Odd / rematch-stuck brackets float ONE player at a time from the next lower
+ * group until a rematch-free pairing exists.
  */
 function pairWithFloats(sortedPlayers, existingMatches) {
   const pairs = [];
   let i = 0;
 
   while (i < sortedPlayers.length) {
-    // Build a score bracket starting at i
     const score = Number(sortedPlayers[i].score ?? 0);
     let j = i;
     while (j < sortedPlayers.length && Number(sortedPlayers[j].score ?? 0) === score) {
@@ -151,7 +145,6 @@ function pairWithFloats(sortedPlayers, existingMatches) {
 
     let pool = sortedPlayers.slice(i, j);
 
-    // Float one player at a time until the pool is even and pairable
     while (
       (pool.length % 2 !== 0 || tryPairPool(pool, existingMatches) === null) &&
       j < sortedPlayers.length
@@ -168,27 +161,16 @@ function pairWithFloats(sortedPlayers, existingMatches) {
       continue;
     }
 
-    // Fallback greedy for this pool (should be rare)
-    const used = new Set();
-    const greedy = [];
-    for (const p of pool) {
-      if (used.has(p.user_id)) continue;
-      const opp = pool.find(
-        (q) =>
-          q.user_id !== p.user_id &&
-          !used.has(q.user_id) &&
-          !hasPlayedBefore(existingMatches, p.user_id, q.user_id)
-      ) || pool.find((q) => q.user_id !== p.user_id && !used.has(q.user_id));
-
-      if (!opp) break;
-      greedy.push({
-        ...assignColors(p.user_id, opp.user_id, existingMatches),
-        is_bye: false,
-      });
-      used.add(p.user_id);
-      used.add(opp.user_id);
-    }
+    // Still stuck (usually end of list): take every rematch-free pair, bye the rest
+    const { pairs: greedy, unpaired } = greedyRematchFree(pool, existingMatches);
     pairs.push(...greedy);
+    for (const p of unpaired) {
+      pairs.push({
+        player_a_id: p.user_id,
+        player_b_id: p.user_id,
+        is_bye: true,
+      });
+    }
     i = j;
   }
 
@@ -204,13 +186,13 @@ function generateSwissPairings(participants, existingMatches = []) {
   if (active.length < 2) return [];
 
   const sorted = sortByScoreAndElo(active);
-  const pairs = [];
+  const structuralByes = [];
   let pool = sorted;
 
   if (pool.length % 2 === 1) {
     const byePlayer = chooseByePlayer(pool, existingMatches);
     if (byePlayer) {
-      pairs.push({
+      structuralByes.push({
         player_a_id: byePlayer.user_id,
         player_b_id: byePlayer.user_id,
         is_bye: true,
@@ -219,11 +201,49 @@ function generateSwissPairings(participants, existingMatches = []) {
     }
   }
 
+  let pairs = [];
   if (pool.length >= 2) {
-    pairs.push(...pairWithFloats(sortByScoreAndElo(pool), existingMatches));
+    const ranked = sortByScoreAndElo(pool);
+    // Prefer score-group floats; if that leaves rematch-stuck byes while a
+    // full-field rematch-free matching exists, use the global matching.
+    const floated = pairWithFloats(ranked, existingMatches);
+    const extraByes = floated.filter((p) => p.is_bye);
+    const global = tryPairPool(ranked, existingMatches);
+    if (extraByes.length > 0 && global) {
+      pairs = global;
+    } else {
+      pairs = floated;
+    }
   }
 
-  return pairs;
+  const combined = [...structuralByes, ...pairs];
+
+  // Absolute safety: never emit a rematch game — convert any slip to byes
+  const safe = [];
+  const rematchVictims = [];
+  for (const p of combined) {
+    if (p.is_bye) {
+      safe.push(p);
+      continue;
+    }
+    if (hasPlayedBefore(existingMatches, p.player_a_id, p.player_b_id)) {
+      rematchVictims.push(p.player_a_id, p.player_b_id);
+      continue;
+    }
+    safe.push(p);
+  }
+  for (const uid of [...new Set(rematchVictims)]) {
+    const alreadyCovered = safe.some(
+      (p) =>
+        (p.is_bye && p.player_a_id === uid) ||
+        (!p.is_bye && (p.player_a_id === uid || p.player_b_id === uid))
+    );
+    if (!alreadyCovered) {
+      safe.push({ player_a_id: uid, player_b_id: uid, is_bye: true });
+    }
+  }
+
+  return safe;
 }
 
 module.exports = {
